@@ -42,7 +42,7 @@ import "../tools/review";
 import type { LocalProtocolOptions } from "../internal-urls";
 import { generateCommitMessage } from "../utils/commit-message-generator";
 import * as git from "../utils/git";
-import { discoverAgents, getAgent } from "./discovery";
+import { discoverAgents, filterVisibleAgents, getAgent } from "./discovery";
 import { runSubprocess } from "./executor";
 import { AgentOutputManager } from "./output-manager";
 import { mapWithConcurrencyLimit, Semaphore } from "./parallel";
@@ -143,7 +143,8 @@ function renderDescription(
 	parentSpawns: string,
 ): string {
 	const spawningDisabled = parentSpawns === "";
-	let filteredAgents = disabledAgents.length > 0 ? agents.filter(a => !disabledAgents.includes(a.name)) : agents;
+	let filteredAgents = filterVisibleAgents(agents);
+	filteredAgents = disabledAgents.length > 0 ? filteredAgents.filter(a => !disabledAgents.includes(a.name)) : filteredAgents;
 	if (spawningDisabled) {
 		filteredAgents = [];
 	} else if (parentSpawns !== "*") {
@@ -579,7 +580,9 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 		// Validate agent exists
 		const agent = getAgent(agents, agentName);
 		if (!agent) {
-			const available = agents.map(a => a.name).join(", ") || "none";
+		const available = filterVisibleAgents(agents)
+			.map(a => a.name)
+			.join(", ") || "none";
 			return {
 				content: [
 					{
@@ -598,7 +601,9 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 		// Check if agent is disabled in settings
 		const disabledAgents = this.session.settings.get("task.disabledAgents") as string[];
 		if (disabledAgents.length > 0 && disabledAgents.includes(agentName)) {
-			const enabled = agents.filter(a => !disabledAgents.includes(a.name)).map(a => a.name);
+			const enabled = filterVisibleAgents(agents)
+				.filter(a => !disabledAgents.includes(a.name))
+				.map(a => a.name);
 			return {
 				content: [
 					{

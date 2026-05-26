@@ -27,6 +27,10 @@ export interface DiscoveryResult {
 	projectAgentsDir: string | null;
 }
 
+export function filterVisibleAgents(agents: readonly AgentDefinition[]): AgentDefinition[] {
+	return agents.filter(agent => agent.hide !== true);
+}
+
 /**
  * Load agents from a directory.
  */
