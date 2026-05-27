@@ -63,9 +63,9 @@ must be rejected instead of silently coerced.
 
 ### Team + Ultragoal bridge
 
-Use `$ultragoal` for durable leader-owned goal/ledger tracking and `$team` for one visible tmux execution lane. When Team is launched with an active `.gjc/ultragoal/goals.json`, worker task/status context may include leader-owned Ultragoal context: `.gjc/ultragoal/goals.json`, `.gjc/ultragoal/ledger.jsonl`, the active goal id, Codex goal mode, and the `fresh_leader_get_goal_required` checkpoint policy.
+Use `$ultragoal` for durable leader-owned goal/ledger tracking and `$team` for one visible tmux execution lane. When Team is launched with an active `.gjc/ultragoal/goals.json`, worker task/status context may include leader-owned Ultragoal context: `.gjc/ultragoal/goals.json`, `.gjc/ultragoal/ledger.jsonl`, the active goal id, GJC goal mode, and the `fresh_leader_get_goal_required` checkpoint policy.
 
-Workers provide task status and verification evidence only. They do not own Ultragoal goal state, create worker ledgers, mutate `.gjc/ultragoal`, auto-launch Team from Ultragoal, or perform hidden Codex goal mutation. The leader uses terminal Team evidence plus a fresh `get_goal` snapshot to run `gjc ultragoal checkpoint --goal-id <id> --status complete --evidence "<team evidence mentioning .gjc/ultragoal and <id>>" --codex-goal-json <fresh-get_goal-json-or-path>`.
+Workers provide task status and verification evidence only. They do not own Ultragoal goal state, create worker ledgers, mutate `.gjc/ultragoal`, auto-launch Team from Ultragoal, or perform hidden GJC goal mutation. The leader uses terminal Team evidence plus a fresh `get_goal` snapshot to run `gjc ultragoal checkpoint --goal-id <id> --status complete --evidence "<team evidence mentioning .gjc/ultragoal and <id>>" --gjc-goal-json <fresh-get_goal-json-or-path>`.
 
 ### Worker command override
 

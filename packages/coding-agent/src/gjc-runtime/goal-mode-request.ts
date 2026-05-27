@@ -32,7 +32,7 @@ export type CurrentSessionGoalModeWriteResult =
 	| { status: "updated"; goal: Goal; sessionFile: string };
 
 interface UltragoalPlanShape {
-	codexObjective?: unknown;
+	gjcObjective?: unknown;
 }
 
 function isEnoent(error: unknown): boolean {
@@ -58,11 +58,11 @@ export function isUltragoalCreateGoalsInvocation(args: readonly string[]): boole
 	return command !== undefined && isCreateGoalsArg(command);
 }
 
-export async function readUltragoalCodexObjective(cwd: string): Promise<{ objective: string; goalsPath: string }> {
+export async function readUltragoalGjcObjective(cwd: string): Promise<{ objective: string; goalsPath: string }> {
 	const goalsPath = ultragoalGoalsPath(cwd);
 	try {
 		const plan = (await Bun.file(goalsPath).json()) as UltragoalPlanShape;
-		const objective = typeof plan.codexObjective === "string" ? plan.codexObjective.trim() : "";
+		const objective = typeof plan.gjcObjective === "string" ? plan.gjcObjective.trim() : "";
 		return { objective: objective || DEFAULT_ULTRAGOAL_OBJECTIVE, goalsPath };
 	} catch (error) {
 		if (isEnoent(error)) {

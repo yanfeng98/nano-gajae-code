@@ -4,7 +4,7 @@ import * as path from "node:path";
 import {
 	consumePendingGoalModeRequest,
 	isUltragoalCreateGoalsInvocation,
-	readUltragoalCodexObjective,
+	readUltragoalGjcObjective,
 	writeCurrentSessionGoalModeState,
 	writePendingGoalModeRequest,
 } from "@gajae-code/coding-agent/gjc-runtime/goal-mode-request";
@@ -35,13 +35,13 @@ describe("GJC ultragoal goal mode request", () => {
 		expect(isUltragoalCreateGoalsInvocation(["status", "--filter", "create-goals"])).toBe(false);
 	});
 
-	it("reads codexObjective from the generated ultragoal plan", async () => {
+	it("reads gjcObjective from the generated ultragoal plan", async () => {
 		const root = await tempDir();
 		const goalsPath = path.join(root, ".gjc", "ultragoal", "goals.json");
 		await fs.mkdir(path.dirname(goalsPath), { recursive: true });
-		await Bun.write(goalsPath, JSON.stringify({ codexObjective: "Complete .gjc/ultragoal/goals.json" }));
+		await Bun.write(goalsPath, JSON.stringify({ gjcObjective: "Complete .gjc/ultragoal/goals.json" }));
 
-		const result = await readUltragoalCodexObjective(root);
+		const result = await readUltragoalGjcObjective(root);
 
 		expect(result.objective).toBe("Complete .gjc/ultragoal/goals.json");
 		expect(result.goalsPath).toBe(goalsPath);
@@ -151,6 +151,6 @@ describe("GJC ultragoal goal mode request", () => {
 		await fs.mkdir(path.dirname(goalsPath), { recursive: true });
 		await Bun.write(goalsPath, "{");
 
-		await expect(readUltragoalCodexObjective(root)).rejects.toThrow(SyntaxError);
+		await expect(readUltragoalGjcObjective(root)).rejects.toThrow(SyntaxError);
 	});
 });

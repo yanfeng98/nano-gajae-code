@@ -2,7 +2,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { DEFAULT_ULTRAGOAL_OBJECTIVE } from "./goal-mode-request";
 
-export type UltragoalCodexGoalMode = "aggregate" | "per-story";
+export type UltragoalGjcGoalMode = "aggregate" | "per-story";
 export type UltragoalGoalStatus =
 	| "pending"
 	| "active"
@@ -28,9 +28,9 @@ export interface UltragoalGoal {
 export interface UltragoalPlan {
 	version: 1;
 	brief: string;
-	codexGoalMode: UltragoalCodexGoalMode;
-	codexObjective: string;
-	codexObjectiveAliases?: string[];
+	gjcGoalMode: UltragoalGjcGoalMode;
+	gjcObjective: string;
+	gjcObjectiveAliases?: string[];
 	goals: UltragoalGoal[];
 	createdAt: string;
 	updatedAt: string;
@@ -47,7 +47,7 @@ export interface UltragoalStatusSummary {
 	exists: boolean;
 	status: "missing" | "pending" | "active" | "complete" | "blocked" | "failed";
 	paths: UltragoalPaths;
-	codexObjective?: string;
+	gjcObjective?: string;
 	currentGoal?: UltragoalGoal;
 	counts: Record<UltragoalGoalStatus, number>;
 	goals: UltragoalGoal[];
@@ -136,8 +136,8 @@ function normalizePlan(raw: unknown): UltragoalPlan {
 	const brief = nonEmptyString(record.brief) ?? "";
 	const createdAt = nonEmptyString(record.createdAt) ?? new Date().toISOString();
 	const updatedAt = nonEmptyString(record.updatedAt) ?? createdAt;
-	const codexGoalMode = record.codexGoalMode === "per-story" ? "per-story" : "aggregate";
-	const codexObjective = nonEmptyString(record.codexObjective) ?? DEFAULT_ULTRAGOAL_OBJECTIVE;
+	const gjcGoalMode = record.gjcGoalMode === "per-story" ? "per-story" : "aggregate";
+	const gjcObjective = nonEmptyString(record.gjcObjective) ?? DEFAULT_ULTRAGOAL_OBJECTIVE;
 	const rawGoals = Array.isArray(record.goals) ? record.goals : [];
 	const goals: UltragoalGoal[] = rawGoals.map((item, index) => {
 		const goalRecord = typeof item === "object" && item !== null ? (item as JsonObject) : {};
@@ -161,17 +161,17 @@ function normalizePlan(raw: unknown): UltragoalPlan {
 					: undefined,
 		};
 	});
-	const aliases = Array.isArray(record.codexObjectiveAliases)
-		? record.codexObjectiveAliases.filter(
+	const aliases = Array.isArray(record.gjcObjectiveAliases)
+		? record.gjcObjectiveAliases.filter(
 				(value): value is string => typeof value === "string" && value.trim().length > 0,
 			)
 		: undefined;
 	return {
 		version: 1,
 		brief,
-		codexGoalMode,
-		codexObjective,
-		codexObjectiveAliases: aliases,
+		gjcGoalMode,
+		gjcObjective,
+		gjcObjectiveAliases: aliases,
 		goals,
 		createdAt,
 		updatedAt,
@@ -216,7 +216,7 @@ export async function getUltragoalStatus(cwd: string): Promise<UltragoalStatusSu
 		exists: true,
 		status,
 		paths,
-		codexObjective: plan.codexObjective,
+		gjcObjective: plan.gjcObjective,
 		currentGoal,
 		counts,
 		goals: plan.goals,
@@ -235,7 +235,7 @@ function titleFromBrief(brief: string): string {
 export async function createUltragoalPlan(input: {
 	cwd: string;
 	brief: string;
-	codexGoalMode?: UltragoalCodexGoalMode;
+	gjcGoalMode?: UltragoalGjcGoalMode;
 }): Promise<UltragoalPlan> {
 	const brief = input.brief.trim();
 	if (!brief) throw new Error("ultragoal brief is required");
@@ -243,8 +243,8 @@ export async function createUltragoalPlan(input: {
 	const plan: UltragoalPlan = {
 		version: 1,
 		brief,
-		codexGoalMode: input.codexGoalMode ?? "aggregate",
-		codexObjective: DEFAULT_ULTRAGOAL_OBJECTIVE,
+		gjcGoalMode: input.gjcGoalMode ?? "aggregate",
+		gjcObjective: DEFAULT_ULTRAGOAL_OBJECTIVE,
 		goals: [
 			{
 				id: "G001",
@@ -309,7 +309,7 @@ export async function checkpointUltragoalGoal(input: {
 	goalId: string;
 	status: UltragoalGoalStatus;
 	evidence: string;
-	codexGoalJson?: string;
+	gjcGoalJson?: string;
 	qualityGateJson?: string;
 }): Promise<UltragoalPlan> {
 	const plan = await readUltragoalPlan(input.cwd);
@@ -330,7 +330,7 @@ export async function checkpointUltragoalGoal(input: {
 		goalId: goal.id,
 		status: input.status,
 		evidence,
-		codexGoalJson: input.codexGoalJson ? await readStructuredValue(input.cwd, input.codexGoalJson) : undefined,
+		gjcGoalJson: input.gjcGoalJson ? await readStructuredValue(input.cwd, input.gjcGoalJson) : undefined,
 		qualityGateJson: input.qualityGateJson ? await readStructuredValue(input.cwd, input.qualityGateJson) : undefined,
 	});
 	return plan;
@@ -382,7 +382,7 @@ export async function recordUltragoalReviewBlockers(input: {
 	title: string;
 	objective: string;
 	evidence: string;
-	codexGoalJson?: string;
+	gjcGoalJson?: string;
 }): Promise<UltragoalPlan> {
 	const objective = input.objective.trim();
 	if (!objective) throw new Error("record-review-blockers --objective is required");
@@ -391,7 +391,7 @@ export async function recordUltragoalReviewBlockers(input: {
 		goalId: input.goalId,
 		status: "review_blocked",
 		evidence: input.evidence,
-		codexGoalJson: input.codexGoalJson,
+		gjcGoalJson: input.gjcGoalJson,
 	});
 	const now = new Date().toISOString();
 	const nextId = `G${String(plan.goals.length + 1).padStart(3, "0")}`;
@@ -423,11 +423,11 @@ function hasFlag(args: readonly string[], flag: string): boolean {
 const FLAGS_WITH_VALUES = new Set([
 	"--brief",
 	"--brief-file",
-	"--codex-goal-mode",
+	"--gjc-goal-mode",
 	"--goal-id",
 	"--status",
 	"--evidence",
-	"--codex-goal-json",
+	"--gjc-goal-json",
 	"--quality-gate-json",
 	"--kind",
 	"--title",
@@ -479,8 +479,8 @@ function renderCompleteHandoff(
 	return [
 		`Ultragoal handoff: ${result.goal.id} — ${result.goal.title}`,
 		`Objective: ${result.goal.objective}`,
-		`Codex objective: ${result.plan.codexObjective}`,
-		"Call get_goal; create_goal only if no active Codex goal exists, then complete this OMX story and checkpoint it.",
+		`GJC objective: ${result.plan.gjcObjective}`,
+		"Call get_goal({}); create_goal only if no active GJC goal exists, then complete this GJC story and checkpoint it.",
 		"",
 	].join("\n");
 }
@@ -494,8 +494,8 @@ export async function runNativeUltragoalCommand(args: string[], cwd = process.cw
 				return { status: 0, stdout: renderStatus(await getUltragoalStatus(cwd), json) };
 			case "create":
 			case "create-goals": {
-				const mode = flagValue(args, "--codex-goal-mode") === "per-story" ? "per-story" : "aggregate";
-				const plan = await createUltragoalPlan({ cwd, brief: await readBrief(cwd, args), codexGoalMode: mode });
+				const mode = flagValue(args, "--gjc-goal-mode") === "per-story" ? "per-story" : "aggregate";
+				const plan = await createUltragoalPlan({ cwd, brief: await readBrief(cwd, args), gjcGoalMode: mode });
 				return {
 					status: 0,
 					createdPlan: true,
@@ -521,7 +521,7 @@ export async function runNativeUltragoalCommand(args: string[], cwd = process.cw
 					goalId,
 					status,
 					evidence,
-					codexGoalJson: flagValue(args, "--codex-goal-json"),
+					gjcGoalJson: flagValue(args, "--gjc-goal-json"),
 					qualityGateJson: flagValue(args, "--quality-gate-json"),
 				});
 				return {
@@ -551,7 +551,7 @@ export async function runNativeUltragoalCommand(args: string[], cwd = process.cw
 					title: flagValue(args, "--title") ?? "Resolve final code-review blockers",
 					objective: flagValue(args, "--objective") ?? "",
 					evidence: flagValue(args, "--evidence") ?? "",
-					codexGoalJson: flagValue(args, "--codex-goal-json"),
+					gjcGoalJson: flagValue(args, "--gjc-goal-json"),
 				});
 				return { status: 0, stdout: json ? `${JSON.stringify(plan, null, 2)}\n` : "Recorded review blockers.\n" };
 			}

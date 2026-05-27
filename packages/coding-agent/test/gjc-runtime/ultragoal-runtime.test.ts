@@ -42,8 +42,8 @@ describe("native GJC ultragoal runtime", () => {
 		const goalsRaw = await Bun.file(path.join(root, ".gjc", "ultragoal", "goals.json")).text();
 		const ledgerRaw = await Bun.file(path.join(root, ".gjc", "ultragoal", "ledger.jsonl")).text();
 
-		expect(plan.codexGoalMode).toBe("aggregate");
-		expect(plan.codexObjective).toContain(".gjc/ultragoal/goals.json");
+		expect(plan.gjcGoalMode).toBe("aggregate");
+		expect(plan.gjcObjective).toContain(".gjc/ultragoal/goals.json");
 		expect(plan.goals).toHaveLength(1);
 		expect(plan.goals[0]).toMatchObject({ id: "G001", status: "pending" });
 		expect(goalsRaw).toContain("Fix native ultragoal status");
@@ -61,7 +61,7 @@ describe("native GJC ultragoal runtime", () => {
 			goalId: "G001",
 			status: "complete",
 			evidence: "tests passed",
-			codexGoalJson: JSON.stringify({ goal: { status: "complete" } }),
+			gjcGoalJson: JSON.stringify({ goal: { status: "complete" } }),
 			qualityGateJson: JSON.stringify({ verification: { status: "passed" } }),
 		});
 		const status = await getUltragoalStatus(root);
