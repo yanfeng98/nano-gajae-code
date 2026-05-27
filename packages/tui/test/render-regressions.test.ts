@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { type Component, TUI } from "@gajae-code/tui";
+import { visibleWidth } from "@gajae-code/tui/utils";
 import { VirtualTerminal } from "./virtual-terminal";
 
 class MutableLinesComponent implements Component {
@@ -232,6 +233,24 @@ describe("TUI terminal-state regressions", () => {
 				expect(viewport[0]!.length).toBeLessThanOrEqual(16);
 				expect(viewport[1]!.length).toBeLessThanOrEqual(16);
 				expect(viewport[2]?.trim()).toBe("");
+			} finally {
+				tui.stop();
+			}
+		});
+		it("truncates compatibility jamo before the terminal can auto-wrap them", async () => {
+			const term = new VirtualTerminal(10, 6);
+			const tui = new TUI(term);
+			const component = new MutableLinesComponent(["ㅁ".repeat(20)]);
+			tui.addChild(component);
+
+			try {
+				tui.start();
+				await settle(term);
+
+				const viewport = visible(term);
+				expect(viewport[0]).toBe("ㅁ".repeat(5));
+				expect(visibleWidth(viewport[0]!)).toBe(10);
+				expect(viewport[1]?.trim()).toBe("");
 			} finally {
 				tui.stop();
 			}

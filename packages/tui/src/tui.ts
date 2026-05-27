@@ -1029,6 +1029,15 @@ export class TUI extends Container {
 		}
 		return lines;
 	}
+	#truncateLinesToWidth(lines: string[], width: number): string[] {
+		for (let i = 0; i < lines.length; i++) {
+			const line = lines[i];
+			if (TERMINAL.isImageLine(line) || visibleWidth(line) <= width) continue;
+			const truncated = truncateToWidth(line, width, Ellipsis.Omit);
+			lines[i] = truncated + (truncated.includes("\x1b]8;") ? LINE_TERMINATOR : SEGMENT_RESET);
+		}
+		return lines;
+	}
 
 	#doRender(): void {
 		if (this.#stopped) return;
@@ -1059,6 +1068,7 @@ export class TUI extends Container {
 		// because the marker is embedded mid-line, and before any diff/full render
 		// path so cache comparisons stay byte-accurate.
 		newLines = this.#applyLineResets(newLines);
+		newLines = this.#truncateLinesToWidth(newLines, width);
 
 		// Width changed - need full re-render (line wrapping changes)
 		const widthChanged = this.#previousWidth !== 0 && this.#previousWidth !== width;
