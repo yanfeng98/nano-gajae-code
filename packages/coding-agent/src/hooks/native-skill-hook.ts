@@ -69,16 +69,17 @@ export async function dispatchGjcNativeSkillHook(
 				});
 		return {
 			hookEventName,
-			outputJson: skillState || activeUltragoalContext
-				? {
-						hookSpecificOutput: {
-							hookEventName,
-							additionalContext: skillState
-								? buildSkillActivationAdditionalContext(skillState)
-								: activeUltragoalContext,
-						},
-					}
-				: null,
+			outputJson:
+				skillState || activeUltragoalContext
+					? {
+							hookSpecificOutput: {
+								hookEventName,
+								additionalContext: skillState
+									? buildSkillActivationAdditionalContext(skillState)
+									: activeUltragoalContext,
+							},
+						}
+					: null,
 		};
 	}
 
@@ -124,14 +125,16 @@ export async function runGjcNativeSkillHookCli(): Promise<void> {
 	const { payload, parseError } = await readStdinJson();
 	if (parseError) {
 		await logHookError(process.cwd(), "native_hook_stdin_parse_error", parseError);
-		process.stdout.write(`${JSON.stringify({
-			decision: "block",
-			reason: "GJC native hook received malformed JSON input.",
-			hookSpecificOutput: {
-				hookEventName: "Unknown",
-				additionalContext: `stdin JSON parsing failed inside gjc codex-native-hook: ${parseError.message}`,
-			},
-		})}\n`);
+		process.stdout.write(
+			`${JSON.stringify({
+				decision: "block",
+				reason: "GJC native hook received malformed JSON input.",
+				hookSpecificOutput: {
+					hookEventName: "Unknown",
+					additionalContext: `stdin JSON parsing failed inside gjc codex-native-hook: ${parseError.message}`,
+				},
+			})}\n`,
+		);
 		return;
 	}
 
@@ -147,12 +150,14 @@ export async function runGjcNativeSkillHookCli(): Promise<void> {
 		await logHookError(cwd, "native_hook_dispatch_error", error);
 		if (readHookEventName(payload) === "Stop") {
 			const detail = error instanceof Error ? error.message : String(error);
-			process.stdout.write(`${JSON.stringify({
-				decision: "block",
-				reason: "GJC native Stop hook failed before normal continuation handling.",
-				stopReason: "gjc_native_stop_dispatch_failure",
-				systemMessage: `GJC native Stop hook failed before normal continuation handling. Failure: ${detail}`,
-			})}\n`);
+			process.stdout.write(
+				`${JSON.stringify({
+					decision: "block",
+					reason: "GJC native Stop hook failed before normal continuation handling.",
+					stopReason: "gjc_native_stop_dispatch_failure",
+					systemMessage: `GJC native Stop hook failed before normal continuation handling. Failure: ${detail}`,
+				})}\n`,
+			);
 		} else {
 			process.exitCode = 1;
 		}

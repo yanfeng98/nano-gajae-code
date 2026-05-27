@@ -1,10 +1,10 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import {
-	GJC_SKILL_KEYWORD_DEFINITIONS,
 	compareSkillKeywordMatches,
-	isGjcWorkflowSkill,
+	GJC_SKILL_KEYWORD_DEFINITIONS,
 	type GjcWorkflowSkill,
+	isGjcWorkflowSkill,
 } from "./skill-keywords";
 
 export const GJC_STATE_DIR = ".gjc/state";
@@ -99,23 +99,28 @@ const KEYWORD_PATTERNS = GJC_SKILL_KEYWORD_DEFINITIONS.map(definition => ({
 	pattern: keywordToPattern(definition.keyword),
 }));
 
-function parseExplicitSkillInvocations(text: string): { matches: SkillKeywordMatch[]; sawExplicitLikeInvocation: boolean } {
+function parseExplicitSkillInvocations(text: string): {
+	matches: SkillKeywordMatch[];
+	sawExplicitLikeInvocation: boolean;
+} {
 	const matches: SkillKeywordMatch[] = [];
 	let sawExplicitLikeInvocation = false;
 	const explicitPattern = /\$((?:gjc:)?[a-z][a-z0-9-]*)/gi;
 	const seenSkills = new Set<string>();
-	let match: RegExpExecArray | null;
-	while ((match = explicitPattern.exec(text)) !== null) {
+	let match = explicitPattern.exec(text);
+	while (match !== null) {
 		sawExplicitLikeInvocation = true;
 		const token = match[1] ?? "";
 		const normalized = token.startsWith("gjc:") ? token.slice(4) : token;
-		if (!isGjcWorkflowSkill(normalized) || seenSkills.has(normalized)) continue;
-		seenSkills.add(normalized);
-		matches.push({
-			keyword: match[0],
-			skill: normalized,
-			priority: GJC_SKILL_KEYWORD_DEFINITIONS.find(definition => definition.skill === normalized)?.priority ?? 0,
-		});
+		if (isGjcWorkflowSkill(normalized) && !seenSkills.has(normalized)) {
+			seenSkills.add(normalized);
+			matches.push({
+				keyword: match[0],
+				skill: normalized,
+				priority: GJC_SKILL_KEYWORD_DEFINITIONS.find(definition => definition.skill === normalized)?.priority ?? 0,
+			});
+		}
+		match = explicitPattern.exec(text);
 	}
 	return { matches, sawExplicitLikeInvocation };
 }
@@ -183,7 +188,12 @@ async function writeJsonFile(filePath: string, value: unknown): Promise<void> {
 	await Bun.write(filePath, `${JSON.stringify(value, null, 2)}\n`);
 }
 
-function entryMatchesContext(entry: SkillActiveEntry, state: SkillActiveState, sessionId?: string, threadId?: string): boolean {
+function entryMatchesContext(
+	entry: SkillActiveEntry,
+	state: SkillActiveState,
+	sessionId?: string,
+	threadId?: string,
+): boolean {
 	const entrySessionId = entry.session_id ?? state.session_id;
 	const entryThreadId = entry.thread_id ?? state.thread_id;
 	if (sessionId && entrySessionId && entrySessionId !== sessionId) return false;
@@ -263,7 +273,9 @@ export async function recordSkillActivation(input: RecordSkillActivationInput): 
 
 function isTerminalModeState(state: ModeState | null): boolean {
 	if (!state || state.active !== true) return true;
-	const phase = String(state.current_phase ?? "").trim().toLowerCase();
+	const phase = String(state.current_phase ?? "")
+		.trim()
+		.toLowerCase();
 	return ["complete", "completed", "failed", "cancelled", "canceled", "inactive"].includes(phase);
 }
 
@@ -304,9 +316,9 @@ export async function buildActiveUltragoalPromptContext(input: UserPromptSubmitS
 export async function buildSkillStopOutput(input: StopHookInput): Promise<Record<string, unknown> | null> {
 	const resolvedStateDir = resolveGjcStateDir(input.cwd, input.stateDir);
 	const skillState = await readVisibleSkillActiveState(input.cwd, input.sessionId, input.stateDir);
-	const activeEntries = listActiveSkills(skillState).filter(entry => (
-		skillState ? entryMatchesContext(entry, skillState, input.sessionId, input.threadId) : false
-	));
+	const activeEntries = listActiveSkills(skillState).filter(entry =>
+		skillState ? entryMatchesContext(entry, skillState, input.sessionId, input.threadId) : false,
+	);
 	if (!skillState || activeEntries.length === 0) return null;
 
 	for (const entry of activeEntries) {

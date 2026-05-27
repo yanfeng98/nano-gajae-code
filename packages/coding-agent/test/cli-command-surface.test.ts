@@ -11,15 +11,17 @@ function extractRegisteredCommands(source: string): string[] {
 }
 
 describe("GJC public CLI command surface", () => {
-	it("registers only launch plus retained workflow runtime endpoints", async () => {
+	it("registers launch, setup, and retained workflow runtime endpoints", async () => {
 		const source = await Bun.file(cliEntry).text();
 		expect(extractRegisteredCommands(source)).toEqual([
+			"codex-native-hook",
 			"question",
 			"state",
 			"team",
 			"ultragoal",
 			"ralplan",
 			"deep-interview",
+			"setup",
 			"launch",
 		]);
 	});

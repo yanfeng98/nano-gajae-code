@@ -52,7 +52,9 @@ describe("GJC native skill-state hooks", () => {
 			session_id: "session-1",
 			initialized_mode: "deep-interview",
 		});
-		expect(state?.initialized_state_path).toBe(path.join(root, ".gjc", "state", "sessions", "session-1", "deep-interview-state.json"));
+		expect(state?.initialized_state_path).toBe(
+			path.join(root, ".gjc", "state", "sessions", "session-1", "deep-interview-state.json"),
+		);
 		const modeState = await Bun.file(state?.initialized_state_path ?? "").json();
 		expect(modeState).toMatchObject({ active: true, current_phase: "interviewing", session_id: "session-1" });
 	});
@@ -108,7 +110,8 @@ describe("GJC native skill-state hooks", () => {
 
 		expect(result.outputJson?.hookSpecificOutput).toMatchObject({ hookEventName: "UserPromptSubmit" });
 		const context = String(
-			(result.outputJson?.hookSpecificOutput as { additionalContext?: unknown } | undefined)?.additionalContext ?? "",
+			(result.outputJson?.hookSpecificOutput as { additionalContext?: unknown } | undefined)?.additionalContext ??
+				"",
 		);
 		expect(context).toContain("Ultragoal is active");
 		expect(context).toContain("gjc ultragoal steer");
@@ -125,7 +128,8 @@ describe("GJC native skill-state hooks", () => {
 			threadId: "thread-ultra-start",
 		});
 		const context = String(
-			(result.outputJson?.hookSpecificOutput as { additionalContext?: unknown } | undefined)?.additionalContext ?? "",
+			(result.outputJson?.hookSpecificOutput as { additionalContext?: unknown } | undefined)?.additionalContext ??
+				"",
 		);
 		expect(context).toContain("Ultragoal is active");
 		expect(context).toContain("gjc ultragoal steer");
