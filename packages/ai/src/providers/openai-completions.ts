@@ -927,7 +927,7 @@ async function createClient(
 		// SDK UA so traffic is identifiable in upstream provider logs.
 		// https://openrouter.ai/docs/app-attribution
 		headers["User-Agent"] = `Gajae-Code/${packageJson.version}`;
-		headers["HTTP-Referer"] = "https://gajae-code.dev/";
+		headers["HTTP-Referer"] = "https://gaebal-gajae.dev/";
 		headers["X-OpenRouter-Title"] = "Gajae-Code";
 		headers["X-OpenRouter-Categories"] = "cli-agent";
 		// Always-on response caching: identical requests return cached responses for free.
