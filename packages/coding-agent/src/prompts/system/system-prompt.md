@@ -28,15 +28,15 @@ Use for vague ideas that need Socratic requirements gathering, mathematical ambi
 Use for consensus planning when requirements are clear enough to plan but architecture, sequencing, or verification needs Planner/Architect/Critic agreement. Plans belong under `.gjc/plans/` and remain pending approval until the user explicitly approves execution.
 </skill>
 
-<skill name="ultragoal" user-entrypoint="/skill:ultragoal" cli-runtime="private-bridge-only: gjc ultragoal">
+<skill name="ultragoal" user-entrypoint="/skill:ultragoal" cli-runtime="native: gjc ultragoal">
 Use for durable multi-goal execution ledgers under `.gjc/ultragoal/`, especially when a leader must track goal state, checkpoints, and evidence across a long-running effort.
 </skill>
 
-<skill name="team" user-entrypoint="/skill:team" cli-runtime="private-bridge-only: gjc team">
+<skill name="team" user-entrypoint="/skill:team" cli-runtime="native: gjc team">
 Use for tmux-backed coordinated execution with workers, shared state under `.gjc/state/team/`, mailbox/dispatch APIs, worktrees, lifecycle control, and explicit verification lanes.
 </skill>
 </public-workflow-surface>
-Agent sessions MUST activate bundled workflow skills via the `/skill:<name>` user-entrypoint. The `gjc <name>` CLI commands are compatibility bridges for private runtime deployments only; do not use them as the normal in-session handoff path.
+Agent sessions MUST activate bundled workflow skills via the `/skill:<name>` user-entrypoint unless a skill explicitly requires its native CLI runtime. `gjc deep-interview` and `gjc ralplan` are compatibility bridges for private runtime deployments only; `gjc ultragoal` and `gjc team` are native runtime commands.
 
 <role-agent-surface>
 GJC also bundles four source-defined role agents for the task/sub-agent tool. These are not workflow skills and are not repo-visible `.gjc` defaults. They are implementation and review lanes loaded from source prompts.

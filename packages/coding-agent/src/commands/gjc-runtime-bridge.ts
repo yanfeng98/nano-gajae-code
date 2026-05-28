@@ -10,6 +10,8 @@ export interface GjcRuntimeBridgeResult {
 	error?: string;
 }
 
+const SKILL_ENTRYPOINT_ENDPOINTS = new Set(["deep-interview", "ralplan"]);
+
 function candidateBinaries(env: NodeJS.ProcessEnv): string[] {
 	return [env[BRIDGE_ENV], env[LEGACY_BRIDGE_ENV]].filter(
 		(value): value is string => typeof value === "string" && value.trim().length > 0,
@@ -59,12 +61,15 @@ export function runGjcRuntimeBridge(
 	}
 
 	const configured = [env[BRIDGE_ENV], env[LEGACY_BRIDGE_ENV]].filter(Boolean).join(", ");
+	const guidance = SKILL_ENTRYPOINT_ENDPOINTS.has(endpoint)
+		? `Inside a GJC agent session, invoke /skill:${endpoint} instead so the bundled skill is loaded directly.`
+		: `Configure ${BRIDGE_ENV} with a GJC-compatible private runtime binary for the ${endpoint} endpoint.`;
 	return {
 		status: 1,
 		error: [
-			`gjc ${endpoint} is a private runtime bridge command, not the in-session workflow skill loader.`,
-			`Inside a GJC agent session, invoke /skill:${endpoint} instead so the bundled skill is loaded directly.`,
-			`Only private runtime deployments should call gjc ${endpoint}; configure them with ${BRIDGE_ENV}.`,
+			`gjc ${endpoint} is a private runtime bridge command.`,
+			guidance,
+			`Only private runtime deployments should call this bridge command; configure them with ${BRIDGE_ENV}.`,
 			configured
 				? `Configured runtime candidates failed: ${configured}.`
 				: "No private GJC runtime binary was configured.",
