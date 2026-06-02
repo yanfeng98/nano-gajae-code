@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-06-02
+
 ### Added
 
 - Added agent options for provider request and stream retry budgets and thread them through streaming calls.
