@@ -87,11 +87,13 @@ function pushUnique(out: string[], value: unknown): void {
 	if (typeof value === "string" && !out.includes(value)) out.push(value);
 }
 
-function completedTerminalEvent(events: EventEnvelope[]): {
+interface CompletedTerminalEvent {
 	cursor: number;
 	createdAt: string;
 	kind: string;
-} | null {
+}
+
+function completedTerminalEvent(events: EventEnvelope[]): CompletedTerminalEvent | null {
 	for (const event of [...events].reverse()) {
 		const signal = (event.evidence as { signal?: unknown } | undefined)?.signal;
 		if (event.kind === "rpc_agent_completed" || signal === "completed") {
@@ -107,7 +109,7 @@ async function buildObservation(
 	ownerLive: boolean,
 ): Promise<{
 	observation: Observation;
-	completedTerminalEvent: { cursor: number; createdAt: string; kind: string } | null;
+	completedTerminalEvent: CompletedTerminalEvent | null;
 }> {
 	const workspace = state.handle.workspace;
 	const { gitDelta, branch, deleted } = gitDeltaFor(workspace);
@@ -127,10 +129,37 @@ async function buildObservation(
 			gitDelta,
 			lastActivityAt: lastEventAt ?? state.updatedAt,
 			observedSignals,
-			risk: deleted ? "deleted-worktree" : "normal",
+			risk: deleted ? "deleted-worktree" : !ownerLive && gitDelta === "dirty" ? "vanished-dirty" : "normal",
 		},
 		completedTerminalEvent: terminalEvent,
 	};
+}
+
+function needsVanishedOwnerBlock(
+	state: SessionState,
+	observation: Observation,
+	completedTerminal: CompletedTerminalEvent | null,
+): boolean {
+	if (observation.ownerLive || state.lifecycle !== "observing") return false;
+	if (completedTerminal || observation.observedSignals.includes("completed")) return false;
+	return observation.observedSignals.some(
+		signal => signal === "prompt-accepted" || signal === "tool-call" || signal === "streaming",
+	);
+}
+
+async function markVanishedOwnerBlocked(
+	root: string,
+	state: SessionState,
+	observation: Observation,
+	completedTerminal: CompletedTerminalEvent | null,
+): Promise<SessionState> {
+	if (!needsVanishedOwnerBlock(state, observation, completedTerminal)) return state;
+	const blocker = `owner-vanished:${observation.gitDelta}`;
+	state.lifecycle = "blocked";
+	state.blockers = state.blockers.includes(blocker) ? state.blockers : [...state.blockers, blocker];
+	state.updatedAt = nowIso();
+	await writeSessionState(root, state);
+	return state;
 }
 
 function resolveRetryBudget(input: Record<string, unknown>): RetryBudget {
@@ -250,6 +279,7 @@ export default class Harness extends Command {
 	): Promise<void> {
 		const sessionId = flagSession ?? (typeof input.sessionId === "string" ? input.sessionId : undefined);
 		if (sessionId && (await this.#tryOwnerRoute(root, sessionId, verb, { ...input, sessionId }))) return;
+		if (verb === "recover" && sessionId) return this.#recoverWithoutOwner(root, sessionId, input);
 		return this.#pending(root, verb, input, flagSession);
 	}
 
@@ -489,13 +519,18 @@ export default class Harness extends Command {
 	async #observe(root: string, input: Record<string, unknown>, flagSession: string | undefined): Promise<void> {
 		const sessionId = requireSessionId(input, flagSession);
 		if (await this.#tryOwnerRoute(root, sessionId, "observe", { ...input, sessionId })) return;
-		const state = await loadState(root, sessionId);
+		let state = await loadState(root, sessionId);
 		const ownerLive = ownerLiveFor(state);
 		const { observation, completedTerminalEvent } = await buildObservation(root, state, ownerLive);
+		const vanishedOwnerBlock = needsVanishedOwnerBlock(state, observation, completedTerminalEvent);
+		state = await markVanishedOwnerBlocked(root, state, observation, completedTerminalEvent);
 		writeJson(
 			buildResponse(state, ownerLive, {
-				observation,
+				observation: { ...observation, lifecycle: state.lifecycle },
 				readOnly: !ownerLive,
+				...(vanishedOwnerBlock
+					? { ownerVanished: true, blockerReason: `owner-vanished:${observation.gitDelta}` }
+					: {}),
 				...(completedTerminalEvent && !ownerLive
 					? { completedOwnerExited: true, terminalResult: completedTerminalEvent }
 					: {}),
@@ -510,7 +545,16 @@ export default class Harness extends Command {
 		const sessionId = flagSession ?? (typeof input.sessionId === "string" ? input.sessionId : undefined);
 		if (sessionId) {
 			stateView = await loadState(root, sessionId);
-			if (!observation) observation = (await buildObservation(root, stateView, ownerLiveFor(stateView))).observation;
+			if (!observation) {
+				const built = await buildObservation(root, stateView, ownerLiveFor(stateView));
+				observation = built.observation;
+				stateView = await markVanishedOwnerBlocked(
+					root,
+					stateView,
+					built.observation,
+					built.completedTerminalEvent,
+				);
+			}
 		}
 		if (!observation) throw new Error("classify_requires_observation_or_session");
 		const full: Observation = {
@@ -525,7 +569,12 @@ export default class Harness extends Command {
 		};
 		const decision = classifyRecovery({ observation: full, retryBudget: budget });
 		if (stateView) {
-			writeJson(buildResponse(stateView, ownerLiveFor(stateView), { decision, observation: full }));
+			writeJson(
+				buildResponse(stateView, ownerLiveFor(stateView), {
+					decision,
+					observation: { ...full, lifecycle: stateView.lifecycle },
+				}),
+			);
 			return;
 		}
 		// Pure classify without a session: synthesize a minimal state view.
@@ -596,6 +645,31 @@ export default class Harness extends Command {
 		state.updatedAt = nowIso();
 		await writeSessionState(root, state);
 		writeJson(buildResponse(state, false, { retired: true }));
+	}
+
+	async #recoverWithoutOwner(root: string, sessionId: string, input: Record<string, unknown>): Promise<void> {
+		const budget = resolveRetryBudget(input);
+		let state = await loadState(root, sessionId);
+		const { observation, completedTerminalEvent } = await buildObservation(root, state, false);
+		state = await markVanishedOwnerBlocked(root, state, observation, completedTerminalEvent);
+		const decision = classifyRecovery({
+			observation: { ...observation, lifecycle: state.lifecycle },
+			retryBudget: budget,
+		});
+		writeJson(
+			buildResponse(
+				state,
+				false,
+				{
+					pending: false,
+					reason: "owner-not-live",
+					decision,
+					observation: { ...observation, lifecycle: state.lifecycle },
+				},
+				false,
+			),
+		);
+		process.exitCode = 1;
 	}
 
 	async #pending(
