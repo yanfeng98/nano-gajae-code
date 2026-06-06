@@ -80,6 +80,11 @@ describe("deep-interview question gates red-team", () => {
 			{ name: "selected not an array", answer: { selected: "JWT" }, keyword: "type" },
 			{ name: "selected item outside enum", answer: { selected: ["Password"] }, keyword: "enum" },
 			{
+				name: "single-select combines option and Other",
+				answer: { selected: ["JWT"], other: true, custom: "Passkeys" },
+				keyword: "anyOf",
+			},
+			{
 				name: "additional unexpected property",
 				answer: { selected: ["JWT"], surprise: true },
 				keyword: "additionalProperties",
@@ -130,14 +135,15 @@ describe("deep-interview question gates red-team", () => {
 
 	it("marks the recommended option description", () => {
 		const gate = questionToGate(singleQ);
-		expect(gate.options?.map(o => ({ label: o.label, description: o.description }))).toEqual([
-			{ label: "JWT", description: undefined },
-			{ label: "OAuth2", description: "recommended" },
-			{ label: "Session cookies", description: undefined },
+		expect(gate.options?.map(o => ({ value: o.value, label: o.label, description: o.description }))).toEqual([
+			{ value: "JWT", label: "JWT", description: undefined },
+			{ value: "OAuth2", label: "OAuth2", description: "recommended" },
+			{ value: "Session cookies", label: "Session cookies", description: undefined },
 		]);
+		expect(gate.context?.stage_state).toMatchObject({ other_option: "Other (type your own)" });
 	});
 
-	it("supports zero-option questions as Other-only gates", async () => {
+	it("supports zero-option questions as free-text gates without advertising Other as a selectable option", async () => {
 		const zeroQ: AskGateQuestion = {
 			id: "zero-options",
 			question: "What constraint is missing?",
@@ -145,6 +151,11 @@ describe("deep-interview question gates red-team", () => {
 		};
 		const gate = questionToGate(zeroQ);
 		expect(gate.options).toEqual([]);
+		expect(gate.context?.stage_state).toMatchObject({
+			question_id: "zero-options",
+			options: [],
+			other_option: "Other (type your own)",
+		});
 		expect(gate.schema.properties?.selected?.items?.enum).toEqual([]);
 
 		const answer = { selected: [], other: true, custom: "No cloud dependencies" };
@@ -160,6 +171,28 @@ describe("deep-interview question gates red-team", () => {
 			selectedOptions: [],
 			customInput: "No cloud dependencies",
 		});
+	});
+
+	it("keeps generic pick-first unattended consumers safe for zero-option questions", async () => {
+		const zeroQ: AskGateQuestion = {
+			id: "zero-options-generic",
+			question: "What constraint is missing?",
+			options: [],
+		};
+		const gate = questionToGate(zeroQ);
+		const first = gate.options?.[0]?.value;
+		expect(first).toBeUndefined();
+		expect(typeof first).not.toBe("object");
+
+		const genericAnswer =
+			first !== undefined
+				? { selected: [first], other: false }
+				: { selected: [], other: true, custom: "memory-derived answer" };
+		const broker = new WorkflowGateBroker("run-zero-options-generic", new MemoryGateStore());
+		const emitted = broker.openGate(gate);
+		const resolution = await broker.resolve({ gate_id: emitted.gate_id, answer: genericAnswer });
+		expect(resolution.status).toBe("accepted");
+		expect(gateAnswerToResult(zeroQ, genericAnswer).customInput).toBe("memory-derived answer");
 	});
 
 	it("advertises the same schema_hash the broker uses for validation", async () => {
