@@ -51,6 +51,7 @@ function cloneToolArgs<T>(args: T): T {
 	}
 }
 
+
 /**
  * Drop trailing removal/hunk-header lines that appear in a streaming diff
  * before the matching `+added` lines have arrived. Without this, a partial
@@ -152,6 +153,7 @@ export class ToolExecutionComponent extends Container {
 		isError?: boolean;
 		details?: any;
 	};
+	#textOutputCache?: { content: unknown; showImages: boolean; terminalImageProtocol: unknown; output: string };
 	// Edit preview state
 	#editMode?: EditMode;
 	#editDiffPreview?: PerFileDiffPreview[];
@@ -295,6 +297,7 @@ export class ToolExecutionComponent extends Container {
 		isPartial = false,
 		_toolCallId?: string,
 	): void {
+		this.#textOutputCache = undefined;
 		this.#result = result;
 		this.#isPartial = isPartial;
 		// When tool is complete, ensure args are marked complete so spinner stops
@@ -397,6 +400,7 @@ export class ToolExecutionComponent extends Container {
 
 	setShowImages(show: boolean): void {
 		this.#showImages = show;
+		this.#textOutputCache = undefined;
 		this.#updateDisplay();
 	}
 
@@ -723,16 +727,23 @@ export class ToolExecutionComponent extends Container {
 	#getTextOutput(): string {
 		if (!this.#result) return "";
 
-		const textBlocks = this.#result.content?.filter((c: any) => c.type === "text") || [];
+		const content = this.#result.content;
+		const terminalImageProtocol = TERMINAL.imageProtocol;
+		const cached = this.#textOutputCache;
+		if (cached?.content === content && cached.showImages === this.#showImages && cached.terminalImageProtocol === terminalImageProtocol) {
+			return cached.output;
+		}
+
+		const textParts: string[] = [];
+		for (const block of content ?? []) {
+			if (block.type !== "text") continue;
+			const text = block.text || "";
+			textParts.push(sanitizeWithOptionalSixelPassthrough(text, sanitizeText));
+		}
+		let output = textParts.join("\n");
+
 		const imageBlocks = this.#getAllImageBlocks();
-
-		let output = textBlocks
-			.map((c: any) => {
-				return sanitizeWithOptionalSixelPassthrough(c.text || "", sanitizeText);
-			})
-			.join("\n");
-
-		if (imageBlocks.length > 0 && (!TERMINAL.imageProtocol || !this.#showImages)) {
+		if (imageBlocks.length > 0 && (!terminalImageProtocol || !this.#showImages)) {
 			const imageIndicators = imageBlocks
 				.map((img: any) => {
 					const dims = img.data ? (getImageDimensions(img.data, img.mimeType) ?? undefined) : undefined;
@@ -742,6 +753,7 @@ export class ToolExecutionComponent extends Container {
 			output = output ? `${output}\n${imageIndicators}` : imageIndicators;
 		}
 
+		this.#textOutputCache = { content, showImages: this.#showImages, terminalImageProtocol, output };
 		return output;
 	}
 

@@ -565,13 +565,15 @@ export function buildSessionContext(
 		};
 	}
 
-	// Walk from leaf to root, collecting path
+	// Walk from leaf to root, then reverse once to avoid repeated front insertions on long branches.
 	const path: SessionEntry[] = [];
 	let current: SessionEntry | undefined = leaf;
 	while (current) {
-		path.unshift(current);
+		path.push(current);
 		current = current.parentId ? byId.get(current.parentId) : undefined;
 	}
+	path.reverse();
+
 
 	// Extract settings and find compaction
 	let thinkingLevel: string | undefined = "off";
@@ -3335,9 +3337,10 @@ export class SessionManager {
 		const startId = fromId ?? this.#leafId;
 		let current = startId ? this.#byId.get(startId) : undefined;
 		while (current) {
-			path.unshift(materializeResidentEntrySync(current, this.#residentBlobStore, cache));
+			path.push(materializeResidentEntrySync(current, this.#residentBlobStore, cache));
 			current = current.parentId ? this.#byId.get(current.parentId) : undefined;
 		}
+		path.reverse();
 		return path;
 	}
 
