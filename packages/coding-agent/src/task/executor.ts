@@ -38,7 +38,7 @@ import { jtdToJsonSchema, normalizeSchema } from "../tools/jtd-to-json-schema";
 import { type ReportFindingDetails, toReviewFinding } from "../tools/review";
 import { ToolAbortError } from "../tools/tool-errors";
 import type { EventBus } from "../utils/event-bus";
-import { buildNamedToolChoice } from "../utils/tool-choice";
+import { buildNamedToolChoiceResult } from "../utils/tool-choice";
 import type { WorkspaceTree } from "../workspace-tree";
 import { subprocessToolRegistry } from "./subprocess-tool-registry";
 import {
@@ -1464,7 +1464,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 				await awaitAbortable(session.waitForIdle());
 			}
 
-			const reminderToolChoice = buildNamedToolChoice("yield", session.model);
+			const reminderToolChoiceResult = buildNamedToolChoiceResult("yield", session.model);
 
 			let retryCount = 0;
 			while (!paused && !yieldCalled && retryCount < MAX_YIELD_RETRIES && !abortSignal.aborted) {
@@ -1485,7 +1485,9 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 					await awaitAbortable(
 						session.prompt(reminder, {
 							attribution: "agent",
-							...(isFinalRetry && reminderToolChoice ? { toolChoice: reminderToolChoice } : {}),
+							...(isFinalRetry && reminderToolChoiceResult.exactNamed && reminderToolChoiceResult.choice
+								? { toolChoice: reminderToolChoiceResult.choice }
+								: {}),
 						}),
 					);
 					await awaitAbortable(session.waitForIdle());

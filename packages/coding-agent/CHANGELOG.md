@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed forced `tool_choice` 400s ("tool_choice forces tool use is not compatible with this model") looping after `ast_edit` previews: named queue directives (resolve protocol, eager `todo_write` enforcement, subagent `yield` reminders) now enqueue only when the model supports exact named forcing; otherwise they degrade silently to the existing steer reminder without a forced `tool_choice`, and a runtime-discovered incapability drops the in-flight directive instead of requeueing it.
+- `models.yml` compat blocks now accept the `toolChoiceSupport` enum (`none`/`auto`/`required`/`named`) alongside the legacy `supportsToolChoice`/`supportsForcedToolChoice` booleans, mirrored in the generated JSON schema.
 ### Added
 - Made `/model` open to a preset-first landing view: provider-grouped presets with live auth checkmarks, highlight-to-expand tiers, a full clamped role→model preview before applying, and a session/default apply scope choice; typing still jumps straight to model search, "Browse all models" opens the classic tabbed selector, and temporary-only quick-switch bypasses the landing entirely.
 - Rebuilt the builtin model profile catalog as 27 profiles: `codex-{eco,medium,pro}` on `gpt-5.5` effort spreads, a single `opencodego` preset, `claude-opus`/`claude-fable`, `{glm,kimi-coding-plan,mimo,grok,cursor,minimax}-{eco,medium,pro}` trios with thinking levels clamped to provider support, and `fable-codex`/`opus-codex`/`codex-opencodego` combos. Legacy profile names (including the `*-standard` family) were removed clean-break and now fail with the available-profile listing.
