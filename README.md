@@ -152,7 +152,10 @@ retry:
 ### 前置条件
 
 - **Bun >= 1.3.14**（`gjc` 运行时会检查版本）
-- **Rust 工具链**（编译原生模块需要，安装：`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`）
+- **Rust 工具链**（编译原生模块需要），安装方式任选其一：
+  - **Ubuntu/Debian（最快）：** `sudo apt install cargo rustc`
+  - **官方 rustup：** `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
+  - **国内镜像加速：** `RUSTUP_DIST_SERVER=https://mirrors.ustc.edu.cn/rust-static RUSTUP_UPDATE_ROOT=https://mirrors.ustc.edu.cn/rust-static/rustup curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
 
 如果 Bun 版本过低，请先升级：
 ```sh
