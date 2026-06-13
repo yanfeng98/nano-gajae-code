@@ -231,6 +231,60 @@ bun run build        # 构建所有包
 bun run build:native # 构建原生 Rust 模块
 ```
 
+### 构建自包含二进制（发布用）
+
+`bun build --compile` 可将整个 CLI 打包为独立二进制文件。用户无需安装 Bun、Rust 或任何依赖，下载即可运行。
+
+**本地构建（当前平台）：**
+
+```sh
+# 1. 构建原生模块
+bun run build:native
+
+# 2. 嵌入原生模块到 JS bundle
+bun --cwd=packages/stats scripts/generate-client-bundle.ts --generate
+bun --cwd=packages/natives run embed:native
+
+# 3. 打包为独立二进制
+bun run build    # 等于 bun --cwd=packages/coding-agent run build
+```
+
+产物在 `packages/coding-agent/dist/gjc`，单个文件约 200MB+（内嵌了 Bun 运行时 + 原生模块）。
+
+**多平台交叉构建：**
+
+```sh
+# 列出可用目标
+bun run ci:release:build-binaries --list-targets
+
+# 构建所有 5 个平台
+bun run ci:release:build-binaries
+
+# 只构建指定平台
+RELEASE_TARGETS=linux-x64,win32-x64 bun run ci:release:build-binaries
+```
+
+支持的目标平台：
+
+| 目标 ID | 说明 | CPU 基线 |
+|---|---|---|
+| `linux-x64` | Linux x86_64（兼容旧版 glibc） | x86-64-v2 |
+| `linux-arm64` | Linux ARM64 | — |
+| `darwin-arm64` | Apple Silicon Mac | — |
+| `darwin-x64` | Intel Mac | — |
+| `win32-x64` | Windows x64 | x86-64-v3 |
+
+Linux x64 使用 `x86-64-v2` 基线，兼容 2008 年后的 CPU；原生模块运行时自动解压到 `~/.gjc/natives/`。
+
+**兼容性说明：**
+- CI 在 **Ubuntu 22.04**（glibc 2.35）上构建，产物可在该版本及更新系统上运行
+- **CentOS 7**（glibc 2.17）无法直接运行 `bun build --compile` 产物，推荐用 Docker 打包：
+
+```sh
+docker build -t gajae-code/pi:dev .
+docker run --rm gajae-code/pi:dev --help
+```
+
 ### 项目结构
 
 默认工作流定义位于源码而非已提交的 `.gjc` 副本中：
