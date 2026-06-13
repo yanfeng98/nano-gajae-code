@@ -149,18 +149,62 @@ retry:
 
 ## 开发
 
-安装依赖和本地默认配置：
+### 可编辑安装（类似 pip install -e .）
+
+本项目是基于 Bun 工作区的 monorepo。有两种开发安装方式：
+
+**方式一：完整开发安装（推荐）**
 
 ```sh
+# 1. 安装所有工作区依赖
 bun install
+
+# 2. 全局链接，使 gjc 命令在终端全局可用（类似 pip install -e .）
+bun run install:dev
+
+# 3. 安装默认工作流技能文件
 bun run install:defaults
 ```
 
-从源码运行 CLI：
+`bun run install:dev` 会将 `@gajae-code/coding-agent` 和 `@gajae-code/ai` 全局 link，之后 `gjc` 命令在终端直接可用，修改源码即时生效。
+
+**方式二：直接从源码运行（无需全局安装）**
 
 ```sh
-bun packages/coding-agent/src/cli.ts --help
+bun install
+bun run dev          # 等价于 bun --cwd=packages/coding-agent src/cli.ts
 ```
+
+TypeScript 源码直接运行，改完即生效，最接近 `pip install -e .` 的体验。
+
+**Python 包的可编辑安装：**
+
+```sh
+bun run robogjc:install   # 等价于 pip install -e 'python/robogjc[dev]'
+```
+
+### 运行测试
+
+```sh
+bun run test                                    # 全部测试（TS + Rust）
+bun --cwd=packages/coding-agent test             # 只测 coding-agent
+bun --cwd=packages/coding-agent test -- --only-failures  # 只重跑失败用例
+bun run test:py                                  # Python 测试
+bun run ci:test:smoke                            # CI 冒烟测试
+```
+
+### 其他常用命令
+
+```sh
+bun run dev          # 从源码运行 TUI
+bun run check        # 类型检查（TS + Rust）
+bun run lint         # Lint 所有 TS
+bun run fmt          # 格式化所有 TS
+bun run build        # 构建所有包
+bun run build:native # 构建原生 Rust 模块
+```
+
+### 项目结构
 
 默认工作流定义位于源码而非已提交的 `.gjc` 副本中：
 
