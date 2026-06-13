@@ -149,21 +149,28 @@ retry:
 
 ## 开发
 
-### 可编辑安装（类似 pip install -e .）
+### 前置条件
 
-本项目是基于 Bun 工作区的 monorepo，需要 **Bun >= 1.3.14**（`gjc` 运行时会检查版本）。如果版本过低，请先升级：
+- **Bun >= 1.3.14**（`gjc` 运行时会检查版本）
+- **Rust 工具链**（编译原生模块需要，安装：`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`）
 
+如果 Bun 版本过低，请先升级：
 ```sh
 bun upgrade
 bun --version   # 确认 >= 1.3.14
 ```
+
+### 可编辑安装（类似 pip install -e .）
 
 有两种开发安装方式：
 
 **方式一：完整开发安装（推荐）**
 
 ```sh
-# 安装依赖 + 全局链接 + 安装默认技能文件（一步到位，类似 pip install -e .）
+# 1. 构建原生模块（需要 Rust）
+bun run build:native
+
+# 2. 安装依赖 + 全局链接 + 安装默认技能文件
 bun run install:dev
 ```
 
@@ -177,16 +184,18 @@ bun run install:dev
 如果需要手动分步执行：
 
 ```sh
-bun install                   # 安装依赖
-bun --cwd=packages/coding-agent link   # 全局链接 coding-agent
-bun --cwd=packages/ai link            # 全局链接 ai
-bun run install:defaults              # 安装默认技能文件
+bun run build:native                          # 构建原生模块
+bun install                                   # 安装依赖
+bun --cwd=packages/coding-agent link          # 全局链接 coding-agent
+bun --cwd=packages/ai link                    # 全局链接 ai
+bun run install:defaults                      # 安装默认技能文件
 ```
 
 **方式二：直接从源码运行（无需全局安装）**
 
 ```sh
 bun install
+bun run build:native
 bun run dev          # 等价于 bun --cwd=packages/coding-agent src/cli.ts
 ```
 
