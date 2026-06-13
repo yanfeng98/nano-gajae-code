@@ -151,22 +151,37 @@ retry:
 
 ### 可编辑安装（类似 pip install -e .）
 
-本项目是基于 Bun 工作区的 monorepo。有两种开发安装方式：
+本项目是基于 Bun 工作区的 monorepo，需要 **Bun >= 1.3.14**（`gjc` 运行时会检查版本）。如果版本过低，请先升级：
+
+```sh
+bun upgrade
+bun --version   # 确认 >= 1.3.14
+```
+
+有两种开发安装方式：
 
 **方式一：完整开发安装（推荐）**
 
 ```sh
-# 1. 安装所有工作区依赖
-bun install
-
-# 2. 全局链接，使 gjc 命令在终端全局可用（类似 pip install -e .）
+# 安装依赖 + 全局链接 + 安装默认技能文件（一步到位，类似 pip install -e .）
 bun run install:dev
-
-# 3. 安装默认工作流技能文件
-bun run install:defaults
 ```
 
-`bun run install:dev` 会将 `@gajae-code/coding-agent` 和 `@gajae-code/ai` 全局 link，之后 `gjc` 命令在终端直接可用，修改源码即时生效。
+`install:dev` 会依次执行：
+1. `bun install` — 安装所有工作区依赖
+2. `bun link` — 将 `@gajae-code/coding-agent` 和 `@gajae-code/ai` 注册为全局 link
+3. `setup defaults` — 安装默认工作流技能文件
+
+之后 `gjc` 命令在终端全局可用，修改源码即时生效。
+
+如果需要手动分步执行：
+
+```sh
+bun install                   # 安装依赖
+bun --cwd=packages/coding-agent link   # 全局链接 coding-agent
+bun --cwd=packages/ai link            # 全局链接 ai
+bun run install:defaults              # 安装默认技能文件
+```
 
 **方式二：直接从源码运行（无需全局安装）**
 
