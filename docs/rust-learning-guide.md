@@ -94,18 +94,14 @@ y = 20;               // OK
 const MAX: u32 = 100; // 编译期常量，必须标注类型
 ```
 
-**本项目示例** (`crates/pi-natives/src/utils.rs:29-35`)：
+**本项目示例** — `let` / `let mut` 变量绑定 (`crates/brush-builtins-vendored/src/printf.rs:33, 73`)：
 ```rust
-pub const fn clamp_u32(value: u64) -> u32 {
-    if value > u32::MAX as u64 {
-        u32::MAX
-    } else {
-        value as u32
-    }
-}
-```
+// let — 不可变变量
+let result_str = String::from_utf8(result).map_err(|_| { ... });
 
-`const fn` 表示这个函数可以在编译期求值。上面也用到了 `u32::MAX` 常量。
+// let mut — 可变变量
+let mut result = escape::quote_if_needed(arg, escape::QuoteMode::BackslashEscape).to_string();
+```
 
 ### 2.2 标量类型
 
@@ -125,9 +121,9 @@ let n: i32 = 42;
 let m: u64 = n as u64;  // 显式转换
 ```
 
-**本项目示例** — `as` 转换 (`crates/pi-shell/src/process.rs:323`)：
+**本项目示例** — `as` 转换 (`crates/brush-builtins-vendored/src/shift.rs:24-25`)：
 ```rust
-if i32::try_from(info.pbi_pid).ok()? != pid { return None; }
+let n = n as usize;  // i32 → usize 显式转换
 ```
 
 ### 2.3 复合类型
@@ -150,15 +146,13 @@ let zeros = [0; 100];       // 100 个 0
 let s: &[i32] = &arr[1..3]; // [2, 3]
 ```
 
-**本项目示例** — `phf_map!` 中的数组 (`crates/pi-ast/src/language/mod.rs:923-930`)：
+**本项目示例** — 元组解构 (`crates/brush-builtins-vendored/src/times.rs:17`) + 数组 (`crates/pi-shell/src/minimizer/filters/system.rs:425`)：
 ```rust
-static CORE_LANG_ALIASES: phf::Map<&'static str, SupportLang> = phf_map! {
-    "bash" => SupportLang::Bash,
-    "rust" => SupportLang::Rust,
-    "python" => SupportLang::Python,
-    // ...
-};
-```
+// 元组解构：从函数返回的元组中提取两个值
+let (self_user, self_system) = get_self_user_and_system_time()?;
+
+// 数组字面量
+let source_extensions = ["rs", "py", "js", "jsx", "ts", "tsx"];
 
 ### 2.4 函数
 
@@ -560,14 +554,12 @@ fn read_file(path: &str) -> Result<String, io::Error> {
 // };
 ```
 
-**本项目示例** — 多步 `?` 链 (`crates/pi-shell/src/shell.rs:483-484`)：
+**本项目示例** — 连续 `?` 传播错误 (`crates/brush-builtins-vendored/src/let_.rs:29-30`)：
 ```rust
-let mut shell = BrushShell::builder()
-    .session_env(session_env)
-    .build()
-    .await
-    .map_err(|err| Error::msg(format!("Failed to initialize shell: {err}")))?;
+let parsed = brush_parser::arithmetic::parse(expr.as_str())?;
+let evaluated = parsed.eval(context.shell)?;
 ```
+每行末尾的 `?` 表示：成功则取出值继续，失败则立即向上返回错误。
 
 ### 6.2 自定义错误类型
 
@@ -630,9 +622,13 @@ N-API 侧有特殊错误类型 (`crates/pi-natives/src/sixel.rs:43`)：
 | `BTreeMap<K, V>` | 有序映射 |
 | `String` | UTF-8 字符串（堆分配） |
 
-**本项目示例** — `HashMap` + `HashSet` 导入 (`crates/pi-shell/src/shell.rs:4`)：
+**本项目示例** — `HashMap` 创建 (`crates/brush-builtins-vendored/src/factory.rs:27-28`) + `Vec` 创建 (`crates/brush-builtins-vendored/src/printf.rs:29`)：
 ```rust
-use std::collections::{HashMap, HashSet};
+// 创建空 HashMap，指定键值类型
+let mut m = HashMap::<String, builtins::Registration<SE>>::new();
+
+// 创建空 Vec
+let mut result: Vec<u8> = vec![];
 ```
 
 ### 7.2 SmallVec
@@ -695,7 +691,14 @@ let x = Box::new(5);  // 在堆上分配一个 i32
 work: Option<Box<dyn FnOnce(CancelToken) -> Result<T> + Send>>
 ```
 
-**本项目示例** — `Box::pin` 固定未来态 (`crates/pi-shell/src/shell.rs:689-690`)：
+**本项目示例** — `Box::new` 基本用法 (`crates/brush-builtins-vendored/src/declare.rs:427-428`)：
+```rust
+// 用 Box 包装闭包，使其可存入 Vec<Box<dyn Fn(...)>>
+let mut filters: Vec<Box<dyn Fn((&String, &ShellVariable)) -> bool>> =
+    vec![Box::new(|(_, v)| v.is_enumerable())];
+```
+
+`Box::pin` 用法 (`crates/pi-shell/src/shell.rs:689-690`)：
 ```rust
 let mut idle_timer = Box::pin(time::sleep(POST_EXIT_IDLE));
 let mut max_timer = Box::pin(time::sleep(POST_EXIT_MAX));
@@ -893,9 +896,18 @@ use rayon::prelude::*;
 items.par_iter().for_each(|item| process(item));  // 并行处理
 ```
 
-**本项目示例** (`crates/pi-natives/src/grep.rs:26`)：
+**本项目示例** — 并行搜索文件 (`crates/pi-natives/src/grep.rs:1187-1191`)：
 ```rust
-use rayon::prelude::*;
+let raw: Vec<Option<FileSearchResult>> = entries
+    .par_iter()          // 并行迭代，等价于 .iter() 但多线程
+    .map_init(
+        || build_searcher_for_params(file_params),
+        |searcher, entry| {
+            let bytes = read_file_bytes(&entry.path).ok()??;
+            // ...
+        },
+    )
+    .collect();
 ```
 
 ---
@@ -1494,7 +1506,13 @@ println!("cargo:rerun-if-changed={}", defs_dir.display());
 | TryFrom | `crates/pi-shell/src/cancel.rs` | 21-33 |
 | `let-else` | `crates/pi-shell/src/shell.rs` | 1035-1037 |
 | `matches!` | `crates/pi-shell/src/shell.rs` | 593, 1084 |
-| Result + ? | `crates/pi-shell/src/shell.rs` | 399, 483-484 |
+| `let` / `let mut` 变量绑定 | `crates/brush-builtins-vendored/src/printf.rs` | 33, 73 |
+| `as` 类型转换 | `crates/brush-builtins-vendored/src/shift.rs` | 24-25 |
+| 元组解构 | `crates/brush-builtins-vendored/src/times.rs` | 17 |
+| 数组字面量 | `crates/pi-shell/src/minimizer/filters/system.rs` | 425 |
+| `HashMap::new` | `crates/brush-builtins-vendored/src/factory.rs` | 27-28 |
+| `Vec::new` | `crates/brush-builtins-vendored/src/printf.rs` | 29 |
+| Result + ? | `crates/brush-builtins-vendored/src/let_.rs` | 29-30 |
 | 自定义错误 | `crates/pi-iso/src/lib.rs` | 176-209 |
 | `tokio::spawn` | `crates/pi-shell/src/shell.rs` | 245-260 |
 | `tokio::select!` | `crates/pi-shell/src/shell.rs` | 262-286 |
@@ -1507,6 +1525,7 @@ println!("cargo:rerun-if-changed={}", defs_dir.display());
 | unsafe syscall | `crates/pi-shell/src/process.rs` | 243-251 |
 | transmute | `crates/pi-natives/src/text.rs` | 45 |
 | `extern "C"` | `crates/pi-shell/src/process.rs` | 301-304, 748-793 |
+| `Box::new` | `crates/brush-builtins-vendored/src/declare.rs` | 427-428 |
 | `Box<dyn FnOnce>` | `crates/pi-natives/src/task.rs` | 159 |
 | `Box::pin` | `crates/pi-shell/src/shell.rs` | 689-690 |
 | Arc + Clone | `crates/pi-natives/src/shell.rs` | 192, 209 |
@@ -1516,7 +1535,7 @@ println!("cargo:rerun-if-changed={}", defs_dir.display());
 | thread_local! | `crates/pi-natives/src/text.rs` | 406-408 |
 | AtomicU8 + Ordering | `crates/pi-shell/src/cancel.rs` | 36-63 |
 | parking_lot::Mutex | `crates/pi-natives/src/prof.rs` | 10 |
-| rayon | `crates/pi-natives/src/grep.rs` | 26 |
+| rayon | `crates/pi-natives/src/grep.rs` | 1187-1191 |
 | phf_map! | `crates/pi-ast/src/language/mod.rs` | 923-977 |
 | serde derive | `crates/pi-shell/src/shell.rs` | 91-98 |
 | Drop impl (RAII) | `crates/pi-shell/src/process.rs` | 813-820 |
