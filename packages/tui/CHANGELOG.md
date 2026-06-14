@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-06-13
+
 ### Added
 
 - Added process-isolated deterministic render-golden capture fixtures and coverage for editor overlays, rich-text resize, multiplexer viewport repaint, sixel preservation, Termux height diffs, and transcript shrink/clear regressions.

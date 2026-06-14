@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-06-13
+
 ### Changed
 
 - Improved Bun runtime version diagnostics with detected runtime path plus platform-specific upgrade and PATH remediation guidance.

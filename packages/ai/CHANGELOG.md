@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-06-13
+
 ### Added
 
 - Added a generic tool-choice capability model: `toolChoiceSupport` compat enum (`none`/`auto`/`required`/`named`) available on every forced-choice-capable API, derived from the legacy `supportsToolChoice`/`supportsForcedToolChoice` booleans when absent, with a shared `resolveToolChoice` helper that clamps requested tool choices (`named` → `required` → omit) and returns structured degradation metadata.
