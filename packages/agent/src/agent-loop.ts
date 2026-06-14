@@ -200,10 +200,6 @@ export function agentLoopDetailed(
 	return { stream, detailed: () => capture.detailed(stream) };
 }
 
-/**
- * Like {@link agentLoopDetailed} but built on top of
- * {@link agentLoopContinue}.
- */
 export function agentLoopContinueDetailed(
 	context: AgentContext,
 	config: AgentLoopConfig,
@@ -343,9 +339,6 @@ function extractIntent(args: Record<string, unknown>): { intent?: string; stripp
 	return { intent: trimmed.length > 0 ? trimmed : undefined, strippedArgs };
 }
 
-/**
- * Main loop logic shared by agentLoop and agentLoopContinue.
- */
 async function runLoop(
 	currentContext: AgentContext,
 	newMessages: AgentMessage[],
@@ -399,7 +392,6 @@ async function runLoopBody(
 	streamFn?: StreamFn,
 ): Promise<void> {
 	let firstTurn = true;
-	// Check for steering messages at start (user may have typed while waiting)
 	let pendingMessages: AgentMessage[] = (await config.getSteeringMessages?.()) || [];
 	let harmonyRetryAttempt = 0;
 	let harmonyTruncateResumeCount = 0;

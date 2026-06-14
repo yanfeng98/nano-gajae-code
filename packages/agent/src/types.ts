@@ -95,14 +95,6 @@ export interface AgentLoopConfig extends SimpleStreamOptions {
 
 	/** Returns the credential type selected by the most recent getApiKey call for this session/provider. */
 	getAuthCredentialType?: (provider: string) => "api_key" | "oauth" | undefined;
-
-	/**
-	 * Returns steering messages to inject into the conversation mid-run.
-	 *
-	 * Called after each tool execution to check for user interruptions unless interruptMode is "wait".
-	 * If messages are returned, remaining tool calls are skipped and
-	 * these messages are added to the context before the next LLM call.
-	 */
 	getSteeringMessages?: () => Promise<AgentMessage[]>;
 
 	/**

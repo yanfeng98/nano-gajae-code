@@ -644,18 +644,7 @@ export interface CursorExecHandlers {
 	onToolResult?: CursorToolResultHandler;
 }
 
-/**
- * Plain JSON Schema document used by extension-authored tools (legacy TypeBox
- * emits this shape). Distinguished from Zod at runtime via {@link isZodSchema}.
- */
 export type TJsonSchema = Record<string, unknown>;
-
-/**
- * Schema type accepted by the {@link Tool} interface.
- *
- * Canonical authoring uses Zod. Extension compat may supply a JSON Schema
- * object (including TypeBox static schema objects).
- */
 export type TSchema = ZodType | TJsonSchema;
 
 /** Resolve parameter types for tool execution / handlers. */
