@@ -304,15 +304,3 @@ bun test packages/coding-agent/test/default-gjc-definitions.test.ts
 ```
 
 按包查看的项目地图请参见 [`docs/codebase-overview.md`](docs/codebase-overview.md)。
-
-## 贡献者
-
-感谢帮助塑造 Gajae-Code 早期版本的个人和智能体，包括 [Yeachan-Heo](https://github.com/Yeachan-Heo)、[IYENTeam](https://github.com/IYENTeam) 和 [HaD0Yun](https://github.com/HaD0Yun)。欢迎通过 GitHub 和 Discord 社区提交贡献、Bug 报告和版本验证反馈。
-
-## 灵感与渊源
-
-Gajae-Code 的默认 TUI 标识是一对甲壳动物：深色外观用红钳，浅色外观用蓝蟹。它借鉴了一小部分智能体运行器的经验，同时将公开的 GJC 界面保持有意精简。历史归属记录保存在 [`NOTICE.md`](NOTICE.md) 中。
-
-## 许可证
-
-MIT。详见 [`LICENSE`](LICENSE)。
