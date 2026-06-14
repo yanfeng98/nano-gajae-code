@@ -405,10 +405,6 @@ export interface AgentTelemetryConfig {
 	readonly onTelemetryWarning?: (warning: AgentTelemetryWarning) => void;
 }
 
-/**
- * Public handle used internally to thread the resolved tracer + config
- * through the loop. Constructed once per `agentLoop` invocation.
- */
 export interface AgentTelemetry {
 	readonly config: AgentTelemetryConfig;
 	readonly tracer: Tracer;
@@ -416,7 +412,6 @@ export interface AgentTelemetry {
 	readonly contentCapture: ResolvedTelemetryContentCapture;
 	readonly conversationId: string | undefined;
 	readonly agent: AgentIdentity | undefined;
-	/** Per-invocation event collector. See {@link AgentRunCollector}. */
 	readonly collector: AgentRunCollector;
 }
 

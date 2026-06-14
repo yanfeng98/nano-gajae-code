@@ -104,10 +104,6 @@ export interface AgentRunSummary {
 	readonly stepCount: number;
 }
 
-/**
- * Coverage rollup: registered-vs-invoked across the run. All arrays are
- * sorted ascending and deduped so the value is stable for diffing.
- */
 export interface AgentRunCoverage {
 	readonly toolsAvailable: readonly string[];
 	readonly toolsInvoked: readonly string[];
@@ -301,7 +297,6 @@ export class AgentRunCollector {
 		});
 	}
 
-	/** Build the immutable summary value from buffered records. */
 	snapshot(opts: { readonly stepCount: number }): {
 		readonly summary: AgentRunSummary;
 		readonly coverage: AgentRunCoverage;

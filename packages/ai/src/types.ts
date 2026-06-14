@@ -450,7 +450,7 @@ export interface TextSignatureV1 {
 export interface TextContent {
 	type: "text";
 	text: string;
-	textSignature?: string; // e.g., for OpenAI responses, message metadata (legacy id string or TextSignatureV1 JSON)
+	textSignature?: string;
 }
 
 export interface ThinkingContent {
@@ -467,8 +467,8 @@ export interface RedactedThinkingContent {
 
 export interface ImageContent {
 	type: "image";
-	data: string; // base64 encoded image data
-	mimeType: string; // e.g., "image/jpeg", "image/png"
+	data: string;
+	mimeType: string;
 }
 
 export interface ToolCall {
@@ -549,13 +549,10 @@ export type ProviderPayload = OpenAIResponsesHistoryPayload;
 export interface UserMessage {
 	role: "user";
 	content: string | (TextContent | ImageContent)[];
-	/** True if the message was injected by the system (e.g., auto-continue). */
 	synthetic?: boolean;
-	/** Who initiated this message for billing/attribution semantics. */
 	attribution?: MessageAttribution;
-	/** Provider-specific opaque payload used to reconstruct transport-native history. */
 	providerPayload?: ProviderPayload;
-	timestamp: number; // Unix timestamp in milliseconds
+	timestamp: number;
 }
 
 export interface DeveloperMessage {

@@ -1,7 +1,3 @@
-/**
- * Agent loop that works with AgentMessage throughout.
- * Transforms to Message[] only at the LLM call boundary.
- */
 import {
 	type AssistantMessage,
 	type AssistantMessageEvent,
@@ -49,7 +45,6 @@ import type {
 	StreamFn,
 } from "./types";
 
-/** Sentinel returned by the abort race in `streamAssistantResponse`. */
 const ABORTED: unique symbol = Symbol("agent-loop-aborted");
 
 class HarmonyLeakInterruption extends Error {
@@ -63,22 +58,10 @@ class HarmonyLeakInterruption extends Error {
 	}
 }
 
-/**
- * Normalize a value coming back from `tool.execute()` (or its streaming partial-update callback)
- * into a structurally valid {@link AgentToolResult}.
- *
- * The tool interface is typed, but third-party tools (MCP, extensions, user-authored AgentTools)
- * can violate the contract at runtime. Persisting a malformed result corrupts the session file
- * (missing `content` array → crash on reload). We coerce at the single boundary where untyped
- * results enter the agent loop, so every downstream consumer can rely on the type.
- */
 function coerceToolResult(raw: unknown): { result: AgentToolResult<any>; malformed: boolean } {
 	const rawObj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null;
 	const rawContent = rawObj?.content;
 	const details = rawObj && "details" in rawObj ? rawObj.details : {};
-	// Tools may flag a non-throwing failure on the result itself (e.g. an
-	// aggregator that catches per-entry errors and synthesizes a combined
-	// result). Preserve the flag so agent-loop can surface it on the wire.
 	const explicitError = Boolean(rawObj && "isError" in rawObj && rawObj.isError);
 
 	if (!Array.isArray(rawContent)) {
@@ -108,10 +91,6 @@ function coerceToolResult(raw: unknown): { result: AgentToolResult<any>; malform
 	return { result: { content, details, ...(explicitError ? { isError: true } : {}) }, malformed: false };
 }
 
-/**
- * Start an agent loop with a new prompt message.
- * The prompt is added to the context and events are emitted for it.
- */
 export function agentLoop(
 	prompts: AgentMessage[],
 	context: AgentContext,
@@ -145,14 +124,6 @@ export function agentLoop(
 	return stream;
 }
 
-/**
- * Continue an agent loop from the current context without adding a new message.
- * Used for retries - context already has user message or tool results.
- *
- * **Important:** The last message in context must convert to a `user` or `toolResult` message
- * via `convertToLlm`. If it doesn't, the LLM provider will reject the request.
- * This cannot be validated here since `convertToLlm` is only called once per turn.
- */
 export function agentLoopContinue(
 	context: AgentContext,
 	config: AgentLoopConfig,
@@ -193,12 +164,6 @@ function createAgentStream(): EventStream<AgentEvent, AgentMessage[]> {
 	);
 }
 
-/**
- * Build the `agent_end` event payload. When telemetry is enabled, snapshots
- * the run collector so consumers receive {@link AgentRunSummary} +
- * {@link AgentRunCoverage} alongside the messages without parsing OTEL spans.
- * When telemetry is unset, returns the bare event for backwards compatibility.
- */
 function buildAgentEndEvent(
 	messages: AgentMessage[],
 	telemetry: AgentTelemetry | undefined,
@@ -214,27 +179,12 @@ function buildAgentEndEvent(
 	return { ...base, telemetry: snapshot.summary, coverage: snapshot.coverage };
 }
 
-/**
- * Detailed-result handle returned by {@link agentLoopDetailed}. Adds the
- * run-level telemetry/coverage rollup to the existing `AgentMessage[]`
- * payload without changing the resolved type of `stream.result()`.
- */
 export interface AgentLoopDetailedResult {
 	readonly messages: AgentMessage[];
 	readonly telemetry: AgentRunSummary | undefined;
 	readonly coverage: AgentRunCoverage | undefined;
 }
 
-/**
- * Convenience wrapper over {@link agentLoop} that exposes the run-level
- * summary + coverage alongside the messages. The returned `stream` is the
- * same `EventStream` callers already consume; `detailed()` awaits the
- * stream's `agent_end` event and returns the additive fields.
- *
- * Existing `stream.result()` semantics are preserved — it still resolves to
- * `AgentMessage[]`. Use {@link agentLoopDetailed} when you need the rollup;
- * use {@link agentLoop} when you do not.
- */
 export function agentLoopDetailed(
 	prompts: AgentMessage[],
 	context: AgentContext,
@@ -268,11 +218,6 @@ export function agentLoopContinueDetailed(
 	return { stream, detailed: () => capture.detailed(stream) };
 }
 
-/**
- * Wire an `onRunEnd` telemetry hook onto `config` so the detailed helper can
- * capture the run summary without consuming the event stream. Preserves any
- * existing `onRunEnd` the caller had set.
- */
 function createDetailedCapture(config: AgentLoopConfig): {
 	readonly config: AgentLoopConfig;
 	readonly detailed: (stream: EventStream<AgentEvent, AgentMessage[]>) => Promise<AgentLoopDetailedResult>;

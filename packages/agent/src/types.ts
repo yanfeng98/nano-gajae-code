@@ -25,29 +25,10 @@ export type StreamFn = (
 	...args: Parameters<typeof streamSimple>
 ) => AssistantMessageEventStream | Promise<AssistantMessageEventStream>;
 
-/**
- * Configuration for the agent loop.
- */
 export interface AgentLoopConfig extends SimpleStreamOptions {
 	model: Model;
-
-	/**
-	 * When to interrupt tool execution for steering messages.
-	 * - "immediate" = check after each tool call (default)
-	 * - "wait" = defer steering until the current turn completes
-	 */
 	interruptMode?: "immediate" | "wait";
-
-	/**
-	 * Optional session identifier forwarded to LLM providers.
-	 * Used by providers that support session-based caching (e.g., OpenAI code provider).
-	 */
 	sessionId?: string;
-	/**
-	 * Optional provider-facing cache/session affinity identifier. When set, this
-	 * is forwarded to providers as StreamOptions.sessionId while `sessionId`
-	 * remains the logical agent conversation id for telemetry/metadata.
-	 */
 	providerSessionId?: string;
 
 	/**
@@ -327,29 +308,10 @@ export interface AfterToolCallContext {
 	context: AgentContext;
 }
 
-/**
- * Extensible interface for custom app messages.
- * Apps can extend via declaration merging:
- *
- * @example
- * ```typescript
- * declare module "@gajae-code/agent" {
- *   interface CustomAgentMessages {
- *     artifact: ArtifactMessage;
- *     notification: NotificationMessage;
- *   }
- * }
- * ```
- */
 export interface CustomAgentMessages {
 	// Empty by default - apps extend via declaration merging
 }
 
-/**
- * AgentMessage: Union of LLM messages + custom messages.
- * This abstraction allows apps to add custom message types while maintaining
- * type safety and compatibility with the base LLM messages.
- */
 export type AgentMessage = Message | CustomAgentMessages[keyof CustomAgentMessages];
 
 /**
@@ -368,12 +330,8 @@ export interface AgentState {
 }
 
 export interface AgentToolResult<T = any, _TInput = unknown> {
-	// Content blocks supporting text and images
 	content: (TextContent | ImageContent)[];
-	// Details to be displayed in a UI or logged
 	details?: T;
-	// Marks a non-throwing failure (e.g. an aggregator catching per-entry errors).
-	// agent-loop honors this and surfaces it as a tool error on the wire.
 	isError?: boolean;
 }
 
@@ -407,7 +365,6 @@ export type AgentToolExecFn<TParameters extends TSchema = TSchema, TDetails = an
 	context?: AgentToolContext,
 ) => Promise<AgentToolResult<TDetails, TParameters>>;
 
-// AgentTool extends Tool but adds the execute function
 export interface AgentTool<TParameters extends TSchema = TSchema, TDetails = any, TTheme = unknown>
 	extends Tool<TParameters> {
 	// A human-readable label for the tool to be displayed in UI
@@ -453,30 +410,21 @@ export interface AgentTool<TParameters extends TSchema = TSchema, TDetails = any
 	) => unknown;
 }
 
-// AgentContext is like Context but uses AgentTool
 export interface AgentContext {
 	systemPrompt: string[];
 	messages: AgentMessage[];
 	tools?: AgentTool<any>[];
 }
 
-/**
- * Events emitted by the Agent for UI updates.
- * These events provide fine-grained lifecycle information for messages, turns, and tool executions.
- */
 export type AgentEvent =
-	// Agent lifecycle
 	| { type: "agent_start" }
 	| {
 			type: "agent_end";
 			messages: AgentMessage[];
-			/** Indicates whether the loop ended normally or suspended at a pause checkpoint. */
 			stopReason?: "completed" | "paused";
-			/** Present iff `AgentTelemetryConfig` was supplied on this run. */
 			telemetry?: AgentRunSummary;
 			coverage?: AgentRunCoverage;
 	  }
-	// Turn lifecycle - a turn is one assistant response + any tool calls/results
 	| { type: "turn_start" }
 	| { type: "turn_end"; message: AgentMessage; toolResults: ToolResultMessage[] }
 	// Message lifecycle - emitted for user, assistant, and toolResult messages
