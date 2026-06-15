@@ -592,14 +592,12 @@ export interface ToolResultMessage<TDetails = any> {
 	role: "toolResult";
 	toolCallId: string;
 	toolName: string;
-	content: (TextContent | ImageContent)[]; // Supports text and images
+	content: (TextContent | ImageContent)[];
 	details?: TDetails;
 	isError: boolean;
-	/** Who initiated this message for billing/attribution semantics. */
 	attribution?: MessageAttribution;
-	/** Timestamp when output was pruned (ms since epoch). Undefined if unpruned. */
 	prunedAt?: number;
-	timestamp: number; // Unix timestamp in milliseconds
+	timestamp: number;
 }
 
 export type Message = UserMessage | DeveloperMessage | AssistantMessage | ToolResultMessage;

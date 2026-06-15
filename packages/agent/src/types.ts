@@ -62,13 +62,7 @@ export interface AgentLoopConfig extends SimpleStreamOptions {
 	intentTracing?: boolean;
 	appendOnlyContext?: AppendOnlyContextManager;
 
-	/**
-	 * Inspect assistant streaming events before they are published to the outer agent event stream.
-	 * Callers may abort synchronously to stop consuming buffered provider events.
-	 */
 	onAssistantMessageEvent?: (message: AssistantMessage, event: AssistantMessageEvent) => void;
-
-	/** Called for non-content tool-choice incapability stream events. */
 	onToolChoiceIncapability?: (event: Extract<AssistantMessageEvent, { type: "toolChoiceIncapability" }>) => void;
 	onHarmonyLeak?: (event: HarmonyAuditEvent) => void | Promise<void>;
 	getToolChoice?: () => ToolChoice | undefined;

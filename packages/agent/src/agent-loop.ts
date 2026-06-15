@@ -667,9 +667,6 @@ async function streamAssistantResponse(
 
 			const responseIterator = response[Symbol.asyncIterator]();
 
-			// Set up a single abort race: register the abort listener once for the whole
-			// stream and reuse the same race promise for every iterator.next() instead of
-			// allocating Promise.withResolvers and add/removeEventListener per event.
 			let abortRacePromise: Promise<typeof ABORTED> | undefined;
 			let detachAbortListener: (() => void) | undefined;
 			if (requestSignal) {
@@ -816,9 +813,6 @@ function emitAbortedAssistantMessage(
 	return abortedMessage;
 }
 
-/**
- * Execute tool calls from an assistant message.
- */
 async function executeToolCalls(
 	currentContext: AgentContext,
 	assistantMessage: AssistantMessage,
@@ -854,10 +848,6 @@ async function executeToolCalls(
 
 	const records = toolCalls.map(toolCall => ({
 		toolCall,
-		// Tools emitted via OpenAI's custom-tool path (e.g. `apply_patch` on GPT-5)
-		// come back under their wire-level name, which may differ from the
-		// harness-internal `name`. Match on either, preferring `name` for
-		// determinism if both somehow collide.
 		tool:
 			tools?.find(t => t.name === toolCall.name) ??
 			tools?.find(t => t.customWireName !== undefined && t.customWireName === toolCall.name),
@@ -932,11 +922,6 @@ async function executeToolCalls(
 
 	const runTool = async (record: (typeof records)[number], index: number): Promise<void> => {
 		if (interruptState.triggered) {
-			// Skip both span emission and the collector orphan record here. The
-			// tail sweep below (after `Promise.allSettled`) is the single path
-			// that handles "no result message was produced" — it calls
-			// `recordSkippedTool` and `emitToolResult` once per record, so any
-			// work we did here would double-count.
 			record.skipped = true;
 			return;
 		}
