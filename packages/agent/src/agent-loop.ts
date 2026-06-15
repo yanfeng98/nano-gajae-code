@@ -396,11 +396,9 @@ async function runLoopBody(
 	let harmonyRetryAttempt = 0;
 	let harmonyTruncateResumeCount = 0;
 
-	// Outer loop: continues when queued follow-up messages arrive after agent would stop
 	while (true) {
 		let hasMoreToolCalls = true;
 
-		// Inner loop: process tool calls and steering messages
 		while (hasMoreToolCalls || pendingMessages.length > 0) {
 			if (!firstTurn) {
 				stream.push({ type: "turn_start" });
@@ -408,7 +406,6 @@ async function runLoopBody(
 				firstTurn = false;
 			}
 
-			// Process pending messages (inject before next assistant response)
 			if (pendingMessages.length > 0) {
 				for (const message of pendingMessages) {
 					stream.push({ type: "message_start", message });
@@ -419,12 +416,10 @@ async function runLoopBody(
 				pendingMessages = [];
 			}
 
-			// Refresh prompt/tool context from live state before each model call
 			if (config.syncContextBeforeModelCall) {
 				await config.syncContextBeforeModelCall(currentContext);
 			}
 
-			// Stream assistant response
 			let recovered: HarmonyRecoveredToolCall | undefined;
 			let message: AssistantMessage;
 			try {
@@ -470,8 +465,6 @@ async function runLoopBody(
 			let steeringMessagesFromExecution: AgentMessage[] | undefined;
 
 			if (message.stopReason === "error" || message.stopReason === "aborted") {
-				// Create placeholder tool results for any tool calls in the aborted message
-				// This maintains the tool_use/tool_result pairing that the API requires
 				type ToolCallContent = Extract<AssistantMessage["content"][number], { type: "toolCall" }>;
 				const toolCalls = message.content.filter((c): c is ToolCallContent => c.type === "toolCall");
 				const toolResults: ToolResultMessage[] = [];
@@ -480,11 +473,6 @@ async function runLoopBody(
 					currentContext.messages.push(result);
 					newMessages.push(result);
 					toolResults.push(result);
-					// The placeholder result above keeps the API's tool_use/tool_result
-					// pairing intact, but no execute_tool span is started for these
-					// calls. Mirror the run-collector entry directly so the run
-					// summary's tool counters and `coverage.toolsInvoked` reflect
-					// what the user actually saw on the wire.
 					recordSkippedTool(telemetry, {
 						toolCallId: toolCall.id,
 						toolName: toolCall.name,
@@ -497,7 +485,6 @@ async function runLoopBody(
 				return;
 			}
 
-			// Check for tool calls
 			const toolCalls = message.content.filter(c => c.type === "toolCall");
 			hasMoreToolCalls = toolCalls.length > 0;
 
@@ -537,7 +524,6 @@ async function runLoopBody(
 			}
 		}
 
-		// Agent would stop here. Check for follow-up messages.
 		await config.onBeforeYield?.();
 		if (config.shouldPause?.()) {
 			stream.push(buildAgentEndEvent(newMessages, telemetry, stepCounter.count, "paused"));
@@ -546,12 +532,10 @@ async function runLoopBody(
 		}
 		const followUpMessages = (await config.getFollowUpMessages?.()) || [];
 		if (followUpMessages.length > 0) {
-			// Set as pending so inner loop processes them
 			pendingMessages = followUpMessages;
 			continue;
 		}
 
-		// No more messages, exit
 		break;
 	}
 
@@ -576,10 +560,6 @@ async function emitHarmonyAudit(
 	);
 }
 
-/**
- * Stream an assistant response from the LLM.
- * This is where AgentMessage[] gets transformed to Message[] for the LLM.
- */
 async function streamAssistantResponse(
 	context: AgentContext,
 	config: AgentLoopConfig,
@@ -591,18 +571,14 @@ async function streamAssistantResponse(
 	streamFn?: StreamFn,
 	harmonyRetryAttempt = 0,
 ): Promise<AssistantMessage> {
-	// Apply context transform if configured (AgentMessage[] → AgentMessage[])
 	let messages = context.messages;
 	if (config.transformContext) {
 		messages = await config.transformContext(messages, signal);
 	}
 
-	// Convert to LLM-compatible messages (AgentMessage[] → Message[])
 	const llmMessages = await config.convertToLlm(messages);
 	const normalizedMessages = normalizeMessagesForProvider(llmMessages, config.model);
 
-	// Build LLM context — append-only mode caches system prompt + tools
-	// AND keeps an append-only message log so prior-turn bytes are stable.
 	let llmContext: Context;
 	if (config.appendOnlyContext) {
 		config.appendOnlyContext.syncMessages(normalizedMessages);
@@ -616,17 +592,9 @@ async function streamAssistantResponse(
 	}
 
 	const streamFunction = streamFn || streamSimple;
-
-	// Resolve API key (important for expiring tokens) — do this before resolving
-	// metadata so that the session-sticky credential recorded by getApiKey is
-	// visible to metadataResolver (e.g. for the correct account_uuid in metadata.user_id).
 	const resolvedApiKey =
 		(config.getApiKey ? await config.getApiKey(config.model.provider) : undefined) || config.apiKey;
-
-	// Re-resolve metadata after credential selection so the per-request value
-	// reflects the credential actually used, not the snapshot from AgentLoopConfig construction.
 	const authCredentialType = config.getAuthCredentialType?.(config.model.provider);
-
 	const resolvedMetadata = config.metadataResolver ? config.metadataResolver(config.model.provider) : config.metadata;
 
 	const dynamicToolChoice = config.getToolChoice?.();

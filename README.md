@@ -170,25 +170,36 @@ bun --version   # 确认 >= 1.3.14
 **方式一：完整开发安装（推荐）**
 
 ```sh
-# 1. 构建原生模块（需要 Rust）
+# 1. 安装依赖（包括 @napi-rs/cli 等构建工具）
+bun install
+
+# 2. 构建原生模块（需要 Rust）
 bun run build:native
 
-# 2. 安装依赖 + 全局链接 + 安装默认技能文件
+# 3. 全局链接 + 安装默认技能文件
+bun run link:dev
+bun run install:defaults
+```
+
+或者一步到位：
+
+```sh
+bun install
+bun run build:native
 bun run install:dev
 ```
 
 `install:dev` 会依次执行：
-1. `bun install` — 安装所有工作区依赖
-2. `bun link` — 将 `@gajae-code/coding-agent` 和 `@gajae-code/ai` 注册为全局 link
-3. `setup defaults` — 安装默认工作流技能文件
+1. `bun link` — 将 `@gajae-code/coding-agent` 和 `@gajae-code/ai` 注册为全局 link
+2. `setup defaults` — 安装默认工作流技能文件
 
 之后 `gjc` 命令在终端全局可用，修改源码即时生效。
 
 如果需要手动分步执行：
 
 ```sh
-bun run build:native                          # 构建原生模块
 bun install                                   # 安装依赖
+bun run build:native                          # 构建原生模块
 bun --cwd=packages/coding-agent link          # 全局链接 coding-agent
 bun --cwd=packages/ai link                    # 全局链接 ai
 bun run install:defaults                      # 安装默认技能文件

@@ -422,7 +422,6 @@ export interface SimpleStreamOptions extends StreamOptions {
 	cursorExecHandlers?: CursorExecHandlers;
 	/** Hook to handle tool results from Cursor exec */
 	cursorOnToolResult?: CursorToolResultHandler;
-	/** Optional tool choice override for compatible providers */
 	toolChoice?: ToolChoice;
 	/** OpenAI service tier for processing priority/cost control. Ignored by non-OpenAI providers. */
 	serviceTier?: ServiceTier;
@@ -571,7 +570,7 @@ export interface AssistantMessage {
 	api: Api;
 	provider: Provider;
 	model: string;
-	responseId?: string; // Provider-specific response/message identifier when the upstream API exposes one
+	responseId?: string;
 	usage: Usage;
 	stopReason: StopReason;
 	errorMessage?: string;

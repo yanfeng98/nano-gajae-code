@@ -103,12 +103,6 @@ export interface HarmonyRecoveredToolCall {
 	removed: string;
 }
 
-/**
- * Whether to run leak detection on responses from this model. We default-on
- * for every OpenAI code provider model rather than enumerating ids, so a future
- * gpt-5.6 (or whatever) doesn't silently bypass the mitigation. Detection
- * itself is cheap; the cost of missing a leak on a new model is not.
- */
 export function isHarmonyLeakMitigationTarget(model: Model): boolean {
 	return model.provider === "openai-codex";
 }

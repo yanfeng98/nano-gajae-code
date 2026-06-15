@@ -31,95 +31,14 @@ export interface AgentLoopConfig extends SimpleStreamOptions {
 	sessionId?: string;
 	providerSessionId?: string;
 
-	/**
-	 * Optional resolver called per LLM request to produce request metadata.
-	 * When set, the agent loop evaluates it **after** `getApiKey` resolves the
-	 * session-sticky credential, ensuring the metadata's `account_uuid` reflects
-	 * the credential actually used for the request (not the credential that was
-	 * current when `AgentLoopConfig` was first constructed). Overrides the static
-	 * `metadata` field when present.
-	 */
 	metadataResolver?: (provider: string) => Record<string, unknown> | undefined;
-
-	/**
-	 * Converts AgentMessage[] to LLM-compatible Message[] before each LLM call.
-	 *
-	 * Each AgentMessage must be converted to a UserMessage, AssistantMessage, or ToolResultMessage
-	 * that the LLM can understand. AgentMessages that cannot be converted (e.g., UI-only notifications,
-	 * status messages) should be filtered out.
-	 *
-	 * @example
-	 * ```typescript
-	 * convertToLlm: (messages) => messages.flatMap(m => {
-	 *   if (m.role === "custom") {
-	 *     // Convert custom message to user message
-	 *     return [{ role: "user", content: m.content, timestamp: m.timestamp }];
-	 *   }
-	 *   if (m.role === "notification") {
-	 *     // Filter out UI-only messages
-	 *     return [];
-	 *   }
-	 *   // Pass through standard LLM messages
-	 *   return [m];
-	 * })
-	 * ```
-	 */
 	convertToLlm: (messages: AgentMessage[]) => Message[] | Promise<Message[]>;
-
-	/**
-	 * Optional transform applied to the context before `convertToLlm`.
-	 *
-	 * Use this for operations that work at the AgentMessage level:
-	 * - Context window management (pruning old messages)
-	 * - Injecting context from external sources
-	 *
-	 * @example
-	 * ```typescript
-	 * transformContext: async (messages) => {
-	 *   if (estimateTokens(messages) > MAX_TOKENS) {
-	 *     return pruneOldMessages(messages);
-	 *   }
-	 *   return messages;
-	 * }
-	 * ```
-	 */
 	transformContext?: (messages: AgentMessage[], signal?: AbortSignal) => Promise<AgentMessage[]>;
-
-	/**
-	 * Resolves an API key dynamically for each LLM call.
-	 *
-	 * Useful for short-lived OAuth tokens (e.g., GitHub Copilot) that may expire
-	 * during long-running tool execution phases.
-	 */
 	getApiKey?: (provider: string) => Promise<string | undefined> | string | undefined;
-
-	/** Returns the credential type selected by the most recent getApiKey call for this session/provider. */
 	getAuthCredentialType?: (provider: string) => "api_key" | "oauth" | undefined;
 	getSteeringMessages?: () => Promise<AgentMessage[]>;
-
-	/**
-	 * Returns follow-up messages to process after the agent would otherwise stop.
-	 *
-	 * Called when the agent has no more tool calls and no steering messages.
-	 * If messages are returned, they're added to the context and the agent
-	 * continues with another turn.
-	 */
 	getFollowUpMessages?: () => Promise<AgentMessage[]>;
-	/**
-	 * Cooperative pause checkpoint evaluated at safe loop boundaries.
-	 *
-	 * Called after completed tool execution has been emitted and before the loop
-	 * polls steering/follow-up queues or schedules another assistant response.
-	 * Returning true ends the current loop with `agent_end.stopReason === "paused"`
-	 * without aborting any in-flight model or tool work.
-	 */
 	shouldPause?: () => boolean;
-	/**
-	 * Hook fired right before the loop would exit.
-	 *
-	 * Called when the agent has no more tool calls and no steering messages,
-	 * immediately before polling follow-up messages.
-	 */
 	onBeforeYield?: () => Promise<void> | void;
 
 	/**
@@ -127,11 +46,6 @@ export interface AgentLoopConfig extends SimpleStreamOptions {
 	 * Use for late-bound UI or session state access.
 	 */
 	getToolContext?: (toolCall?: ToolCallContext) => AgentToolContext | undefined;
-
-	/**
-	 * Refreshes prompt/tool context from live session state before each model call.
-	 * Use this when tool availability or the system prompt can change mid-turn.
-	 */
 	syncContextBeforeModelCall?: (context: AgentContext) => void | Promise<void>;
 
 	/**
@@ -146,14 +60,6 @@ export interface AgentLoopConfig extends SimpleStreamOptions {
 	 * then strips from arguments before executing tools.
 	 */
 	intentTracing?: boolean;
-	/**
-	 * Append-only context mode — stabilizes system prompt + tool spec bytes
-	 * across turns so provider prefix caches hit at maximum rate.
-	 *
-	 * When set, the loop reads messages from the append-only log (stable
-	 * byte prefix) and caches system prompt + tools. Tools exclude per-turn
-	 * `_i` intent fields.
-	 */
 	appendOnlyContext?: AppendOnlyContextManager;
 
 	/**
@@ -164,24 +70,8 @@ export interface AgentLoopConfig extends SimpleStreamOptions {
 
 	/** Called for non-content tool-choice incapability stream events. */
 	onToolChoiceIncapability?: (event: Extract<AssistantMessageEvent, { type: "toolChoiceIncapability" }>) => void;
-
-	/**
-	 * Called when GPT-5 Harmony protocol leakage is detected and mitigated.
-	 */
 	onHarmonyLeak?: (event: HarmonyAuditEvent) => void | Promise<void>;
-
-	/**
-	 * Dynamic tool choice override, resolved per LLM call.
-	 * When set and returns a value, overrides the static `toolChoice`.
-	 */
 	getToolChoice?: () => ToolChoice | undefined;
-
-	/**
-	 * Dynamic reasoning effort override, resolved per LLM call.
-	 * When set and returns a value, overrides the static `reasoning` captured
-	 * at run-loop start. Use this so mid-run thinking-level changes apply on
-	 * the next model call instead of waiting for the next prompt.
-	 */
 	getReasoning?: () => Effort | undefined;
 
 	/**
