@@ -631,9 +631,6 @@ async function streamAssistantResponse(
 		},
 	});
 
-	// Wrap the user-supplied onResponse so we always observe response headers
-	// for telemetry (`ChatUsageEvent.headers`, gateway auto-detection) without
-	// stealing them from the configured hook.
 	let capturedHeaders: Readonly<Record<string, string>> | undefined;
 	const userOnResponse = config.onResponse;
 	const captureOnResponse: AgentLoopConfig["onResponse"] = (response, modelInfo) => {
