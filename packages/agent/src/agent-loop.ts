@@ -998,7 +998,6 @@ async function executeToolCalls(
 						throw new ToolCallBlockedError(beforeResult.reason);
 					}
 				}
-				// Reflect post-hook args so emitted tool results / afterToolCall see what actually executed.
 				record.args = effectiveArgs;
 
 				const toolContext = getToolContext
@@ -1134,10 +1133,6 @@ async function executeToolCalls(
 	return { toolResults: emittedToolResults, steeringMessages };
 }
 
-/**
- * Create a tool result for a tool call that was aborted or errored before execution.
- * Maintains the tool_use/tool_result pairing required by the API.
- */
 function createAbortedToolResult(
 	toolCall: Extract<AssistantMessage["content"][number], { type: "toolCall" }>,
 	stream: EventStream<AgentEvent, AgentMessage[]>,
