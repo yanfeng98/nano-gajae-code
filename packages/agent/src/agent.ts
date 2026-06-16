@@ -1,6 +1,3 @@
-/** Agent class that uses the agent-loop directly.
- * No transport abstraction - calls streamSimple via the loop.
- */
 import {
 	type AssistantMessage,
 	type AssistantMessageEvent,
@@ -35,9 +32,6 @@ import type {
 	ToolCallContext,
 } from "./types";
 
-/**
- * Default convertToLlm: Keep only LLM-compatible messages, convert attachments.
- */
 function defaultConvertToLlm(messages: AgentMessage[]): Message[] {
 	return messages.filter((m): m is Message => m.role === "user" || m.role === "assistant" || m.role === "toolResult");
 }
@@ -70,179 +64,47 @@ export class AgentBusyError extends Error {
 }
 export interface AgentOptions {
 	initialState?: Partial<AgentState>;
-
-	/**
-	 * Converts AgentMessage[] to LLM-compatible Message[] before each LLM call.
-	 * Default filters to user/assistant/toolResult and converts attachments.
-	 */
 	convertToLlm?: (messages: AgentMessage[]) => Message[] | Promise<Message[]>;
-
-	/**
-	 * Optional transform applied to context before convertToLlm.
-	 * Use for context pruning, injecting external context, etc.
-	 */
 	transformContext?: (messages: AgentMessage[], signal?: AbortSignal) => Promise<AgentMessage[]>;
-
-	/**
-	 * Steering mode: "all" = send all steering messages at once, "one-at-a-time" = one per turn
-	 */
 	steeringMode?: "all" | "one-at-a-time";
-
-	/**
-	 * Follow-up mode: "all" = send all follow-up messages at once, "one-at-a-time" = one per turn
-	 */
 	followUpMode?: "all" | "one-at-a-time";
-
-	/**
-	 * When to interrupt tool execution for steering messages.
-	 * - "immediate": check after each tool call (default)
-	 * - "wait": defer steering until the current turn completes
-	 */
 	interruptMode?: "immediate" | "wait";
-	/** Cooperative pause checkpoint passed through to AgentLoopConfig.shouldPause. */
 	shouldPause?: AgentLoopConfig["shouldPause"];
-
-	/**
-	 * API format for Kimi Code provider: "openai" or "anthropic" (default: "anthropic")
-	 */
 	kimiApiFormat?: "openai" | "anthropic";
-
-	/** Hint that websocket transport should be preferred when supported by the provider implementation. */
 	preferWebsockets?: boolean;
-
-	/**
-	 * Custom stream function (for proxy backends, etc.). Default uses streamSimple.
-	 */
 	streamFn?: StreamFn;
-
-	/**
-	 * Optional session identifier forwarded to LLM providers.
-	 * Used by providers that support session-based caching (e.g., OpenAI code provider).
-	 */
 	sessionId?: string;
-	/** Provider-facing cache/session affinity identifier. */
 	providerSessionId?: string;
-	/**
-	 * Shared provider state map for session-scoped transport/session caches.
-	 */
 	providerSessionState?: Map<string, ProviderSessionState>;
-
-	/**
-	 * Resolves an API key dynamically for each LLM call.
-	 * Useful for expiring tokens (e.g., GitHub Copilot OAuth).
-	 */
 	getApiKey?: (provider: string) => Promise<string | undefined> | string | undefined;
 	getAuthCredentialType?: (provider: string) => "api_key" | "oauth" | undefined;
-
-	/**
-	 * Inspect or replace provider payloads before they are sent.
-	 */
 	onPayload?: SimpleStreamOptions["onPayload"];
-	/**
-	 * Inspect provider response metadata after headers arrive and before streaming body consumption.
-	 */
 	onResponse?: SimpleStreamOptions["onResponse"];
-	/**
-	 * Inspect raw Server-Sent Events from HTTP streaming providers.
-	 */
 	onSseEvent?: SimpleStreamOptions["onSseEvent"];
-	/**
-	 * Inspect assistant streaming events before they are emitted to subscribers.
-	 * Use this when abort decisions must happen before buffered events continue flowing.
-	 */
 	onAssistantMessageEvent?: (message: AssistantMessage, event: AssistantMessageEvent) => void;
-	/** Called for non-content tool-choice incapability stream events. */
 	onToolChoiceIncapability?: AgentLoopConfig["onToolChoiceIncapability"];
-
-	/**
-	 * Called when GPT-5 Harmony protocol leakage is detected and mitigated.
-	 */
 	onHarmonyLeak?: (event: HarmonyAuditEvent) => void | Promise<void>;
-	/**
-	 * Custom token budgets for thinking levels (token-based providers only).
-	 */
 	thinkingBudgets?: ThinkingBudgets;
-
-	/**
-	 * Sampling temperature for LLM calls. `undefined` uses provider default.
-	 */
 	temperature?: number;
-
-	/** Additional sampling controls for providers that support them. */
 	topP?: number;
 	topK?: number;
 	minP?: number;
 	presencePenalty?: number;
 	repetitionPenalty?: number;
 	serviceTier?: ServiceTier;
-	/**
-	 * If true, request that the underlying provider omit reasoning/thinking summaries
-	 * from the response. The model still reasons internally; only the human-readable
-	 * summary stream is suppressed. Useful when the UI hides thinking blocks anyway.
-	 */
 	hideThinkingSummary?: boolean;
-
-	/**
-	 * Maximum delay in milliseconds to wait for a retry when the server requests a long wait.
-	 * If the server's requested delay exceeds this value, the request fails immediately,
-	 * allowing higher-level retry logic to handle it with user visibility.
-	 * Default: 60000 (60 seconds). Set to 0 to disable the cap.
-	 */
 	maxRetryDelayMs?: number;
-	/** Provider request retry budget. Counts retries, not the initial attempt. */
 	requestMaxRetries?: number;
-	/** Provider stream replay retry budget. Counts retries, not the initial attempt. */
 	streamMaxRetries?: number;
-
-	/**
-	 * Provides tool execution context, resolved per tool call.
-	 * Use for late-bound UI or session state access.
-	 */
 	getToolContext?: (toolCall?: ToolCallContext) => AgentToolContext | undefined;
-
-	/**
-	 * Optional transform applied to tool call arguments before execution.
-	 * Use for deobfuscating secrets or rewriting arguments.
-	 */
 	transformToolCallArguments?: (args: Record<string, unknown>, toolName: string) => Record<string, unknown>;
-
-	/** Enable intent tracing schema injection/stripping in the harness. */
 	intentTracing?: boolean;
-	/** Dynamic tool choice override, resolved per LLM call. */
 	getToolChoice?: () => ToolChoice | undefined;
-
-	/**
-	 * Cursor exec handlers for local tool execution.
-	 */
 	cursorExecHandlers?: CursorExecHandlers;
-
-	/**
-	 * Cursor tool result callback for exec tool responses.
-	 */
 	cursorOnToolResult?: CursorToolResultHandler;
-
-	/**
-	 * Called after a tool call has been validated and is about to execute.
-	 * See {@link AgentLoopConfig.beforeToolCall} for full semantics.
-	 */
 	beforeToolCall?: AgentLoopConfig["beforeToolCall"];
-
-	/**
-	 * Called after a tool finishes executing, before `tool_execution_end` and the tool-result
-	 * message are emitted. See {@link AgentLoopConfig.afterToolCall} for full semantics.
-	 */
 	afterToolCall?: AgentLoopConfig["afterToolCall"];
-
-	/**
-	 * Opt-in OpenTelemetry instrumentation. Passing `{}` enables the loop's
-	 * GenAI-semantic-convention spans using the global tracer provider. See
-	 * {@link AgentLoopConfig.telemetry} for the full surface.
-	 */
 	telemetry?: AgentLoopConfig["telemetry"];
-	/**
-	 * Immutable context mode — stabilizes system prompt + tool spec bytes
-	 * across turns so DeepSeek/Anthropic prefix caches hit at maximum rate.
-	 */
 	appendOnlyContext?: AppendOnlyContextManager;
 }
 
@@ -250,7 +112,6 @@ export interface AgentPromptOptions {
 	toolChoice?: ToolChoice;
 }
 
-/** Buffered Cursor tool result with text position at time of call */
 interface CursorToolResultEntry {
 	toolResult: ToolResultMessage;
 	textLengthAtCall: number;
@@ -322,21 +183,12 @@ export class Agent {
 		return this.#intentTracing;
 	}
 
-	/** Buffered Cursor tool results with text length at time of call (for correct ordering) */
 	#cursorToolResultBuffer: CursorToolResultEntry[] = [];
 
 	streamFn: StreamFn;
 	getApiKey?: (provider: string) => Promise<string | undefined> | string | undefined;
 	getAuthCredentialType?: (provider: string) => "api_key" | "oauth" | undefined;
-	/**
-	 * Hook invoked after tool arguments are validated and before execution.
-	 * Reassign at any time to swap the implementation (e.g. on extension reload).
-	 */
 	beforeToolCall?: AgentLoopConfig["beforeToolCall"];
-	/**
-	 * Hook invoked after tool execution and before `tool_execution_end` / tool-result
-	 * message emission. Reassign at any time to swap the implementation.
-	 */
 	afterToolCall?: AgentLoopConfig["afterToolCall"];
 
 	constructor(opts: AgentOptions = {}) {
