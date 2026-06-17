@@ -237,17 +237,10 @@ export class Agent {
 		this.#appendOnlyContext = opts.appendOnlyContext;
 	}
 
-	/**
-	 * Get the current session ID used for provider caching.
-	 */
 	get sessionId(): string | undefined {
 		return this.#sessionId;
 	}
 
-	/**
-	 * Set the session ID for provider caching.
-	 * Call this when switching sessions (new session, branch, resume).
-	 */
 	set sessionId(value: string | undefined) {
 		this.#sessionId = value;
 	}
@@ -260,15 +253,6 @@ export class Agent {
 		this.#providerSessionId = value;
 	}
 
-	/**
-	 * Static metadata forwarded to every API request when no resolver is installed
-	 * (e.g. `metadata.user_id` for Anthropic session attribution). Setting this
-	 * clears any installed resolver.
-	 *
-	 * For live/provider-aware metadata (e.g. Anthropic OAuth `account_uuid` that
-	 * must reflect the credential selected per-request), use
-	 * {@link setMetadataResolver} and read via {@link metadataForProvider}.
-	 */
 	get metadata(): Record<string, unknown> | undefined {
 		return this.#metadata;
 	}
@@ -278,87 +262,43 @@ export class Agent {
 		this.#metadataResolver = undefined;
 	}
 
-	/**
-	 * Resolve request metadata for the given provider at call time. When a
-	 * resolver is installed via {@link setMetadataResolver}, it is invoked with
-	 * the provider string so the result can be scoped (e.g. `account_uuid` is
-	 * only included for `"anthropic"` requests). Falls back to the static
-	 * {@link metadata} value when no resolver is set.
-	 */
 	metadataForProvider(provider: string): Record<string, unknown> | undefined {
 		if (this.#metadataResolver) return this.#metadataResolver(provider);
 		return this.#metadata;
 	}
 
-	/**
-	 * Install a function that resolves request metadata at call time. The
-	 * resolver receives the target provider string and can gate provider-specific
-	 * fields (e.g. `account_uuid` only for `"anthropic"`). Invoked per LLM
-	 * request by `agent-loop` after `getApiKey` selects the session-sticky
-	 * credential. Pass `undefined` to clear and revert to the static
-	 * {@link metadata} value.
-	 */
 	setMetadataResolver(resolver: ((provider: string) => Record<string, unknown> | undefined) | undefined): void {
 		this.#metadataResolver = resolver;
 	}
 
-	/**
-	 * Read the active OpenTelemetry configuration. Returns `undefined` when
-	 * instrumentation is disabled. Callers spawning child runs (e.g. subagent
-	 * dispatch) forward this to the child's loop so its spans appear under the
-	 * parent's active context with the subagent's own identity stamped.
-	 */
 	get telemetry(): AgentLoopConfig["telemetry"] | undefined {
 		return this.#telemetry;
 	}
 
-	/**
-	 * Replace the active OpenTelemetry configuration. Pass `undefined` to
-	 * disable instrumentation. Applies to the *next* `agentLoop` invocation —
-	 * in-flight loops keep the configuration they started with.
-	 */
 	setTelemetry(telemetry: AgentLoopConfig["telemetry"] | undefined): void {
 		this.#telemetry = telemetry;
 	}
 
-	/**
-	 * Get provider-scoped mutable session state store.
-	 */
 	get providerSessionState(): Map<string, ProviderSessionState> | undefined {
 		return this.#providerSessionState;
 	}
 
-	/**
-	 * Set provider-scoped mutable session state store.
-	 */
 	set providerSessionState(value: Map<string, ProviderSessionState> | undefined) {
 		this.#providerSessionState = value;
 	}
 
-	/**
-	 * Get the current thinking budgets.
-	 */
 	get thinkingBudgets(): ThinkingBudgets | undefined {
 		return this.#thinkingBudgets;
 	}
 
-	/**
-	 * Set custom thinking budgets for token-based providers.
-	 */
 	set thinkingBudgets(value: ThinkingBudgets | undefined) {
 		this.#thinkingBudgets = value;
 	}
 
-	/**
-	 * Get the current sampling temperature.
-	 */
 	get temperature(): number | undefined {
 		return this.#temperature;
 	}
 
-	/**
-	 * Set sampling temperature for LLM calls. `undefined` uses provider default.
-	 */
 	set temperature(value: number | undefined) {
 		this.#temperature = value;
 	}
@@ -419,17 +359,10 @@ export class Agent {
 		this.#hideThinkingSummary = value;
 	}
 
-	/**
-	 * Get the current max retry delay in milliseconds.
-	 */
 	get maxRetryDelayMs(): number | undefined {
 		return this.#maxRetryDelayMs;
 	}
 
-	/**
-	 * Set the maximum delay to wait for server-requested retries.
-	 * Set to 0 to disable the cap.
-	 */
 	set maxRetryDelayMs(value: number | undefined) {
 		this.#maxRetryDelayMs = value;
 	}
@@ -536,10 +469,6 @@ export class Agent {
 		if (!source) return undefined;
 
 		const guarded: CursorExecHandlers = {};
-		// Bind each handler to `source`: they are methods of a CursorExecHandlers
-		// instance that reference private fields via `this`. Extracting them bare
-		// (`const read = source.read`) and calling `read(args)` would invoke them with
-		// `this === undefined`, throwing "undefined is not an object (this.#optionsForCall)".
 		const read = source.read?.bind(source);
 		if (read) {
 			guarded.read = async args => {
@@ -633,7 +562,6 @@ export class Agent {
 		return guarded;
 	}
 
-	// State mutators
 	setSystemPrompt(v: string[]) {
 		this.#state.systemPrompt = v;
 	}
@@ -694,18 +622,10 @@ export class Agent {
 		return removed;
 	}
 
-	/**
-	 * Queue a steering message to interrupt the agent mid-run.
-	 * Delivered after current tool execution, skips remaining tools.
-	 */
 	steer(m: AgentMessage) {
 		this.#steeringQueue.push(m);
 	}
 
-	/**
-	 * Queue a follow-up message to be processed after the agent finishes.
-	 * Delivered only when agent has no more tool calls or steering messages.
-	 */
 	followUp(m: AgentMessage) {
 		this.#followUpQueue.push(m);
 	}
@@ -731,29 +651,19 @@ export class Agent {
 		return this.#steeringQueue.length > 0;
 	}
 
-	/**
-	 * Snapshot the steering queue without mutating it. Used to preserve queued
-	 * steering across maintenance ops (compaction/handoff) that call reset().
-	 */
 	snapshotSteering(): AgentMessage[] {
 		return this.#steeringQueue.slice();
 	}
 
-	/**
-	 * Restore previously snapshotted steering messages ahead of any newly
-	 * queued ones. No-op for an empty snapshot.
-	 */
 	restoreSteering(messages: AgentMessage[]): void {
 		if (messages.length === 0) return;
 		this.#steeringQueue = [...messages, ...this.#steeringQueue];
 	}
 
-	/** Snapshot the follow-up queue without mutating it. */
 	snapshotFollowUp(): AgentMessage[] {
 		return this.#followUpQueue.slice();
 	}
 
-	/** Restore previously snapshotted follow-up messages ahead of any newly queued ones. */
 	restoreFollowUp(messages: AgentMessage[]): void {
 		if (messages.length === 0) return;
 		this.#followUpQueue = [...messages, ...this.#followUpQueue];
