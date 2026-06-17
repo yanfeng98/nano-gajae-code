@@ -36,7 +36,6 @@
       },
       "dependencies": {
         "@anthropic-ai/sdk": "catalog:",
-        "@bufbuild/protobuf": "catalog:",
         "@gajae-code/utils": "catalog:",
         "openai": "catalog:",
         "partial-json": "catalog:",
@@ -216,8 +215,6 @@
     "@babel/traverse": "^7.29.0",
     "@babel/types": "^7.29.0",
     "@biomejs/biome": "^2.4.14",
-    "@bufbuild/protobuf": "^2.12.0",
-    "@bufbuild/protoc-gen-es": "^2.12.0",
     "@gajae-code/agent-core": "0.5.0",
     "@gajae-code/ai": "0.5.0",
     "@gajae-code/bridge-client": "0.5.0",
@@ -337,8 +334,6 @@
     "@biomejs/cli-win32-x64": ["@biomejs/cli-win32-x64@2.4.16", "https://registry.npmmirror.com/@biomejs/cli-win32-x64/-/cli-win32-x64-2.4.16.tgz", { "os": "win32", "cpu": "x64" }, "sha512-Kp85jgoBHa05gix6UIRjfCDiUV3w/8VIdZ247VyyO2gEjaw12WEVhdIjlxp/AMzXxqxQwbxNTDVZ3Mwd2RG5rw=="],
 
     "@borewit/text-codec": ["@borewit/text-codec@0.2.2", "https://registry.npmmirror.com/@borewit/text-codec/-/text-codec-0.2.2.tgz", {}, "sha512-DDaRehssg1aNrH4+2hnj1B7vnUGEjU6OIlyRdkMd0aUdIUvKXrJfXsy8LVtXAy7DRvYVluWbMspsRhz2lcW0mQ=="],
-
-    "@bufbuild/protobuf": ["@bufbuild/protobuf@2.12.0", "https://registry.npmmirror.com/@bufbuild/protobuf/-/protobuf-2.12.0.tgz", {}, "sha512-B/XlCaFIP8LOwzo+bz5uFzATYokcwCKQcghqnlfwSmM5eX/qTkvDBnDPs+gXtX/RyjxJ4DRikECcPJbyALA8FA=="],
 
     "@colors/colors": ["@colors/colors@1.6.0", "https://registry.npmmirror.com/@colors/colors/-/colors-1.6.0.tgz", {}, "sha512-Ir+AOibqzrIsL6ajt3Rz3LskB7OiMVHqltZmspbW/TJuTVuyOMirVqAkjfY6JISiLHgyNqicAC8AyHHGzNd/dA=="],
 

@@ -42,7 +42,6 @@
 	},
 	"dependencies": {
 		"@anthropic-ai/sdk": "catalog:",
-		"@bufbuild/protobuf": "catalog:",
 		"@gajae-code/utils": "catalog:",
 		"openai": "catalog:",
 		"partial-json": "catalog:",

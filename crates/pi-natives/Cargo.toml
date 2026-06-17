@@ -16,7 +16,6 @@ workspace = true
 anyhow.workspace = true
 arboard.workspace = true
 ast-grep-core.workspace = true
-clap.workspace = true
 dashmap.workspace = true
 globset.workspace = true
 grep-matcher.workspace = true
@@ -40,12 +39,10 @@ rayon.workspace = true
 regex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-similar.workspace = true
 smallvec.workspace = true
 syntect.workspace = true
 tiktoken-rs.workspace = true
 tokio.workspace = true
-tokio-util.workspace = true
 toml.workspace = true
 unicode-segmentation.workspace = true
 unicode-width.workspace = true
@@ -55,7 +52,7 @@ xxhash-rust.workspace = true
 libc.workspace = true
 
 [target.'cfg(windows)'.dependencies]
-winreg.workspace = true
+# winreg removed - unused in pi-natives
 
 [build-dependencies]
 napi-build.workspace = true
