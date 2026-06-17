@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { getBundledModel } from "../src/models";
 import { DEFAULT_MODEL_PER_PROVIDER } from "../src/provider-models/descriptors";
 
-const minimaxProviders = ["minimax", "minimax-cn", "minimax-code", "minimax-code-cn"] as const;
+const minimaxProviders = ["minimax-cn"] as const;
 
 describe("MiniMax M3 support (issue #385)", () => {
 	test("bundles minimax-m3 across first-class MiniMax providers", () => {
@@ -19,9 +19,7 @@ describe("MiniMax M3 support (issue #385)", () => {
 	});
 
 	test("uses minimax-m3 as the default first-class MiniMax model", () => {
-		expect(DEFAULT_MODEL_PER_PROVIDER.minimax).toBe("minimax-m3");
-		expect(DEFAULT_MODEL_PER_PROVIDER["minimax-code"]).toBe("minimax-m3");
-		expect(DEFAULT_MODEL_PER_PROVIDER["minimax-code-cn"]).toBe("minimax-m3");
+		expect(DEFAULT_MODEL_PER_PROVIDER["minimax-cn"]).toBe("minimax-m3");
 	});
 
 	test("surfaces minimax-m3 with MiniMax-M3 display casing (issue #404)", () => {

@@ -164,8 +164,6 @@ export const PROVIDER_DESCRIPTORS: readonly ProviderDescriptor[] = [
 export const DEFAULT_MODEL_PER_PROVIDER: Record<KnownProvider, string> = {
 	...Object.fromEntries(PROVIDER_DESCRIPTORS.map(d => [d.providerId, d.defaultModel])),
 	// Providers not in PROVIDER_DESCRIPTORS (special auth or no standard discovery)
-	minimax: "minimax-m3",
-	"minimax-code": "minimax-m3",
-	"minimax-code-cn": "minimax-m3",
+	"minimax-cn": "minimax-m3",
 	"lm-studio": "llama-4",
 } as Record<KnownProvider, string>;

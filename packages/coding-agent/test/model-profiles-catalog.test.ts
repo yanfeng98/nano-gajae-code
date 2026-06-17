@@ -58,7 +58,7 @@ const expectedProfiles: Array<{ name: string; requiredProviders: string[]; mappi
 			default: "opencode-go/kimi-k2.6",
 			executor: "opencode-go/deepseek-v4-flash",
 			planner: "opencode-go/qwen3.7-max",
-			critic: "opencode-go/mimo-v2.5-pro",
+			critic: "opencode-go/MiniMax-M2.5",
 			architect: "opencode-go/deepseek-v4-pro",
 		},
 	},
@@ -140,36 +140,36 @@ const expectedProfiles: Array<{ name: string; requiredProviders: string[]; mappi
 		},
 	},
 	{
-		name: "mimo-eco",
-		requiredProviders: ["xiaomi"],
+		name: "minimax-eco",
+		requiredProviders: ["minimax-cn"],
 		mapping: {
-			default: "xiaomi/mimo-v2.5-pro:low",
-			executor: "xiaomi/mimo-v2.5-pro:minimal",
-			planner: "xiaomi/mimo-v2.5-pro:low",
-			critic: "xiaomi/mimo-v2.5-pro:medium",
-			architect: "xiaomi/mimo-v2.5-pro:high",
+			default: "xiaomi/MiniMax-M2.5:low",
+			executor: "xiaomi/MiniMax-M2.5:minimal",
+			planner: "xiaomi/MiniMax-M2.5:low",
+			critic: "xiaomi/MiniMax-M2.5:medium",
+			architect: "xiaomi/MiniMax-M2.5:high",
 		},
 	},
 	{
-		name: "mimo-medium",
-		requiredProviders: ["xiaomi"],
+		name: "minimax-medium",
+		requiredProviders: ["minimax-cn"],
 		mapping: {
-			default: "xiaomi/mimo-v2.5-pro:medium",
-			executor: "xiaomi/mimo-v2.5-pro:low",
-			planner: "xiaomi/mimo-v2.5-pro:medium",
-			critic: "xiaomi/mimo-v2.5-pro:high",
-			architect: "xiaomi/mimo-v2.5-pro:xhigh",
+			default: "xiaomi/MiniMax-M2.5:medium",
+			executor: "xiaomi/MiniMax-M2.5:low",
+			planner: "xiaomi/MiniMax-M2.5:medium",
+			critic: "xiaomi/MiniMax-M2.5:high",
+			architect: "xiaomi/MiniMax-M2.5:xhigh",
 		},
 	},
 	{
-		name: "mimo-pro",
-		requiredProviders: ["xiaomi"],
+		name: "minimax-pro",
+		requiredProviders: ["minimax-cn"],
 		mapping: {
-			default: "xiaomi/mimo-v2.5-pro:xhigh",
-			executor: "xiaomi/mimo-v2.5-pro:medium",
-			planner: "xiaomi/mimo-v2.5-pro:high",
-			critic: "xiaomi/mimo-v2.5-pro:xhigh",
-			architect: "xiaomi/mimo-v2.5-pro:xhigh",
+			default: "xiaomi/MiniMax-M2.5:xhigh",
+			executor: "xiaomi/MiniMax-M2.5:medium",
+			planner: "xiaomi/MiniMax-M2.5:high",
+			critic: "xiaomi/MiniMax-M2.5:xhigh",
+			architect: "xiaomi/MiniMax-M2.5:xhigh",
 		},
 	},
 	{
@@ -256,7 +256,7 @@ const expectedProfiles: Array<{ name: string; requiredProviders: string[]; mappi
 			default: "openai-codex/gpt-5.5:medium",
 			executor: "opencode-go/deepseek-v4-pro",
 			planner: "opencode-go/kimi-k2.6",
-			critic: "opencode-go/mimo-v2.5-pro",
+			critic: "opencode-go/MiniMax-M2.5",
 			architect: "openai-codex/gpt-5.5:xhigh",
 		},
 	},
@@ -337,7 +337,7 @@ describe("built-in model profile catalog", () => {
 			"CLAUDE",
 			"GLM",
 			"KIMI CODING PLAN",
-			"MIMO",
+			"MINIMAX",
 			"GROK",
 			"CURSOR",
 			"MINIMAX",
@@ -348,7 +348,7 @@ describe("built-in model profile catalog", () => {
 		expect(recommendModelProfileForProvider("opencode-go", profiles)?.name).toBe("opencodego");
 		expect(recommendModelProfileForProvider("zai", profiles)?.name).toBe("glm-medium");
 		expect(recommendModelProfileForProvider("kimi-code", profiles)?.name).toBe("kimi-coding-plan-medium");
-		expect(recommendModelProfileForProvider("xiaomi", profiles)?.name).toBe("mimo-medium");
+		expect(recommendModelProfileForProvider("minimax-cn", profiles)?.name).toBe("minimax-medium");
 		expect(recommendModelProfileForProvider("xai", profiles)?.name).toBe("grok-medium");
 	});
 

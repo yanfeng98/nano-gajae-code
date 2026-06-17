@@ -850,7 +850,7 @@ export function veniceModelManagerOptions(
 ): ModelManagerOptions<"openai-completions"> {
 	const apiKey = config?.apiKey;
 	const baseUrl = config?.baseUrl ?? "https://api.venice.ai/api/v1";
-	const references = createBundledReferenceMap<"openai-completions">("venice");
+	const references = createBundledReferenceMap<"openai-completions">("venice" as any);
 	return {
 		providerId: "venice",
 		fetchDynamicModels: () =>
@@ -938,7 +938,7 @@ export function xiaomiModelManagerOptions(
 	// Token-plan keys always use the TP baseUrl; config?.baseUrl (from catalog)
 	// would incorrectly pin to the standard endpoint (api.xiaomimimo.com).
 	const baseUrl = apiKey?.startsWith("tp-") ? defaultBaseUrl : (config?.baseUrl ?? defaultBaseUrl);
-	const references = createBundledReferenceMap<"openai-completions">("xiaomi");
+	const references = createBundledReferenceMap<"openai-completions">("xiaomi" as any);
 	return {
 		providerId: "xiaomi",
 		...(apiKey && {

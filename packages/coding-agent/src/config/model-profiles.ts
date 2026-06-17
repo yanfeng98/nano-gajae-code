@@ -168,9 +168,6 @@ const PROFILE_PRESENTATION: Record<string, ModelProfilePresentation> = {
 	"kimi-coding-plan-eco": { displayName: "Kimi Coding Plan Eco", providerGroup: "KIMI CODING PLAN" },
 	"kimi-coding-plan-medium": { displayName: "Kimi Coding Plan Medium", providerGroup: "KIMI CODING PLAN" },
 	"kimi-coding-plan-pro": { displayName: "Kimi Coding Plan Pro", providerGroup: "KIMI CODING PLAN" },
-	"mimo-eco": { displayName: "Mimo Eco", providerGroup: "MIMO" },
-	"mimo-medium": { displayName: "Mimo Medium", providerGroup: "MIMO" },
-	"mimo-pro": { displayName: "Mimo Pro", providerGroup: "MIMO" },
 	"minimax-eco": { displayName: "MiniMax Eco", providerGroup: "MINIMAX" },
 	"minimax-medium": { displayName: "MiniMax Medium", providerGroup: "MINIMAX" },
 	"minimax-pro": { displayName: "MiniMax Pro", providerGroup: "MINIMAX" },
@@ -181,7 +178,6 @@ const PROFILE_GROUP_ORDER = [
 	"CLAUDE",
 	"GLM",
 	"KIMI CODING PLAN",
-	"MIMO",
 	"MINIMAX",
 	"COMBOS",
 ];
@@ -191,7 +187,6 @@ const PROFILE_RECOMMENDATIONS: Record<string, string> = {
 	"opencode-go": "opencodego",
 	zai: "glm-medium",
 	"kimi-code": "kimi-coding-plan-medium",
-	xiaomi: "mimo-medium",
 	"minimax-code": "minimax-medium",
 };
 

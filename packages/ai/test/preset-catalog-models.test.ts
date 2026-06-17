@@ -15,10 +15,10 @@ describe("preset catalog model entries", () => {
 	});
 
 	test("bundles minimax-code/minimax-v3", () => {
-		const model = getBundledModel("minimax-code", "minimax-v3");
+		const model = getBundledModel("minimax-cn", "minimax-v3");
 
 		expect(model.id).toBe("minimax-v3");
-		expect(model.provider).toBe("minimax-code");
+		expect(model.provider).toBe("minimax-cn");
 		expect(model.name).toBe("MiniMax-V3");
 		expect(model.reasoning).toBe(true);
 		expect(model.contextWindow).toBe(512_000);

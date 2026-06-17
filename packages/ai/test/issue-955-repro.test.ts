@@ -33,8 +33,7 @@ async function capturePayload(model: Model<"openai-completions">): Promise<Recor
 
 describe("issue #955 — MiniMax coding-plan plan mode payload", () => {
 	it.each([
-		["minimax-code", "MiniMax-M2.5"],
-		["minimax-code-cn", "MiniMax-M2.5"],
+		["minimax-cn", "MiniMax-M2.5"],
 	] as const)("omits unsupported thinking fields for %s/%s", async (provider, modelId) => {
 		const model = getBundledModel(provider, modelId) as Model<"openai-completions">;
 		const body = await capturePayload(model);

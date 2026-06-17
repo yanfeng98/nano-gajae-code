@@ -60,7 +60,7 @@ function stopChunk(model: Model<"openai-completions">): unknown {
 
 describe("issue #1203 - MiniMax Coding Plan CN think tags", () => {
 	it("parses minimax-code-cn <think> content into a thinking block", async () => {
-		const model = getBundledModel("minimax-code-cn", "MiniMax-M2.5") as Model<"openai-completions">;
+		const model = getBundledModel("minimax-cn", "MiniMax-M2.5") as Model<"openai-completions">;
 		global.fetch = createMockFetch([
 			minimaxChunk(model, "<think>"),
 			minimaxChunk(model, "hidden reasoning"),

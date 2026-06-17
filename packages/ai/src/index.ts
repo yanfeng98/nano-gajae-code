@@ -25,7 +25,6 @@ export * from "./types";
 export * from "./usage";
 export * from "./usage/claude";
 export * from "./usage/kimi";
-export * from "./usage/minimax-code";
 export * from "./usage/zai";
 export * from "./utils/anthropic-auth";
 export * from "./utils/discovery";
