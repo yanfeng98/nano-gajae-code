@@ -114,7 +114,6 @@ Providers:
   nanogpt           NanoGPT
   minimax-code      MiniMax Coding Plan (International)
   minimax-code-cn   MiniMax Coding Plan (China)
-  cursor            Cursor (Anthropic, GPT, etc.)
   zenmux            ZenMux
   ollama-cloud      Ollama Cloud
 

@@ -11,7 +11,7 @@ import {
 } from "./model-thinking";
 import type { BedrockOptions } from "./providers/amazon-bedrock";
 import type { AnthropicOptions } from "./providers/anthropic";
-import type { CursorOptions } from "./providers/cursor";
+
 import { isGitLabDuoModel, streamGitLabDuo } from "./providers/gitlab-duo";
 import type { GoogleOptions } from "./providers/google";
 import type { GoogleGeminiCliOptions } from "./providers/google-gemini-cli";
@@ -32,7 +32,6 @@ import {
 	streamAnthropic,
 	streamAzureOpenAIResponses,
 	streamBedrock,
-	streamCursor,
 	streamGoogle,
 	streamGoogleGeminiCli,
 	streamGoogleVertex,
@@ -94,7 +93,7 @@ const serviceProviderMap: Record<string, KeyResolver> = {
 	"minimax-code-cn": "MINIMAX_CODE_CN_API_KEY",
 	"opencode-go": "OPENCODE_API_KEY",
 	"opencode-zen": "OPENCODE_API_KEY",
-	cursor: "CURSOR_ACCESS_TOKEN",
+
 	deepseek: "DEEPSEEK_API_KEY",
 	"openai-codex": "OPENAI_CODEX_OAUTH_TOKEN",
 	"azure-openai": "AZURE_OPENAI_API_KEY",
@@ -264,9 +263,6 @@ export function stream<TApi extends Api>(
 
 		case "ollama-chat":
 			return streamOllama(model as Model<"ollama-chat">, context, providerOptions as OllamaChatOptions);
-
-		case "cursor-agent":
-			return streamCursor(model as Model<"cursor-agent">, context, providerOptions as CursorOptions);
 
 		default:
 			throw new Error(`Unhandled API: ${api}`);
@@ -579,7 +575,6 @@ function mapOptionsForApi<TApi extends Api>(
 		onPayload: options?.onPayload,
 		onResponse: options?.onResponse,
 		onSseEvent: options?.onSseEvent,
-		execHandlers: options?.execHandlers,
 	};
 
 	switch (model.api) {
@@ -859,16 +854,6 @@ function mapOptionsForApi<TApi extends Api>(
 				reasoning: resolveOpenAiReasoningEffort(model, options),
 				toolChoice: options?.toolChoice,
 			});
-
-		case "cursor-agent": {
-			const execHandlers = options?.cursorExecHandlers ?? options?.execHandlers;
-			const onToolResult = options?.cursorOnToolResult ?? execHandlers?.onToolResult;
-			return castApi<"cursor-agent">({
-				...base,
-				execHandlers,
-				onToolResult,
-			});
-		}
 
 		default:
 			throw new Error(`Unhandled API in mapOptionsForApi: ${model.api}`);

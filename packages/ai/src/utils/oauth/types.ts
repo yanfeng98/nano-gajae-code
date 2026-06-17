@@ -13,7 +13,6 @@ export type OAuthProvider =
 	| "anthropic"
 	| "cerebras"
 	| "cloudflare-ai-gateway"
-	| "cursor"
 	| "deepseek"
 	| "fireworks"
 	| "firepass"

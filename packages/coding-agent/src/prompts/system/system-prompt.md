@@ -71,7 +71,7 @@ Use for read-only plan critique. It approves only when execution can proceed wit
 
 <skill-discipline>
 - Never ignore a skill invocation or any skill text. When a skill is active, read it in full and follow its instructions exactly. Do not assume, paraphrase, reorder, or substitute steps.
-- Read-only and interview-style skills (e.g. `deep-interview`, `planner`, `architect`, `critic`) MUST NOT implement, edit product source, commit, or run mutating commands. Honor each skill's read-only or pending-approval boundary even when the fix looks obvious.
+- Read-only and interview-style skills (e.g. `deep-interview`, `planner`, `architect`, `critic`) NEVER implement, edit product source, commit, or run mutating commands. Honor each skill's read-only or pending-approval boundary even when the fix looks obvious.
 - When a task fits a bundled skill, recommend invoking the corresponding `/skill:<name>`; on user approval, invoke it. Never silently bypass an applicable skill.
 - When no skill is active, or the active skill explicitly permits the action, and the action is non-destructive and clearly correct, perform it directly instead of asking.
 </skill-discipline>

@@ -206,39 +206,6 @@ const expectedProfiles: Array<{ name: string; requiredProviders: string[]; mappi
 		},
 	},
 	{
-		name: "cursor-eco",
-		requiredProviders: ["cursor"],
-		mapping: {
-			default: "cursor/composer-1.5:low",
-			executor: "cursor/composer-1.5:minimal",
-			planner: "cursor/composer-1.5:low",
-			critic: "cursor/composer-1.5:medium",
-			architect: "cursor/composer-1.5:high",
-		},
-	},
-	{
-		name: "cursor-medium",
-		requiredProviders: ["cursor"],
-		mapping: {
-			default: "cursor/composer-1.5:medium",
-			executor: "cursor/composer-1.5:low",
-			planner: "cursor/composer-1.5:medium",
-			critic: "cursor/composer-1.5:high",
-			architect: "cursor/composer-1.5:xhigh",
-		},
-	},
-	{
-		name: "cursor-pro",
-		requiredProviders: ["cursor"],
-		mapping: {
-			default: "cursor/composer-1.5:xhigh",
-			executor: "cursor/composer-1.5:medium",
-			planner: "cursor/composer-1.5:high",
-			critic: "cursor/composer-1.5:xhigh",
-			architect: "cursor/composer-1.5:xhigh",
-		},
-	},
-	{
 		name: "minimax-eco",
 		requiredProviders: ["minimax-code"],
 		mapping: {
@@ -383,7 +350,6 @@ describe("built-in model profile catalog", () => {
 		expect(recommendModelProfileForProvider("kimi-code", profiles)?.name).toBe("kimi-coding-plan-medium");
 		expect(recommendModelProfileForProvider("xiaomi", profiles)?.name).toBe("mimo-medium");
 		expect(recommendModelProfileForProvider("xai", profiles)?.name).toBe("grok-medium");
-		expect(recommendModelProfileForProvider("cursor", profiles)?.name).toBe("cursor-medium");
 	});
 
 	test("user same-name profile overrides builtin via mergeModelProfiles", () => {

@@ -130,7 +130,6 @@ const ModelDefinitionSchema = z
 				"google-vertex",
 				"google-gemini-cli",
 				"ollama-chat",
-				"cursor-agent",
 			])
 			.optional(),
 		baseUrl: z.string().min(1).optional(),
@@ -213,7 +212,6 @@ const ProviderConfigSchema = z
 				"google-vertex",
 				"google-gemini-cli",
 				"ollama-chat",
-				"cursor-agent",
 			])
 			.optional(),
 		headers: z.record(z.string(), z.string()).optional(),

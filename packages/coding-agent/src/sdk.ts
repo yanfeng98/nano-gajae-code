@@ -1,6 +1,5 @@
 import {
 	Agent,
-	type AgentEvent,
 	type AgentMessage,
 	type AgentTelemetryConfig,
 	type AgentTool,
@@ -46,7 +45,6 @@ import {
 } from "./config/model-resolver";
 import { loadPromptTemplates as loadPromptTemplatesInternal, type PromptTemplate } from "./config/prompt-templates";
 import { Settings, type SkillsSettings } from "./config/settings";
-import { CursorExecHandlers } from "./cursor";
 import "./discovery";
 import { resolveConfigValue } from "./config/resolve-config-value";
 import { getEmbeddedDefaultGjcSkills } from "./defaults/gjc-defaults";
@@ -1514,9 +1512,6 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 				toolRegistry.set(tool.name, new ExtensionToolWrapper(tool, extensionRunner));
 			}
 		}
-		if (model?.provider === "cursor") {
-			toolRegistry.delete("edit");
-		}
 
 		const hasDeferrableTools = Array.from(toolRegistry.values()).some(tool => tool.deferrable === true);
 		if (!hasDeferrableTools) {
@@ -1538,15 +1533,6 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			const wrapped = wrapToolWithMetaNotice(sshTool);
 			return (extensionRunner ? new ExtensionToolWrapper(wrapped, extensionRunner) : wrapped) as AgentTool;
 		};
-
-		let cursorEventEmitter: ((event: AgentEvent) => void) | undefined;
-		const cursorExecHandlers = new CursorExecHandlers({
-			cwd,
-			tools: toolRegistry,
-			getToolContext: () => toolContextStore.getContext(),
-			emitEvent: event => cursorEventEmitter?.(event),
-			createEventEmitter: () => agent.createExternalEventEmitterForCurrentRun(),
-		});
 
 		const repeatToolDescriptions = settings.get("repeatToolDescriptions");
 		const eagerTasks = settings.get("task.eager");
@@ -1889,7 +1875,6 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 						return modelRegistry.getApiKeyForProvider(provider, agent.sessionId);
 					},
 				}),
-			cursorExecHandlers,
 			transformToolCallArguments: (args, _toolName) => {
 				let result = args;
 				const maxTimeout = settings.get("tools.maxTimeout");
@@ -1919,8 +1904,6 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			telemetry: options.telemetry,
 			appendOnlyContext,
 		});
-
-		cursorEventEmitter = event => agent.emitExternalEvent(event);
 
 		// Restore messages if session has existing data
 		if (hasExistingSession) {

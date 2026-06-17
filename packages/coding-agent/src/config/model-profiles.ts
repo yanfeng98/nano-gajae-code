@@ -173,27 +173,6 @@ export const BUILTIN_MODEL_PROFILES: readonly ModelProfileDefinition[] = [
 		critic: "xai/grok-4.3:xhigh",
 		architect: "xai/grok-4.3:xhigh",
 	}),
-	profile("cursor-eco", ["cursor"], {
-		default: "cursor/composer-1.5:low",
-		executor: "cursor/composer-1.5:minimal",
-		planner: "cursor/composer-1.5:low",
-		critic: "cursor/composer-1.5:medium",
-		architect: "cursor/composer-1.5:high",
-	}),
-	profile("cursor-medium", ["cursor"], {
-		default: "cursor/composer-1.5:medium",
-		executor: "cursor/composer-1.5:low",
-		planner: "cursor/composer-1.5:medium",
-		critic: "cursor/composer-1.5:high",
-		architect: "cursor/composer-1.5:xhigh",
-	}),
-	profile("cursor-pro", ["cursor"], {
-		default: "cursor/composer-1.5:xhigh",
-		executor: "cursor/composer-1.5:medium",
-		planner: "cursor/composer-1.5:high",
-		critic: "cursor/composer-1.5:xhigh",
-		architect: "cursor/composer-1.5:xhigh",
-	}),
 	profile("minimax-eco", ["minimax-code"], {
 		default: "minimax-code/minimax-v3:low",
 		executor: "minimax-code/minimax-v3:minimal",
@@ -254,9 +233,6 @@ const PROFILE_PRESENTATION: Record<string, ModelProfilePresentation> = {
 	"grok-eco": { displayName: "Grok Eco", providerGroup: "GROK" },
 	"grok-medium": { displayName: "Grok Medium", providerGroup: "GROK" },
 	"grok-pro": { displayName: "Grok Pro", providerGroup: "GROK" },
-	"cursor-eco": { displayName: "Cursor Eco", providerGroup: "CURSOR" },
-	"cursor-medium": { displayName: "Cursor Medium", providerGroup: "CURSOR" },
-	"cursor-pro": { displayName: "Cursor Pro", providerGroup: "CURSOR" },
 	"minimax-eco": { displayName: "MiniMax Eco", providerGroup: "MINIMAX" },
 	"minimax-medium": { displayName: "MiniMax Medium", providerGroup: "MINIMAX" },
 	"minimax-pro": { displayName: "MiniMax Pro", providerGroup: "MINIMAX" },
@@ -272,7 +248,6 @@ const PROFILE_GROUP_ORDER = [
 	"KIMI CODING PLAN",
 	"MIMO",
 	"GROK",
-	"CURSOR",
 	"MINIMAX",
 	"COMBOS",
 ];
@@ -285,7 +260,6 @@ const PROFILE_RECOMMENDATIONS: Record<string, string> = {
 	"kimi-code": "kimi-coding-plan-medium",
 	xiaomi: "mimo-medium",
 	xai: "grok-medium",
-	cursor: "cursor-medium",
 	"minimax-code": "minimax-medium",
 };
 

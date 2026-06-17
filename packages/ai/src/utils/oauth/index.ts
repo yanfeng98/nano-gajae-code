@@ -91,11 +91,6 @@ const builtInOAuthProviders: OAuthProviderInfo[] = [
 		available: true,
 	},
 	{
-		id: "cursor",
-		name: "Cursor (Claude, GPT, etc.)",
-		available: true,
-	},
-	{
 		id: "litellm",
 		name: "LiteLLM",
 		available: true,
@@ -308,11 +303,6 @@ export async function refreshOAuthToken(
 		case "gitlab-duo": {
 			const { refreshGitLabDuoToken } = await import("./gitlab-duo");
 			newCredentials = await refreshGitLabDuoToken(credentials);
-			break;
-		}
-		case "cursor": {
-			const { refreshCursorToken } = await import("./cursor");
-			newCredentials = await refreshCursorToken(credentials.refresh);
 			break;
 		}
 		case "xai": {

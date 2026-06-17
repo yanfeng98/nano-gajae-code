@@ -113,7 +113,6 @@ describe("pi-native parseRequest", () => {
 				onPayload: () => {},
 				onResponse: () => {},
 				onSseEvent: () => {},
-				execHandlers: {},
 				providerSessionState: new Map(),
 				notARealField: "ignored",
 			},

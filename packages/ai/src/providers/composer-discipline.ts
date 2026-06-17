@@ -1,9 +1,8 @@
 /**
- * Anchor/edit discipline for composer-harness models (xai grok-composer-*,
- * cursor composer-*).
+ * Anchor/edit discipline for composer-harness models (xai grok-composer-*).
  *
  * Composer models are trained on a proprietary coding-agent harness
- * (Cursor / Grok Build) and carry habits that break this agent's hashline
+ * (Grok Build) and carry habits that break this agent's hashline
  * edit workflow when driven through a generic provider. Observed in live
  * sessions with grok-composer-2.5-fast:
  *
@@ -20,10 +19,10 @@
  *    syntax errors.
  *
  * This prompt is the per-request countermeasure, pinned ahead of the host
- * system prompt on both the openai-completions path and the cursor RPC path.
+ * system prompt on the openai-completions path.
  */
 
-/** Matches composer-harness model ids on any provider (xai grok-composer-*, cursor composer-*). */
+/** Matches composer-harness model ids on any provider (xai grok-composer-*). */
 export function isComposerHarnessModel(modelId: string): boolean {
 	return modelId.toLowerCase().includes("composer");
 }

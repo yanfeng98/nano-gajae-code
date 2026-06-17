@@ -1,12 +1,11 @@
 /**
- * Composer-harness models (xai grok-composer-*, cursor composer-*) get the
+ * Composer-harness models (xai grok-composer-*) get the
  * anchor/edit discipline prompt pinned ahead of the host system prompt, on
- * both the openai-completions path and the cursor RPC path. Non-composer
+ * the openai-completions path. Non-composer
  * models must stay byte-identical to previous behavior.
  */
 import { describe, expect, it } from "bun:test";
 import { COMPOSER_EDIT_DISCIPLINE_PROMPT, isComposerHarnessModel } from "@gajae-code/ai/providers/composer-discipline";
-import { buildCursorSystemPromptJsons } from "@gajae-code/ai/providers/cursor";
 import { convertMessages } from "@gajae-code/ai/providers/openai-completions";
 import type { Context, Model, OpenAICompat } from "@gajae-code/ai/types";
 
@@ -102,32 +101,5 @@ describe("openai-completions composer discipline injection", () => {
 		);
 		expect(params[0].role).toBe("system");
 		expect(params[0].content).toBe(`${COMPOSER_EDIT_DISCIPLINE_PROMPT}\n\nHost system prompt.`);
-	});
-});
-
-describe("cursor composer discipline injection", () => {
-	it("pins the discipline block ahead of the host prompt for composer model ids", () => {
-		const jsons = buildCursorSystemPromptJsons(["Host system prompt."], "composer-1");
-		const contents = jsons.map(json => (JSON.parse(json) as { content: string }).content);
-		expect(contents[0]).toBe(COMPOSER_EDIT_DISCIPLINE_PROMPT);
-		expect(contents[1]).toBe("Host system prompt.");
-	});
-
-	it("keeps non-composer cursor models unchanged", () => {
-		const jsons = buildCursorSystemPromptJsons(["Host system prompt."], "gpt-5");
-		const contents = jsons.map(json => (JSON.parse(json) as { content: string }).content);
-		expect(contents).toEqual(["Host system prompt."]);
-	});
-
-	it("keeps the legacy single-argument call shape unchanged", () => {
-		const jsons = buildCursorSystemPromptJsons(["Host system prompt."]);
-		const contents = jsons.map(json => (JSON.parse(json) as { content: string }).content);
-		expect(contents).toEqual(["Host system prompt."]);
-	});
-
-	it("does not inject discipline without a host system prompt", () => {
-		const jsons = buildCursorSystemPromptJsons(undefined, "composer-1");
-		const contents = jsons.map(json => (JSON.parse(json) as { content: string }).content);
-		expect(contents).toEqual(["You are a helpful assistant."]);
 	});
 });

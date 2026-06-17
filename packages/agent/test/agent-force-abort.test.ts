@@ -1,6 +1,5 @@
 import { describe, expect, it } from "bun:test";
 import { Agent, type StreamFn } from "@gajae-code/agent-core";
-import type { CursorExecHandlers, SimpleStreamOptions } from "@gajae-code/ai";
 import { createMockModel } from "@gajae-code/ai/providers/mock";
 import { AssistantMessageEventStream } from "@gajae-code/ai/utils/event-stream";
 import { createAssistantMessage } from "./helpers";
@@ -11,17 +10,6 @@ async function waitForStreaming(agent: Agent): Promise<void> {
 		await Bun.sleep(5);
 	}
 	throw new Error("Agent did not enter streaming state");
-}
-
-async function waitForCapturedCursorHandlers(
-	getHandlers: () => CursorExecHandlers | undefined,
-): Promise<CursorExecHandlers> {
-	for (let attempt = 0; attempt < 50; attempt += 1) {
-		const handlers = getHandlers();
-		if (handlers) return handlers;
-		await Bun.sleep(5);
-	}
-	throw new Error("Cursor handlers were not captured");
 }
 
 describe("Agent.forceAbort", () => {
@@ -126,74 +114,6 @@ describe("Agent.forceAbort", () => {
 			.filter(content => content.type === "text")
 			.map(content => content.text);
 		expect(assistantTexts).toEqual(["fresh"]);
-	});
-
-	it("ignores late Cursor exec calls captured by a force-aborted run", async () => {
-		const model = createMockModel();
-		const firstStream = new AssistantMessageEventStream();
-		const secondStream = new AssistantMessageEventStream();
-		let firstRunCursorHandlers: CursorExecHandlers | undefined;
-		let callCount = 0;
-		const streamFn: StreamFn = (_selectedModel, _context, options?: SimpleStreamOptions) => {
-			callCount += 1;
-			if (callCount === 1) {
-				firstRunCursorHandlers = options?.cursorExecHandlers;
-				return firstStream;
-			}
-			return secondStream;
-		};
-		const emittedToolCallIds: string[] = [];
-		const agent = new Agent({
-			initialState: { model: model.model, systemPrompt: ["Test"], tools: [], messages: [] },
-			cursorExecHandlers: {
-				read: async args => {
-					agent.emitExternalEvent({
-						type: "tool_execution_start",
-						toolCallId: args.toolCallId,
-						toolName: "read",
-						args: { path: args.path },
-					});
-					return {
-						role: "toolResult",
-						toolCallId: args.toolCallId,
-						toolName: "read",
-						content: [{ type: "text", text: "stale read" }],
-						isError: false,
-						timestamp: Date.now(),
-					};
-				},
-			},
-			streamFn,
-		});
-		agent.subscribe(event => {
-			if (event.type === "tool_execution_start") {
-				emittedToolCallIds.push(event.toolCallId);
-			}
-		});
-
-		const firstPrompt = agent.prompt("first");
-		await waitForStreaming(agent);
-		const staleCursorHandlers = await waitForCapturedCursorHandlers(() => firstRunCursorHandlers);
-		expect(staleCursorHandlers.read).toBeDefined();
-		expect(agent.forceAbort("test timeout")).toBe(true);
-		await expect(firstPrompt).resolves.toBeUndefined();
-
-		const secondPrompt = agent.prompt("second");
-		await waitForStreaming(agent);
-		const staleReadArgs = {
-			$typeName: "agent.v1.ReadArgs",
-			path: "stale.txt",
-			toolCallId: "old-call",
-		} as Parameters<NonNullable<CursorExecHandlers["read"]>>[0];
-		await expect(staleCursorHandlers.read?.(staleReadArgs)).rejects.toThrow("inactive agent run");
-		expect(emittedToolCallIds).toEqual([]);
-
-		secondStream.push({
-			type: "done",
-			reason: "stop",
-			message: createAssistantMessage([{ type: "text", text: "fresh" }]),
-		});
-		await expect(secondPrompt).resolves.toBeUndefined();
 	});
 
 	it("drops partial thinking and tool-use from replay history when a streamed turn is aborted", async () => {

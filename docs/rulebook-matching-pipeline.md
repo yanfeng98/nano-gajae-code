@@ -14,7 +14,6 @@ It reflects the current implementation, including partial semantics and metadata
 - [`../src/discovery/index.ts`](../packages/coding-agent/src/discovery/index.ts)
 - [`../src/discovery/helpers.ts`](../packages/coding-agent/src/discovery/helpers.ts)
 - [`../src/discovery/builtin.ts`](../packages/coding-agent/src/discovery/builtin.ts)
-- [`../src/discovery/cursor.ts`](../packages/coding-agent/src/discovery/cursor.ts)
 - [`../src/discovery/windsurf.ts`](../packages/coding-agent/src/discovery/windsurf.ts)
 - [`../src/discovery/cline.ts`](../packages/coding-agent/src/discovery/cline.ts)
 - [`../src/sdk.ts`](../packages/coding-agent/src/sdk.ts)
@@ -50,7 +49,6 @@ Consequence: precedence and deduplication are **name-based only**. Two different
 `src/discovery/index.ts` auto-registers providers. For `rules`, current providers are:
 
 - `native` (priority `100`)
-- `cursor` (priority `50`)
 - `windsurf` (priority `50`)
 - `cline` (priority `40`)
 
@@ -70,9 +68,6 @@ Normalization:
 
 Important caveat: `condition` values that look like file globs are converted into `tool:edit(...)` / `tool:write(...)` scope shorthands with catch-all condition `.*`.
 
-### Cursor provider (`cursor.ts`)
-
-Loads from:
 
 - user: `~/.cursor/rules/*.{mdc,md}`
 - project: `<cwd>/.cursor/rules/*.{mdc,md}`
@@ -135,13 +130,12 @@ Ambiguity consequences:
 ### Precedence model
 
 - Providers are ordered by priority descending.
-- Equal priority keeps registration order (`cursor` before `windsurf` from `discovery/index.ts`).
+- Equal priority keeps registration order (from `discovery/index.ts`).
 - Dedup is first-wins: first encountered rule name is kept; later same-name items are marked `_shadowed` in `all` and excluded from `items`.
 
 Effective rule provider order is currently:
 
 1. `native` (100)
-2. `cursor` (50)
 3. `windsurf` (50)
 4. `cline` (40)
 
@@ -152,7 +146,6 @@ Within a provider, item order comes from `loadFilesFromDir` glob result ordering
 Notable source-order differences:
 
 - `native` appends project then user config dirs.
-- `cursor` appends user then project results.
 - `windsurf` appends user `global_rules` first, then project rules.
 - `cline` loads only nearest `.clinerules` source.
 

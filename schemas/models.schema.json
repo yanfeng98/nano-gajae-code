@@ -37,8 +37,7 @@
 							"google-generative-ai",
 							"google-vertex",
 							"google-gemini-cli",
-							"ollama-chat",
-							"cursor-agent"
+							"ollama-chat"
 						]
 					},
 					"headers": {
@@ -311,8 +310,7 @@
 										"google-generative-ai",
 										"google-vertex",
 										"google-gemini-cli",
-										"ollama-chat",
-										"cursor-agent"
+										"ollama-chat"
 									]
 								},
 								"baseUrl": {

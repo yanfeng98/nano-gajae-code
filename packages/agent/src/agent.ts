@@ -1,8 +1,6 @@
 import {
 	type AssistantMessage,
 	type AssistantMessageEvent,
-	type CursorExecHandlers,
-	type CursorToolResultHandler,
 	type Effort,
 	getBundledModel,
 	type ImageContent,
@@ -15,7 +13,6 @@ import {
 	type TextContent,
 	type ThinkingBudgets,
 	type ToolChoice,
-	type ToolResultMessage,
 } from "@gajae-code/ai";
 import { agentLoop, agentLoopContinue } from "./agent-loop";
 import type { AppendOnlyContextManager } from "./append-only-context";
@@ -100,8 +97,6 @@ export interface AgentOptions {
 	transformToolCallArguments?: (args: Record<string, unknown>, toolName: string) => Record<string, unknown>;
 	intentTracing?: boolean;
 	getToolChoice?: () => ToolChoice | undefined;
-	cursorExecHandlers?: CursorExecHandlers;
-	cursorOnToolResult?: CursorToolResultHandler;
 	beforeToolCall?: AgentLoopConfig["beforeToolCall"];
 	afterToolCall?: AgentLoopConfig["afterToolCall"];
 	telemetry?: AgentLoopConfig["telemetry"];
@@ -110,11 +105,6 @@ export interface AgentOptions {
 
 export interface AgentPromptOptions {
 	toolChoice?: ToolChoice;
-}
-
-interface CursorToolResultEntry {
-	toolResult: ToolResultMessage;
-	textLengthAtCall: number;
 }
 
 export class Agent {
@@ -157,8 +147,6 @@ export class Agent {
 	#requestMaxRetries?: number;
 	#streamMaxRetries?: number;
 	#getToolContext?: (toolCall?: ToolCallContext) => AgentToolContext | undefined;
-	#cursorExecHandlers?: CursorExecHandlers;
-	#cursorOnToolResult?: CursorToolResultHandler;
 	#runningPrompt?: Promise<void>;
 	#resolveRunningPrompt?: () => void;
 	#runSequence = 0;
@@ -182,8 +170,6 @@ export class Agent {
 	get intentTracing(): boolean {
 		return this.#intentTracing;
 	}
-
-	#cursorToolResultBuffer: CursorToolResultEntry[] = [];
 
 	streamFn: StreamFn;
 	getApiKey?: (provider: string) => Promise<string | undefined> | string | undefined;
@@ -220,8 +206,6 @@ export class Agent {
 		this.#onResponse = opts.onResponse;
 		this.#onSseEvent = opts.onSseEvent;
 		this.#getToolContext = opts.getToolContext;
-		this.#cursorExecHandlers = opts.cursorExecHandlers;
-		this.#cursorOnToolResult = opts.cursorOnToolResult;
 		this.#kimiApiFormat = opts.kimiApiFormat;
 		this.#preferWebsockets = opts.preferWebsockets;
 		this.#transformToolCallArguments = opts.transformToolCallArguments;
@@ -458,110 +442,6 @@ export class Agent {
 		};
 	}
 
-	#assertActiveRun(runId: number): void {
-		if (this.#activeRunId !== runId) {
-			throw new Error("Ignoring Cursor exec callback from an inactive agent run.");
-		}
-	}
-
-	#cursorExecHandlersForRun(runId: number): CursorExecHandlers | undefined {
-		const source = this.#cursorExecHandlers;
-		if (!source) return undefined;
-
-		const guarded: CursorExecHandlers = {};
-		const read = source.read?.bind(source);
-		if (read) {
-			guarded.read = async args => {
-				this.#assertActiveRun(runId);
-				const result = await read(args);
-				this.#assertActiveRun(runId);
-				return result;
-			};
-		}
-		const ls = source.ls?.bind(source);
-		if (ls) {
-			guarded.ls = async args => {
-				this.#assertActiveRun(runId);
-				const result = await ls(args);
-				this.#assertActiveRun(runId);
-				return result;
-			};
-		}
-		const grep = source.grep?.bind(source);
-		if (grep) {
-			guarded.grep = async args => {
-				this.#assertActiveRun(runId);
-				const result = await grep(args);
-				this.#assertActiveRun(runId);
-				return result;
-			};
-		}
-		const write = source.write?.bind(source);
-		if (write) {
-			guarded.write = async args => {
-				this.#assertActiveRun(runId);
-				const result = await write(args);
-				this.#assertActiveRun(runId);
-				return result;
-			};
-		}
-		const deleteHandler = source.delete?.bind(source);
-		if (deleteHandler) {
-			guarded.delete = async args => {
-				this.#assertActiveRun(runId);
-				const result = await deleteHandler(args);
-				this.#assertActiveRun(runId);
-				return result;
-			};
-		}
-		const shell = source.shell?.bind(source);
-		if (shell) {
-			guarded.shell = async args => {
-				this.#assertActiveRun(runId);
-				const result = await shell(args);
-				this.#assertActiveRun(runId);
-				return result;
-			};
-		}
-		const shellStream = source.shellStream?.bind(source);
-		if (shellStream) {
-			guarded.shellStream = async (args, callbacks) => {
-				this.#assertActiveRun(runId);
-				const result = await shellStream(args, callbacks);
-				this.#assertActiveRun(runId);
-				return result;
-			};
-		}
-		const diagnostics = source.diagnostics?.bind(source);
-		if (diagnostics) {
-			guarded.diagnostics = async args => {
-				this.#assertActiveRun(runId);
-				const result = await diagnostics(args);
-				this.#assertActiveRun(runId);
-				return result;
-			};
-		}
-		const mcp = source.mcp?.bind(source);
-		if (mcp) {
-			guarded.mcp = async call => {
-				this.#assertActiveRun(runId);
-				const result = await mcp(call);
-				this.#assertActiveRun(runId);
-				return result;
-			};
-		}
-		const onToolResult = source.onToolResult;
-		if (onToolResult) {
-			guarded.onToolResult = async message => {
-				this.#assertActiveRun(runId);
-				const result = await onToolResult(message);
-				this.#assertActiveRun(runId);
-				return result;
-			};
-		}
-		return guarded;
-	}
-
 	setSystemPrompt(v: string[]) {
 		this.#state.systemPrompt = v;
 	}
@@ -751,7 +631,6 @@ export class Agent {
 		this.#state.streamMessage = null;
 		this.#state.pendingToolCalls = new Set<string>();
 		this.#abortController = undefined;
-		this.#cursorToolResultBuffer = [];
 
 		const resolve = this.#resolveRunningPrompt;
 		this.#runningPrompt = undefined;
@@ -879,9 +758,6 @@ export class Agent {
 		this.#state.streamMessage = null;
 		this.#state.error = undefined;
 
-		// Clear Cursor tool result buffer at start of each run
-		this.#cursorToolResultBuffer = [];
-
 		const reasoning = this.#state.thinkingLevel;
 
 		const context: AgentContext = {
@@ -890,37 +766,8 @@ export class Agent {
 			tools: this.#state.tools,
 		};
 
-		const cursorOnToolResult =
-			this.#cursorExecHandlers || this.#cursorOnToolResult
-				? async (message: ToolResultMessage) => {
-						let finalMessage = message;
-						if (this.#activeRunId !== runId) {
-							return finalMessage;
-						}
-						if (this.#cursorOnToolResult) {
-							try {
-								const updated = await this.#cursorOnToolResult(message);
-								if (this.#activeRunId !== runId) {
-									return finalMessage;
-								}
-								if (updated) {
-									finalMessage = updated;
-								}
-							} catch {}
-						}
-						// Buffer tool result with current text length for correct ordering later.
-						// Cursor executes tools server-side during streaming, so the assistant message
-						// already incorporates results. We buffer here and emit in correct order
-						// when the assistant message ends.
-						const textLength = this.#getAssistantTextLength(this.#state.streamMessage);
-						this.#cursorToolResultBuffer.push({ toolResult: finalMessage, textLengthAtCall: textLength });
-						return finalMessage;
-					}
-				: undefined;
-
 		const getToolChoice = () =>
 			this.#getToolChoice?.() ?? refreshToolChoiceForActiveTools(options?.toolChoice, this.#state.tools);
-		const cursorExecHandlers = this.#cursorExecHandlersForRun(runId);
 
 		const config: AgentLoopConfig = {
 			model,
@@ -961,8 +808,6 @@ export class Agent {
 				context.systemPrompt = this.#state.systemPrompt;
 				context.tools = this.#state.tools;
 			},
-			cursorExecHandlers,
-			cursorOnToolResult,
 			transformToolCallArguments: this.#transformToolCallArguments,
 			intentTracing: this.#intentTracing,
 			appendOnlyContext: this.#appendOnlyContext,
@@ -1060,12 +905,6 @@ export class Agent {
 
 					case "message_end":
 						partial = null;
-						// Check if this is an assistant message with buffered Cursor tool results.
-						// If so, split the message to emit tool results at the correct position.
-						if (event.message.role === "assistant" && this.#cursorToolResultBuffer.length > 0) {
-							this.#emitCursorSplitAssistantMessage(event.message as AssistantMessage);
-							continue; // Skip default emit - split method handles everything
-						}
 						this.#state.streamMessage = null;
 						this.appendMessage(event.message);
 						break;
@@ -1164,118 +1003,6 @@ export class Agent {
 	#emit(e: AgentEvent) {
 		for (const listener of this.#listeners) {
 			listener(e);
-		}
-	}
-
-	/** Calculate total text length from an assistant message's content blocks */
-	#getAssistantTextLength(message: AgentMessage | null): number {
-		if (message?.role !== "assistant" || !Array.isArray(message.content)) {
-			return 0;
-		}
-		let length = 0;
-		for (const block of message.content) {
-			if (block.type === "text") {
-				length += (block as TextContent).text.length;
-			}
-		}
-		return length;
-	}
-
-	/**
-	 * Emit a Cursor assistant message split around tool results.
-	 * This fixes the ordering issue where tool results appear after the full explanation.
-	 *
-	 * Output order: Assistant(preamble) -> ToolResults -> Assistant(continuation)
-	 */
-	#emitCursorSplitAssistantMessage(assistantMessage: AssistantMessage): void {
-		const buffer = this.#cursorToolResultBuffer;
-		this.#cursorToolResultBuffer = [];
-
-		if (buffer.length === 0) {
-			// No tool results, emit normally
-			this.#state.streamMessage = null;
-			this.appendMessage(assistantMessage);
-			this.#emit({ type: "message_end", message: assistantMessage });
-			return;
-		}
-
-		// Find the split point: minimum text length at first tool call
-		const splitPoint = Math.min(...buffer.map(r => r.textLengthAtCall));
-
-		// Extract text content from assistant message
-		const content = assistantMessage.content;
-		let fullText = "";
-		for (const block of content) {
-			if (block.type === "text") {
-				fullText += block.text;
-			}
-		}
-
-		// If no text or split point is 0 or at/past end, don't split
-		if (fullText.length === 0 || splitPoint <= 0 || splitPoint >= fullText.length) {
-			// Emit assistant message first, then tool results (original behavior but with buffered results)
-			this.#state.streamMessage = null;
-			this.appendMessage(assistantMessage);
-			this.#emit({ type: "message_end", message: assistantMessage });
-
-			// Emit buffered tool results
-			for (const { toolResult } of buffer) {
-				this.#emit({ type: "message_start", message: toolResult });
-				this.appendMessage(toolResult);
-				this.#emit({ type: "message_end", message: toolResult });
-			}
-			return;
-		}
-
-		// Split the text
-		const preambleText = fullText.slice(0, splitPoint);
-		const continuationText = fullText.slice(splitPoint);
-
-		// Create preamble message (text before tools)
-		const preambleContent = content.map(block => {
-			if (block.type === "text") {
-				return { ...block, text: preambleText };
-			}
-			return block;
-		});
-		const preambleMessage: AssistantMessage = {
-			...assistantMessage,
-			content: preambleContent,
-		};
-
-		// Emit preamble
-		this.#state.streamMessage = null;
-		this.appendMessage(preambleMessage);
-		this.#emit({ type: "message_end", message: preambleMessage });
-
-		// Emit buffered tool results
-		for (const { toolResult } of buffer) {
-			this.#emit({ type: "message_start", message: toolResult });
-			this.appendMessage(toolResult);
-			this.#emit({ type: "message_end", message: toolResult });
-		}
-
-		// Emit continuation message (text after tools) if non-empty
-		const trimmedContinuation = continuationText.trim();
-		if (trimmedContinuation.length > 0) {
-			// Create continuation message with only text content (no thinking/toolCalls)
-			const continuationContent: TextContent[] = [{ type: "text", text: continuationText }];
-			const continuationMessage: AssistantMessage = {
-				...assistantMessage,
-				content: continuationContent,
-				// Zero out usage for continuation since it's part of same response
-				usage: {
-					input: 0,
-					output: 0,
-					cacheRead: 0,
-					cacheWrite: 0,
-					totalTokens: 0,
-					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-				},
-			};
-			this.#emit({ type: "message_start", message: continuationMessage });
-			this.appendMessage(continuationMessage);
-			this.#emit({ type: "message_end", message: continuationMessage });
 		}
 	}
 }

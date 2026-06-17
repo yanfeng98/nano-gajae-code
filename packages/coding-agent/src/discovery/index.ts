@@ -24,7 +24,6 @@ import "./agents-md";
 import "./builtin";
 import "./cline";
 import "./agents";
-import "./cursor";
 import "./gemini";
 import "./opencode";
 import "./github";

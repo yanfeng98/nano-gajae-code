@@ -1426,14 +1426,6 @@ export class AuthStorage {
 				credentials = await loginKilo(ctrl);
 				break;
 			}
-			case "cursor": {
-				const { loginCursor } = await import("./utils/oauth/cursor");
-				credentials = await loginCursor(
-					url => ctrl.onAuth({ url }),
-					ctrl.onProgress ? () => ctrl.onProgress?.("Waiting for browser authentication...") : undefined,
-				);
-				break;
-			}
 			case "perplexity": {
 				const { loginPerplexity } = await import("./utils/oauth/perplexity");
 				credentials = await loginPerplexity(ctrl);
