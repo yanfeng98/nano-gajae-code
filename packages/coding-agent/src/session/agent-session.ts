@@ -586,7 +586,7 @@ function dedupeIrcReply(text: string): string {
  * account UUID in memory. `account_uuid` and `device_id` are omitted for
  * non-Anthropic providers to avoid leaking the user's Anthropic model identity to
  * third-party APIs (including Anthropic-format-compatible proxies such as
- * cloudflare-ai-gateway or gitlab-duo).
+ * gitlab-duo or other proxy).
  *
  * `provider` is the target provider string (e.g. `"anthropic"`) and gates the
  * `account_uuid` and `device_id` lookups — only `"anthropic"` requests carry them.
@@ -607,7 +607,7 @@ function buildSessionMetadata(
 	const userId: Record<string, string> = { session_id: sessionId };
 	// Only look up account_uuid when the request is going to Anthropic. Injecting
 	// a Anthropic model OAuth account_uuid into requests bound for other providers (including
-	// Anthropic-format-compatible proxies like cloudflare-ai-gateway or gitlab-duo)
+	// Anthropic-format-compatible proxies like gitlab-duo or other proxy)
 	// would leak the user's Anthropic identity to unrelated third-party APIs.
 	if (provider === "anthropic") {
 		const accountUuid = authStorage?.getOAuthAccountId("anthropic", sessionId);
@@ -6900,8 +6900,9 @@ export class AgentSession {
 
 	#closeCodexProviderSessionsForHistoryRewrite(): void {
 		const currentModel = this.model;
-		if (currentModel?.api !== "openai-codex-responses") return;
-		this.#closeProviderSessionsForModelSwitch(currentModel, currentModel);
+		if (currentModel) {
+			this.#closeProviderSessionsForModelSwitch(currentModel, currentModel);
+		}
 	}
 
 	/**
@@ -6929,9 +6930,6 @@ export class AgentSession {
 
 	#closeProviderSessionsForModelSwitch(currentModel: Model, nextModel: Model): void {
 		const providerKeys = new Set<string>();
-		if (currentModel.api === "openai-codex-responses" || nextModel.api === "openai-codex-responses") {
-			providerKeys.add("openai-codex-responses");
-		}
 		if (currentModel.api === "openai-responses") {
 			providerKeys.add(`openai-responses:${currentModel.provider}`);
 		}
@@ -6979,7 +6977,7 @@ export class AgentSession {
 				};
 			case "assistant": {
 				const isResponsesFamilyMessage =
-					message.api === "openai-responses" || message.api === "openai-codex-responses";
+					message.api === "openai-responses";
 				return {
 					role: message.role,
 					content:

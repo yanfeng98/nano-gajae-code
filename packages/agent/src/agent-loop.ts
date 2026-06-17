@@ -247,7 +247,7 @@ export function normalizeMessagesForProvider(
 	messages: Context["messages"],
 	model: AgentLoopConfig["model"],
 ): Context["messages"] {
-	if (model.provider !== "cerebras") {
+	if (true) {
 		return messages;
 	}
 

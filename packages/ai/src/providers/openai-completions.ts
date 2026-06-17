@@ -38,7 +38,6 @@ import {
 import { normalizeSystemPrompts } from "../utils";
 import { createAbortSourceTracker } from "../utils/abort";
 import { AssistantMessageEventStream } from "../utils/event-stream";
-import { toFirepassWireModelId, toFireworksWireModelId } from "../utils/fireworks-model-id";
 import {
 	type CapturedHttpErrorResponse,
 	finalizeErrorMessage,
@@ -306,10 +305,6 @@ function getOpenAICompletionsProviderSessionState(
 	return created;
 }
 
-function isOpenRouterAnthropicModel(model: Model<"openai-completions">): boolean {
-	return model.provider === "openrouter" && model.id.toLowerCase().startsWith("anthropic/");
-}
-
 function isCompiledGrammarTooLargeStrictError(
 	error: unknown,
 	capturedErrorResponse: CapturedHttpErrorResponse | undefined,
@@ -510,18 +505,6 @@ export const streamOpenAICompletions: StreamFunction<"openai-completions"> = (
 						registryKey: resolvedToolChoice.registryKey,
 					});
 					openaiStream = await createCompletionsStream();
-				} else if (
-					isOpenRouterAnthropicModel(model) &&
-					!disableStrictTools &&
-					isCompiledGrammarTooLargeStrictError(error, capturedErrorResponse)
-				) {
-					strictFallbackErrorMessage = await finalizeErrorMessage(error, rawRequestDump, capturedErrorResponse);
-					output.errorMessage = strictFallbackErrorMessage;
-					if (providerSessionState) {
-						providerSessionState.strictToolsDisabled = true;
-					}
-					disableStrictTools = true;
-					openaiStream = await createCompletionsStream("none");
 				} else {
 					if (!shouldRetryWithoutStrictTools(error, capturedErrorResponse, appliedToolStrictMode, context.tools)) {
 						throw error;
@@ -544,7 +527,7 @@ export const streamOpenAICompletions: StreamFunction<"openai-completions"> = (
 			// though tool calls are also surfaced structurally. Strip the leaked markers
 			// so users don't see raw `<｜...｜>` tokens.
 			const stripDeepseekChatTemplateTokens =
-				/deepseek/i.test(model.id) && (model.provider === "nvidia" || model.provider === "deepseek");
+				/deepseek/i.test(model.id) && (model.provider === "deepseek");
 			type OpenAIStreamBlock = TextContent | ThinkingContent | (ToolCall & { partialArgs: string });
 			let currentBlock: OpenAIStreamBlock | undefined;
 			const blockIndex = (block: OpenAIStreamBlock | undefined): number => {
@@ -955,24 +938,6 @@ async function createClient(
 	const rawApiKey = apiKey;
 
 	let headers = { ...model.headers };
-	if (model.provider === "openrouter") {
-		// App attribution — opts the agent into OpenRouter's public rankings and per-app
-		// analytics. `HTTP-Referer` is the unique app identifier; without it nothing is
-		// tracked. `X-OpenRouter-Title` is the display name (`X-Title` is the legacy
-		// alias kept for back-compat). `X-OpenRouter-Categories` slots us into the
-		// `cli-agent` marketplace category. `User-Agent` overrides the default OpenAI
-		// SDK UA so traffic is identifiable in upstream provider logs.
-		// https://openrouter.ai/docs/app-attribution
-		headers["User-Agent"] = `Gajae-Code/${packageJson.version}`;
-		headers["HTTP-Referer"] = "https://gaebal-gajae.dev/";
-		headers["X-OpenRouter-Title"] = "Gajae-Code";
-		headers["X-OpenRouter-Categories"] = "cli-agent";
-		// Always-on response caching: identical requests return cached responses for free.
-		// TTL 1h; first call hits the provider, every identical call within the window
-		// replays from OpenRouter's edge cache. https://openrouter.ai/docs/features/response-caching
-		headers["X-OpenRouter-Cache"] = "true";
-		headers["X-OpenRouter-Cache-TTL"] = "3600";
-	}
 	Object.assign(headers, extraHeaders);
 	if (model.provider === "kimi-code") {
 		headers = { ...getKimiCommonHeaders(), ...headers };
@@ -1076,15 +1041,11 @@ function buildParams(
 ): { params: OpenAICompletionsParams; toolStrictMode: AppliedToolStrictMode } {
 	const compat = getCompat(model, resolvedBaseUrl);
 	const messages = convertMessages(model, context, compat);
-	maybeAddOpenRouterAnthropicCacheControl(model, messages);
 	const supportsReasoningParams = model.provider !== "github-copilot";
 
-	// Kimi (including via OpenRouter and Fireworks router-form IDs such as
-	// `accounts/fireworks/routers/kimi-*`) calculates TPM rate limits based on
-	// max_tokens, not actual output. The official Kimi K2 model guidance
-	// (https://docs.fireworks.ai/models/kimi-k2) also requires `max_tokens` for
-	// every call since the family can otherwise emit very long reasoning traces
-	// before the final answer. Always send max_tokens — match the same
+	// Kimi calculates TPM rate limits based on
+	// max_tokens, not actual output.
+	// Always send max_tokens — match the same
 	// Kimi-family regex used by the compat detector.
 	// Note: Direct kimi-code provider is handled by the dedicated Kimi provider in kimi.ts.
 	const isKimi = model.id.includes("moonshotai/kimi") || /(^|\/)kimi[-.]/i.test(model.id);
@@ -1092,11 +1053,7 @@ function buildParams(
 
 	const requestModelId =
 		model.wireModelId ??
-		(model.provider === "fireworks"
-			? toFireworksWireModelId(model.id)
-			: model.provider === "firepass"
-				? toFirepassWireModelId(model.id)
-				: model.id);
+		model.id;
 	const params: OpenAICompletionsParams = {
 		model: requestModelId,
 		messages,
@@ -1266,21 +1223,6 @@ function buildParams(
 		}
 	}
 
-	// OpenRouter provider routing preferences
-	if (model.baseUrl.includes("openrouter.ai") && compat.openRouterRouting) {
-		params.provider = compat.openRouterRouting;
-	}
-
-	// Vercel AI Gateway provider routing preferences
-	if (model.baseUrl.includes("ai-gateway.vercel.sh") && model.compat?.vercelGatewayRouting) {
-		const routing = model.compat.vercelGatewayRouting;
-		if (routing.only || routing.order) {
-			const gatewayOptions: Record<string, string[]> = {};
-			if (routing.only) gatewayOptions.only = routing.only;
-			if (routing.order) gatewayOptions.order = routing.order;
-			params.providerOptions = { gateway: gatewayOptions };
-		}
-	}
 
 	if (compat.extraBody) {
 		Object.assign(params, compat.extraBody);
@@ -1351,38 +1293,6 @@ function mapReasoningEffort(
 	return reasoningEffortMap[effort] ?? effort;
 }
 
-function maybeAddOpenRouterAnthropicCacheControl(
-	model: Model<"openai-completions">,
-	messages: ChatCompletionMessageParam[],
-): void {
-	if (model.provider !== "openrouter" || !model.id.startsWith("anthropic/")) return;
-
-	// Anthropic-style caching requires cache_control on a text part. Add a breakpoint
-	// on the last user/assistant message (walking backwards until we find text content).
-	for (let i = messages.length - 1; i >= 0; i--) {
-		const msg = messages[i];
-		if (msg.role !== "user" && msg.role !== "assistant" && msg.role !== "developer") continue;
-
-		const content = msg.content;
-		if (typeof content === "string") {
-			msg.content = [
-				Object.assign({ type: "text" as const, text: content }, { cache_control: { type: "ephemeral" } }),
-			];
-			return;
-		}
-
-		if (!Array.isArray(content)) continue;
-
-		// Find last text part and add cache_control
-		for (let j = content.length - 1; j >= 0; j--) {
-			const part = content[j];
-			if (part?.type === "text") {
-				Object.assign(part, { cache_control: { type: "ephemeral" } });
-				return;
-			}
-		}
-	}
-}
 
 export function convertMessages(
 	model: Model<"openai-completions">,

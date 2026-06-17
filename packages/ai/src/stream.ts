@@ -9,7 +9,6 @@ import {
 import type { AnthropicOptions } from "./providers/anthropic";
 
 import type { GoogleOptions } from "./providers/google";
-import type { GoogleGeminiCliOptions } from "./providers/google-gemini-cli";
 import { isKimiModel, streamKimi } from "./providers/kimi";
 import type { OllamaChatOptions } from "./providers/ollama";
 import type { OpenAICompletionsOptions } from "./providers/openai-completions";
@@ -25,9 +24,7 @@ import { streamPiNative } from "./providers/pi-native-client";
 import {
 	streamAnthropic,
 	streamGoogle,
-	streamGoogleGeminiCli,
 	streamOllama,
-	streamOpenAICodexResponses,
 	streamOpenAICompletions,
 	streamOpenAIResponses,
 } from "./providers/register-builtins";
@@ -51,15 +48,7 @@ type KeyResolver = string | (() => string | undefined);
 const serviceProviderMap: Record<string, KeyResolver> = {
 	openai: () => $credentialEnv("OPENAI_API_KEY"),
 	google: "GEMINI_API_KEY",
-	groq: "GROQ_API_KEY",
-	cerebras: "CEREBRAS_API_KEY",
-	xai: "XAI_API_KEY",
-	fireworks: "FIREWORKS_API_KEY",
-	firepass: "FIREPASS_API_KEY",
-	openrouter: "OPENROUTER_API_KEY",
-	kilo: "KILO_API_KEY",
 	zai: "ZAI_API_KEY",
-	mistral: "MISTRAL_API_KEY",
 	minimax: "MINIMAX_API_KEY",
 	"minimax-code": "MINIMAX_CODE_API_KEY",
 	"minimax-code-cn": "MINIMAX_CODE_CN_API_KEY",
@@ -67,7 +56,6 @@ const serviceProviderMap: Record<string, KeyResolver> = {
 	"opencode-zen": "OPENCODE_API_KEY",
 
 	deepseek: "DEEPSEEK_API_KEY",
-	"openai-codex": "OPENAI_CODEX_OAUTH_TOKEN",
 	exa: "EXA_API_KEY",
 	jina: "JINA_API_KEY",
 	brave: "BRAVE_API_KEY",
@@ -83,13 +71,9 @@ const serviceProviderMap: Record<string, KeyResolver> = {
 	huggingface: () => $pickCredentialEnv("HUGGINGFACE_HUB_TOKEN", "HF_TOKEN"),
 	litellm: "LITELLM_API_KEY",
 	moonshot: "MOONSHOT_API_KEY",
-	nvidia: "NVIDIA_API_KEY",
-	nanogpt: "NANO_GPT_API_KEY",
 	ollama: "OLLAMA_API_KEY",
 	"ollama-cloud": "OLLAMA_CLOUD_API_KEY",
 	"llama.cpp": "LLAMA_CPP_API_KEY",
-	qianfan: "QIANFAN_API_KEY",
-	together: "TOGETHER_API_KEY",
 	zenmux: "ZENMUX_API_KEY",
 	venice: "VENICE_API_KEY",
 	vllm: "VLLM_API_KEY",
@@ -152,18 +136,8 @@ export function stream<TApi extends Api>(
 		case "openai-responses":
 			return streamOpenAIResponses(model as Model<"openai-responses">, context, providerOptions as any);
 
-		case "openai-codex-responses":
-			return streamOpenAICodexResponses(model as Model<"openai-codex-responses">, context, providerOptions as any);
-
 		case "google-generative-ai":
 			return streamGoogle(model as Model<"google-generative-ai">, context, providerOptions);
-
-		case "google-gemini-cli":
-			return streamGoogleGeminiCli(
-				model as Model<"google-gemini-cli">,
-				context,
-				providerOptions as GoogleGeminiCliOptions,
-			);
 
 		case "ollama-chat":
 			return streamOllama(model as Model<"ollama-chat">, context, providerOptions as OllamaChatOptions);
@@ -367,7 +341,7 @@ export function mapAnthropicToolChoice(choice?: ToolChoice): AnthropicOptions["t
 
 function mapGoogleToolChoice(
 	choice?: ToolChoice,
-): GoogleOptions["toolChoice"] | GoogleGeminiCliOptions["toolChoice"] | GoogleVertexOptions["toolChoice"] {
+): GoogleOptions["toolChoice"] {
 	if (!choice) return undefined;
 	if (typeof choice === "string") {
 		if (choice === "required") return "any";
@@ -532,16 +506,6 @@ function mapOptionsForApi<TApi extends Api>(
 				reasoningSummary: options?.hideThinkingSummary ? null : undefined,
 			});
 
-		case "openai-codex-responses":
-			return castApi<"openai-codex-responses">({
-				...base,
-				reasoning: resolveOpenAiReasoningEffort(model, options),
-				toolChoice: mapOpenAiToolChoice(options?.toolChoice),
-				serviceTier: options?.serviceTier,
-				preferWebsockets: options?.preferWebsockets,
-				reasoningSummary: options?.hideThinkingSummary ? null : undefined,
-			});
-
 		case "google-generative-ai": {
 			// Explicitly disable thinking when reasoning is not specified or model doesn't support it
 			// This is needed because Gemini has "dynamic thinking" enabled by default
@@ -570,7 +534,7 @@ function mapOptionsForApi<TApi extends Api>(
 				});
 			}
 
-			return castApi<"google-gemini-cli">({
+			return castApi<"google-generative-ai">({
 				...base,
 				thinking: {
 					enabled: true,
@@ -578,57 +542,6 @@ function mapOptionsForApi<TApi extends Api>(
 				},
 				toolChoice: mapGoogleToolChoice(options?.toolChoice),
 			});
-		}
-
-		case "google-gemini-cli": {
-			const reasoning = options?.reasoning;
-			if (!reasoning || !model.reasoning) {
-				return castApi<"google-gemini-cli">({
-					...base,
-					thinking: { enabled: false },
-					toolChoice: mapGoogleToolChoice(options?.toolChoice),
-				});
-			}
-
-			const effort = requireSupportedEffort(model, reasoning);
-
-			// Gemini 3+ models use thinkingLevel instead of thinkingBudget
-			if (model.thinking?.mode === "google-level") {
-				return castApi<"google-gemini-cli">({
-					...base,
-					thinking: {
-						enabled: true,
-						level: mapEffortToGoogleThinkingLevel(model, effort),
-					},
-					toolChoice: mapGoogleToolChoice(options?.toolChoice),
-				});
-			}
-
-			let thinkingBudget = options.thinkingBudgets?.[effort] ?? GOOGLE_THINKING[effort];
-
-			// Caller's maxTokens is the desired output; add thinking budget on top, capped at model limit
-			const maxTokens = Math.min((base.maxTokens || 0) + thinkingBudget, model.maxTokens);
-
-			// If not enough room for thinking + output, reduce thinking budget
-			if (maxTokens <= thinkingBudget) {
-				thinkingBudget = Math.max(0, maxTokens - MIN_OUTPUT_TOKENS) ?? 0;
-			}
-
-			// If thinking budget is too low, disable thinking
-			if (thinkingBudget <= 0) {
-				return castApi<"google-gemini-cli">({
-					...base,
-					thinking: { enabled: false },
-					toolChoice: mapGoogleToolChoice(options?.toolChoice),
-				});
-			} else {
-				return castApi<"google-gemini-cli">({
-					...base,
-					maxTokens,
-					thinking: { enabled: true, budgetTokens: thinkingBudget },
-					toolChoice: mapGoogleToolChoice(options?.toolChoice),
-				});
-			}
 		}
 
 		case "ollama-chat":

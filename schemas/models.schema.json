@@ -30,10 +30,8 @@
 						"enum": [
 							"openai-completions",
 							"openai-responses",
-							"openai-codex-responses",
 							"anthropic-messages",
 							"google-generative-ai",
-							"google-gemini-cli",
 							"ollama-chat"
 						]
 					},
@@ -149,7 +147,6 @@
 								"type": "string",
 								"enum": [
 									"openai",
-									"openrouter",
 									"zai",
 									"qwen",
 									"qwen-chat-template"
@@ -300,10 +297,8 @@
 									"enum": [
 										"openai-completions",
 										"openai-responses",
-										"openai-codex-responses",
 										"anthropic-messages",
 										"google-generative-ai",
-										"google-gemini-cli",
 										"ollama-chat"
 									]
 								},
@@ -547,7 +542,6 @@
 											"type": "string",
 											"enum": [
 												"openai",
-												"openrouter",
 												"zai",
 												"qwen",
 												"qwen-chat-template"
@@ -916,7 +910,6 @@
 											"type": "string",
 											"enum": [
 												"openai",
-												"openrouter",
 												"zai",
 												"qwen",
 												"qwen-chat-template"

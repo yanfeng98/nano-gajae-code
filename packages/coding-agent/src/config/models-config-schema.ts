@@ -40,7 +40,6 @@ export const OpenAICompatSchema = z.object({
 	toolChoiceSupport: z.enum(["none", "auto", "required", "named"]).optional(),
 	disableReasoningOnForcedToolChoice: z.boolean().optional(),
 	disableReasoningOnToolChoice: z.boolean().optional(),
-	thinkingFormat: z.enum(["openai", "openrouter", "zai", "qwen", "qwen-chat-template"]).optional(),
 	openRouterRouting: OpenRouterRoutingSchema.optional(),
 	vercelGatewayRouting: VercelGatewayRoutingSchema.optional(),
 	extraBody: z.record(z.string(), z.unknown()).optional(),
@@ -122,10 +121,8 @@ const ModelDefinitionSchema = z
 			.enum([
 				"openai-completions",
 				"openai-responses",
-				"openai-codex-responses",
 				"anthropic-messages",
 				"google-generative-ai",
-				"google-gemini-cli",
 				"ollama-chat",
 			])
 			.optional(),
@@ -201,10 +198,8 @@ const ProviderConfigSchema = z
 			.enum([
 				"openai-completions",
 				"openai-responses",
-				"openai-codex-responses",
 				"anthropic-messages",
 				"google-generative-ai",
-				"google-gemini-cli",
 				"ollama-chat",
 			])
 			.optional(),

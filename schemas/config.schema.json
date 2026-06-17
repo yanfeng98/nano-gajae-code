@@ -1832,7 +1832,6 @@
 						"codex",
 						"tavily",
 						"kagi",
-						"synthetic",
 						"parallel",
 						"searxng"
 					],
@@ -1845,7 +1844,6 @@
 						"auto",
 						"openai",
 						"gemini",
-						"openrouter",
 						"antigravity"
 					],
 					"description": "Provider for image generation tool",

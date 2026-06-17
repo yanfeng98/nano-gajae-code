@@ -200,12 +200,6 @@ function getCatalogCost(provider: string, modelId: string): ModelCost | null {
 		return primaryCost;
 	}
 
-	if (provider === "openai-codex") {
-		const openAICost = getBundledModelCost("openai", modelId);
-		if (openAICost && hasBillableCost(openAICost)) {
-			return openAICost;
-		}
-	}
 
 	return null;
 }

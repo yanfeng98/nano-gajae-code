@@ -24,14 +24,10 @@ import type {
 	UsageReport,
 } from "./usage";
 import { claudeRankingStrategy, claudeUsageProvider } from "./usage/claude";
-import { googleGeminiCliUsageProvider } from "./usage/gemini";
-import { antigravityUsageProvider } from "./usage/google-antigravity";
 import { kimiUsageProvider } from "./usage/kimi";
-import { codexRankingStrategy, openaiCodexUsageProvider } from "./usage/openai-codex";
 import { zaiUsageProvider } from "./usage/zai";
 import { getOAuthApiKey, getOAuthProvider, refreshOAuthToken } from "./utils/oauth";
 import { loginDeepSeek } from "./utils/oauth/deepseek";
-import { loginOpenAICodexDevice } from "./utils/oauth/openai-codex";
 import type { OAuthController, OAuthCredentials, OAuthProvider, OAuthProviderId } from "./utils/oauth/types";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -362,10 +358,7 @@ async function defaultConfigValueResolver(config: string): Promise<string | unde
 // ─────────────────────────────────────────────────────────────────────────────
 
 const DEFAULT_USAGE_PROVIDERS: UsageProvider[] = [
-	openaiCodexUsageProvider,
 	kimiUsageProvider,
-	antigravityUsageProvider,
-	googleGeminiCliUsageProvider,
 	claudeUsageProvider,
 	zaiUsageProvider,
 ];
@@ -468,10 +461,6 @@ function isAbortSignalOption(
 	return typeof value === "object" && value !== null && "aborted" in value && "addEventListener" in value;
 }
 
-function requiresOpenAICodexProModel(provider: string, modelId: string | undefined): boolean {
-	return provider === "openai-codex" && typeof modelId === "string" && modelId.includes("-spark");
-}
-
 function getUsagePlanType(report: UsageReport | null): string | undefined {
 	const metadata = report?.metadata;
 	if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return undefined;
@@ -479,14 +468,15 @@ function getUsagePlanType(report: UsageReport | null): string | undefined {
 	return typeof planType === "string" ? planType.toLowerCase() : undefined;
 }
 
-function getOpenAICodexPlanPriority(report: UsageReport | null): number {
-	const planType = getUsagePlanType(report);
-	if (!planType) return 1;
-	return planType.includes("pro") ? 0 : 2;
+// Stub functions for removed openai-codex provider — always return no-op defaults.
+function requiresOpenAICodexProModel(_provider: string, _modelId: string | undefined): boolean {
+	return false;
 }
-
-function hasOpenAICodexProPlan(report: UsageReport | null): boolean {
-	return getUsagePlanType(report)?.includes("pro") === true;
+function getOpenAICodexPlanPriority(_report: UsageReport | null): number {
+	return 1;
+}
+function hasOpenAICodexProPlan(_report: UsageReport | null): boolean {
+	return false;
 }
 
 function resolveDefaultUsageProvider(provider: Provider): UsageProvider | undefined {
@@ -494,7 +484,6 @@ function resolveDefaultUsageProvider(provider: Provider): UsageProvider | undefi
 }
 
 const DEFAULT_RANKING_STRATEGIES = new Map<Provider, CredentialRankingStrategy>([
-	["openai-codex", codexRankingStrategy],
 	["anthropic", claudeRankingStrategy],
 ]);
 
@@ -1358,38 +1347,6 @@ export class AuthStorage {
 				});
 				break;
 			}
-			case "google-gemini-cli": {
-				const { loginGeminiCli } = await import("./utils/oauth/google-gemini-cli");
-				credentials = await loginGeminiCli({
-					...ctrl,
-					onManualCodeInput: ctrl.onManualCodeInput ?? manualCodeInput,
-				});
-				break;
-			}
-			case "google-antigravity": {
-				const { loginAntigravity } = await import("./utils/oauth/google-antigravity");
-				credentials = await loginAntigravity({
-					...ctrl,
-					onManualCodeInput: ctrl.onManualCodeInput ?? manualCodeInput,
-				});
-				break;
-			}
-			case "openai-codex": {
-				const { loginOpenAICodex } = await import("./utils/oauth/openai-codex");
-				credentials = await loginOpenAICodex({
-					...ctrl,
-					onManualCodeInput: ctrl.onManualCodeInput ?? manualCodeInput,
-				});
-				break;
-			}
-			case "openai-codex-device": {
-				// Device/headless flow — stores credentials under "OpenAI code provider" so the
-				// provider can pick them up without a separate provider configuration.
-				const deviceCredentials = await loginOpenAICodexDevice(ctrl);
-				const newCredential: OAuthCredential = { type: "oauth", ...deviceCredentials };
-				await this.#upsertOAuthCredential("openai-codex", newCredential);
-				return;
-			}
 			case "kimi-code": {
 				const { loginKimi } = await import("./utils/oauth/kimi");
 				credentials = await loginKimi(ctrl);
@@ -1428,28 +1385,8 @@ export class AuthStorage {
 				await saveApiKeyCredential(apiKey);
 				return;
 			}
-			case "cerebras": {
-				const { loginCerebras } = await import("./utils/oauth/cerebras");
-				const apiKey = await loginCerebras(ctrl);
-				await saveApiKeyCredential(apiKey);
-				return;
-			}
 			case "deepseek": {
 				const apiKey = await loginDeepSeek(ctrl);
-				await saveApiKeyCredential(apiKey);
-				return;
-			}
-			case "xai": {
-				const { loginXai } = await import("./utils/oauth/xai");
-				credentials = await loginXai({
-					...ctrl,
-					onManualCodeInput: ctrl.onManualCodeInput ?? manualCodeInput,
-				});
-				break;
-			}
-			case "fireworks": {
-				const { loginFireworks } = await import("./utils/oauth/fireworks");
-				const apiKey = await loginFireworks(ctrl);
 				await saveApiKeyCredential(apiKey);
 				return;
 			}
@@ -1496,13 +1433,6 @@ export class AuthStorage {
 				return;
 			}
 
-			case "together": {
-				const { loginTogether } = await import("./utils/oauth/together");
-				const apiKey = await loginTogether(ctrl);
-				await saveApiKeyCredential(apiKey);
-				return;
-			}
-
 			case "vllm": {
 				const { loginVllm } = await import("./utils/oauth/vllm");
 				const apiKey = await loginVllm(ctrl);
@@ -1512,12 +1442,6 @@ export class AuthStorage {
 			case "parallel": {
 				const { loginParallel } = await import("./utils/oauth/parallel");
 				const apiKey = await loginParallel(ctrl);
-				await saveApiKeyCredential(apiKey);
-				return;
-			}
-			case "nvidia": {
-				const { loginNvidia } = await import("./utils/oauth/nvidia");
-				const apiKey = await loginNvidia(ctrl);
 				await saveApiKeyCredential(apiKey);
 				return;
 			}
@@ -1543,13 +1467,6 @@ export class AuthStorage {
 			}
 		}
 		const newCredential: OAuthCredential = { type: "oauth", ...credentials };
-		if (provider === "xai") {
-			const existingOAuthCredentials = this.#getCredentialsForProvider(provider).filter(
-				(credential): credential is OAuthCredential => credential.type === "oauth",
-			);
-			await this.set(provider, [...existingOAuthCredentials, newCredential]);
-			return;
-		}
 		await this.#upsertOAuthCredential(provider, newCredential);
 	}
 
@@ -1889,7 +1806,7 @@ export class AuthStorage {
 		const identifiers: string[] = [];
 		const email = this.#getUsageReportMetadataValue(report, "email");
 		if (email) identifiers.push(`email:${email.toLowerCase()}`);
-		if (report.provider === "openai-codex" || report.provider === "anthropic") {
+		if (report.provider === "anthropic") {
 			return identifiers.map(identifier => `${report.provider}:${identifier.toLowerCase()}`);
 		}
 		const accountId = this.#getUsageReportMetadataValue(report, "accountId");
@@ -3336,7 +3253,7 @@ function toStoredAuthCredential(row: AuthRow, credential: AuthCredential): Store
 
 function resolveProviderCredentialIdentityKey(provider: string, identifiers: string[]): string | null {
 	const emailIdentifier = identifiers.find(identifier => identifier.startsWith("email:"));
-	if ((provider === "openai-codex" || provider === "anthropic") && emailIdentifier) return emailIdentifier;
+	if (provider === "anthropic" && emailIdentifier) return emailIdentifier;
 	const accountIdentifier = identifiers.find(identifier => identifier.startsWith("account:"));
 	if (accountIdentifier) return accountIdentifier;
 	if (emailIdentifier) return emailIdentifier;

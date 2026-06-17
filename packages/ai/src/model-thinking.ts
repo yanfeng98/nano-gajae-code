@@ -47,10 +47,6 @@ const DEFAULT_REASONING_EFFORTS_WITH_XHIGH_AND_MAX: readonly Effort[] = [
 const GEMINI_3_PRO_EFFORTS: readonly Effort[] = [Effort.Low, Effort.High];
 const GEMINI_3_FLASH_EFFORTS: readonly Effort[] = [Effort.Minimal, Effort.Low, Effort.Medium, Effort.High];
 const GPT_5_2_PLUS_EFFORTS: readonly Effort[] = [Effort.Low, Effort.Medium, Effort.High, Effort.XHigh];
-const GPT_5_5_DEFAULT_EFFORT = Effort.XHigh;
-
-const GPT_5_1_CODEX_MINI_EFFORTS: readonly Effort[] = [Effort.Medium, Effort.High];
-const CLOUDFLARE_AI_GATEWAY_BASE_URL = "https://gateway.ai.cloudflare.com/v1/<account>/<gateway>/anthropic";
 
 type SemVer = {
 	major: number;
@@ -100,29 +96,6 @@ interface UnknownModel {
 }
 
 type ParsedModel = GeminiModel | AnthropicModel | OpenAIModel | UnknownModel;
-
-/**
- * Static fallback model injected when Cloudflare AI Gateway discovery
- * returns no results. Ensures the provider always has at least one usable
- * model entry in the catalog.
- */
-export const CLOUDFLARE_FALLBACK_MODEL: ApiModel<"anthropic-messages"> = {
-	id: "claude-sonnet-4-5",
-	name: "Anthropic Sonnet 4.5",
-	api: "anthropic-messages",
-	provider: "cloudflare-ai-gateway",
-	baseUrl: CLOUDFLARE_AI_GATEWAY_BASE_URL,
-	reasoning: true,
-	input: ["text", "image"],
-	cost: {
-		input: 3,
-		output: 15,
-		cacheRead: 0.3,
-		cacheWrite: 3.75,
-	},
-	contextWindow: 200000,
-	maxTokens: 64000,
-};
 
 const kEnrichedModel = Symbol("model-thinking.enrichedModel");
 type ModelWithEnriched = ApiModel<Api> & { [kEnrichedModel]?: ApiModel<Api> };
@@ -433,9 +406,6 @@ function inferGeneratedApplyPatchToolType(
 	if (model.provider === "openai" && model.api === "openai-responses") {
 		return "freeform";
 	}
-	if (model.provider === "openai-codex" && model.api === "openai-codex-responses") {
-		return "freeform";
-	}
 	return undefined;
 }
 
@@ -460,29 +430,9 @@ function applyOpenAICatalogPolicy(model: ApiModel<Api>, parsedModel: OpenAIModel
 		model.contextWindow = 272000;
 		return;
 	}
-	// GPT-5.4 mini/nano use plain OpenAI IDs on the OpenAI code backend transport, but OpenAI code backend still
-	// enforces the lower prompt budget for these variants. OpenAI code backend discovery can also
-	// report inconsistent priorities for the GPT-5.4 family, so normalize by parsed
-	// variant instead of special-casing raw model ids.
-	if (model.api === "openai-codex-responses" && semverEqual(parsedModel.version, "5.4")) {
-		const normalizedPriority = CODEX_GPT_5_4_PRIORITY_BY_VARIANT[parsedModel.variant];
-		if (normalizedPriority !== undefined) {
-			model.priority = normalizedPriority;
-		}
-		if (parsedModel.variant === "mini" || parsedModel.variant === "nano") {
-			model.contextWindow = 272000;
-		}
-	}
 }
 
-function inferDefaultEffort<TApi extends Api>(model: ApiModel<TApi>, parsedModel: ParsedModel): Effort | undefined {
-	if (
-		parsedModel.family === "openai" &&
-		model.provider === "openai-codex" &&
-		semverEqual(parsedModel.version, "5.5")
-	) {
-		return GPT_5_5_DEFAULT_EFFORT;
-	}
+function inferDefaultEffort<TApi extends Api>(_model: ApiModel<TApi>, _parsedModel: ParsedModel): Effort | undefined {
 	return undefined;
 }
 
@@ -564,9 +514,6 @@ function inferSupportedEfforts<TApi extends Api>(parsedModel: ParsedModel, model
 }
 
 function inferOpenAISupportedEfforts(model: OpenAIModel): readonly Effort[] {
-	if (model.variant === "codex-mini" && semverEqual(model.version, "5.1")) {
-		return GPT_5_1_CODEX_MINI_EFFORTS;
-	}
 	if (semverGte(model.version, "5.2")) {
 		return GPT_5_2_PLUS_EFFORTS;
 	}
@@ -614,7 +561,7 @@ function inferFallbackEfforts<TApi extends Api>(model: ApiModel<TApi>): readonly
 		return DEFAULT_REASONING_EFFORTS;
 	}
 	// OpenAI Responses APIs encode discrete effort levels, including xhigh.
-	if (model.api === "openai-responses" || model.api === "openai-codex-responses") {
+	if (model.api === "openai-responses") {
 		return DEFAULT_REASONING_EFFORTS_WITH_XHIGH;
 	}
 	return DEFAULT_REASONING_EFFORTS;
@@ -626,7 +573,6 @@ function inferThinkingControlMode<TApi extends Api>(
 ): ThinkingConfig["mode"] {
 	switch (model.api) {
 		case "google-generative-ai":
-		case "google-gemini-cli":
 		case "google-vertex":
 			return parsedModel.family === "gemini" &&
 				semverGte(parsedModel.version, "3.0") &&

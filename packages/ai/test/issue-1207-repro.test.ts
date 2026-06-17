@@ -92,7 +92,7 @@ describe("issue #1207 — DeepSeek V4 keeps reasoning with tools", () => {
 	});
 
 	it("preserves OpenRouter reasoning when tool_choice auto is present", async () => {
-		const model = getBundledModel("openrouter", "deepseek/deepseek-v4-flash") as Model<"openai-completions">;
+		const model = getBundledModel("deepseek", "deepseek-v4-flash") as Model<"openai-completions">;
 		const compat = detectOpenAICompat(model);
 		const body = await capturePayload(model);
 

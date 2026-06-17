@@ -65,11 +65,7 @@ const ACTIONS: readonly AuthBrokerAction[] = ["serve", "token", "login", "logout
 /** Callback ports baked from the per-provider OAuth flow modules. */
 const CALLBACK_PORTS: Record<string, number> = {
 	anthropic: 54545,
-	"openai-codex": 1455,
-	"google-gemini-cli": 8085,
-	"google-antigravity": 51121,
 	"gitlab-duo": 8080,
-	xai: 56121,
 };
 
 function getTokenFilePath(): string {
@@ -258,10 +254,6 @@ async function runLogout(flags: AuthBrokerCommandArgs["flags"]): Promise<void> {
  */
 const CLIPROXY_TYPE_TO_PROVIDER: Record<string, string> = {
 	claude: "anthropic",
-	codex: "openai-codex",
-	gemini: "google-gemini-cli",
-	antigravity: "google-antigravity",
-	"gemini-cli": "google-gemini-cli",
 };
 
 interface CliProxyCredentialJson {

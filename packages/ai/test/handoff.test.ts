@@ -514,32 +514,4 @@ describe("Cross-Provider Handoff Tests", () => {
 		});
 	});
 
-	describe.skipIf(!e2eApiKey("MISTRAL_API_KEY"))("Mistral Provider Handoff", () => {
-		const model = getBundledModel("mistral", "devstral-medium-latest");
-
-		it("should handle contexts from all providers", async () => {
-			console.log("\nTesting Mistral with pre-built contexts:\n");
-
-			const contextTests = [
-				{ label: "Anthropic-style", context: providerContexts.anthropic, sourceModel: "claude-haiku-4-5-20251001" },
-				{ label: "Google-style", context: providerContexts.google, sourceModel: "gemini-2.5-flash" },
-				{ label: "OpenAI-Completions", context: providerContexts.openaiCompletions, sourceModel: "gpt-4o-mini" },
-				{ label: "OpenAI-Responses", context: providerContexts.openaiResponses, sourceModel: "gpt-5-mini" },
-				{ label: "Aborted", context: providerContexts.aborted, sourceModel: null },
-			];
-
-			let successCount = 0;
-			const totalTests = contextTests.length;
-
-			for (const { label, context } of contextTests) {
-				const success = await testProviderHandoff(model, label, context);
-				if (success) successCount++;
-			}
-
-			console.log(`\nMistral success rate: ${successCount}/${totalTests}\n`);
-
-			// All handoffs should succeed
-			expect(successCount).toBe(totalTests);
-		}, 60000);
-	});
 });

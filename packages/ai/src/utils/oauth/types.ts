@@ -10,11 +10,9 @@ export type OAuthCredentials = {
 
 export type OAuthProvider =
 	| "anthropic"
-	| "cerebras"
 	| "deepseek"
-	| "fireworks"
-	| "google-gemini-cli"
-	| "google-antigravity"
+	| "github-copilot"
+	| "gitlab-duo"
 	| "huggingface"
 	| "kimi-code"
 	| "kagi"
@@ -22,19 +20,14 @@ export type OAuthProvider =
 	| "minimax-code"
 	| "minimax-code-cn"
 	| "moonshot"
-	| "nvidia"
 	| "ollama"
 	| "ollama-cloud"
-	| "openai-codex"
-	| "openai-codex-device"
 	| "opencode-go"
 	| "opencode-zen"
 	| "parallel"
 	| "perplexity"
 	| "tavily"
-	| "together"
 	| "vllm"
-	| "xai"
 	| "zai";
 
 export type OAuthProviderId = OAuthProvider | (string & {});

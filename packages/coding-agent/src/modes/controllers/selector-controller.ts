@@ -65,11 +65,7 @@ import type { SessionObserverRegistry } from "../session-observer-registry";
 
 const CALLBACK_SERVER_PROVIDERS = new Set<string>([
 	"anthropic",
-	"openai-codex",
 	"gitlab-duo",
-	"google-gemini-cli",
-	"google-antigravity",
-	"xai",
 ]);
 
 const MANUAL_LOGIN_TIP = "Tip: You can complete pairing with /login <redirect URL>.";
@@ -511,7 +507,6 @@ export class SelectorController {
 					value === "auto" ||
 					value === "openai" ||
 					value === "gemini" ||
-					value === "openrouter" ||
 					value === "antigravity"
 				) {
 					setPreferredImageProvider(value);

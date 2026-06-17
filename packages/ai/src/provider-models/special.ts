@@ -1,32 +1,4 @@
 import type { ModelManagerOptions } from "../model-manager";
-import { fetchCodexModels } from "../utils/discovery/codex";
-
-// ---------------------------------------------------------------------------
-// OpenAI code provider
-// ---------------------------------------------------------------------------
-
-export interface OpenAICodexModelManagerConfig {
-	accessToken?: string;
-	accountId?: string;
-	clientVersion?: string;
-}
-
-export function openaiCodexModelManagerOptions(
-	config: OpenAICodexModelManagerConfig = {},
-): ModelManagerOptions<"openai-codex-responses"> {
-	const { accessToken, accountId, clientVersion } = config;
-	return {
-		providerId: "openai-codex",
-		...(accessToken
-			? {
-					fetchDynamicModels: async () => {
-						const result = await fetchCodexModels({ accessToken, accountId, clientVersion });
-						return result?.models ?? null;
-					},
-				}
-			: undefined),
-	};
-}
 
 // ---------------------------------------------------------------------------
 // Zai

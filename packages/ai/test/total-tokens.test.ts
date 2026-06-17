@@ -22,11 +22,8 @@ import { e2eApiKey, resolveApiKey } from "./oauth";
 const oauthTokens = await Promise.all([
 	resolveApiKey("anthropic"),
 	resolveApiKey("anthropic"),
-	resolveApiKey("google-gemini-cli"),
-	resolveApiKey("google-antigravity"),
-	resolveApiKey("openai-codex"),
 ]);
-const [anthropicOAuthToken, githubCopilotToken, geminiCliToken, antigravityToken, openaiCodexToken] = oauthTokens;
+const [anthropicOAuthToken, githubCopilotToken, ] = oauthTokens;
 
 // Generate a long system prompt to trigger caching (>2k bytes for most providers)
 const LONG_SYSTEM_PROMPT = `You are a helpful assistant. Be concise in your responses.
@@ -122,28 +119,6 @@ describe("totalTokens field", () => {
 		);
 	});
 
-	describe("Anthropic (OAuth)", () => {
-		it.skipIf(!anthropicOAuthToken)(
-			"claude-sonnet-4 - should return totalTokens equal to sum of components",
-			async () => {
-				const llm = getBundledModel("anthropic", "claude-sonnet-4-20250514");
-
-				console.log(`\nAnthropic OAuth / ${llm.id}:`);
-				const { first, second } = await testTotalTokensWithCache(llm, { apiKey: anthropicOAuthToken });
-
-				logUsage("First request", first);
-				logUsage("Second request", second);
-
-				assertTotalTokensEqualsComponents(first);
-				assertTotalTokensEqualsComponents(second);
-
-				// Anthropic should have cache activity
-				const hasCache = second.cacheRead > 0 || second.cacheWrite > 0 || first.cacheWrite > 0;
-				expect(hasCache).toBe(true);
-			},
-			{ retry: 3, timeout: 60000 },
-		);
-	});
 
 	// =========================================================================
 	// OpenAI
@@ -217,70 +192,16 @@ describe("totalTokens field", () => {
 	// xAI
 	// =========================================================================
 
-	describe.skipIf(!e2eApiKey("XAI_API_KEY"))("xAI", () => {
-		it(
-			"grok-3-fast - should return totalTokens equal to sum of components",
-			async () => {
-				const llm = getBundledModel("xai", "grok-3-fast");
-
-				console.log(`\nxAI / ${llm.id}:`);
-				const { first, second } = await testTotalTokensWithCache(llm, { apiKey: Bun.env.XAI_API_KEY });
-
-				logUsage("First request", first);
-				logUsage("Second request", second);
-
-				assertTotalTokensEqualsComponents(first);
-				assertTotalTokensEqualsComponents(second);
-			},
-			{ retry: 3, timeout: 60000 },
-		);
-	});
 
 	// =========================================================================
 	// Groq
 	// =========================================================================
 
-	describe.skipIf(!e2eApiKey("GROQ_API_KEY"))("Groq", () => {
-		it(
-			"openai/gpt-oss-120b - should return totalTokens equal to sum of components",
-			async () => {
-				const llm = getBundledModel("groq", "openai/gpt-oss-120b");
-
-				console.log(`\nGroq / ${llm.id}:`);
-				const { first, second } = await testTotalTokensWithCache(llm, { apiKey: Bun.env.GROQ_API_KEY });
-
-				logUsage("First request", first);
-				logUsage("Second request", second);
-
-				assertTotalTokensEqualsComponents(first);
-				assertTotalTokensEqualsComponents(second);
-			},
-			{ retry: 3, timeout: 60000 },
-		);
-	});
 
 	// =========================================================================
 	// Cerebras
 	// =========================================================================
 
-	describe.skipIf(!e2eApiKey("CEREBRAS_API_KEY"))("Cerebras", () => {
-		it(
-			"gpt-oss-120b - should return totalTokens equal to sum of components",
-			async () => {
-				const llm = getBundledModel("cerebras", "gpt-oss-120b");
-
-				console.log(`\nCerebras / ${llm.id}:`);
-				const { first, second } = await testTotalTokensWithCache(llm, { apiKey: Bun.env.CEREBRAS_API_KEY });
-
-				logUsage("First request", first);
-				logUsage("Second request", second);
-
-				assertTotalTokensEqualsComponents(first);
-				assertTotalTokensEqualsComponents(second);
-			},
-			{ retry: 3, timeout: 60000 },
-		);
-	});
 
 	// =========================================================================
 	// z.ai
@@ -309,115 +230,11 @@ describe("totalTokens field", () => {
 	// Mistral
 	// =========================================================================
 
-	describe.skipIf(!e2eApiKey("MISTRAL_API_KEY"))("Mistral", () => {
-		it(
-			"devstral-medium-latest - should return totalTokens equal to sum of components",
-			async () => {
-				const llm = getBundledModel("mistral", "devstral-medium-latest");
-
-				console.log(`\nMistral / ${llm.id}:`);
-				const { first, second } = await testTotalTokensWithCache(llm, { apiKey: Bun.env.MISTRAL_API_KEY });
-
-				logUsage("First request", first);
-				logUsage("Second request", second);
-
-				assertTotalTokensEqualsComponents(first);
-				assertTotalTokensEqualsComponents(second);
-			},
-			{ retry: 3, timeout: 60000 },
-		);
-	});
 
 	// =========================================================================
 	// OpenRouter - Multiple backend providers
 	// =========================================================================
 
-	describe.skipIf(!e2eApiKey("OPENROUTER_API_KEY"))("OpenRouter", () => {
-		it(
-			"anthropic/claude-sonnet-4 - should return totalTokens equal to sum of components",
-			async () => {
-				const llm = getBundledModel("openrouter", "anthropic/claude-sonnet-4");
-
-				console.log(`\nOpenRouter / ${llm.id}:`);
-				const { first, second } = await testTotalTokensWithCache(llm, { apiKey: Bun.env.OPENROUTER_API_KEY });
-
-				logUsage("First request", first);
-				logUsage("Second request", second);
-
-				assertTotalTokensEqualsComponents(first);
-				assertTotalTokensEqualsComponents(second);
-			},
-			{ retry: 3, timeout: 60000 },
-		);
-
-		it(
-			"deepseek/deepseek-chat - should return totalTokens equal to sum of components",
-			async () => {
-				const llm = getBundledModel("openrouter", "deepseek/deepseek-chat");
-
-				console.log(`\nOpenRouter / ${llm.id}:`);
-				const { first, second } = await testTotalTokensWithCache(llm, { apiKey: Bun.env.OPENROUTER_API_KEY });
-
-				logUsage("First request", first);
-				logUsage("Second request", second);
-
-				assertTotalTokensEqualsComponents(first);
-				assertTotalTokensEqualsComponents(second);
-			},
-			{ retry: 3, timeout: 60000 },
-		);
-
-		it(
-			"mistralai/mistral-small-3.1-24b-instruct - should return totalTokens equal to sum of components",
-			async () => {
-				const llm = getBundledModel("openrouter", "mistralai/mistral-small-3.1-24b-instruct");
-
-				console.log(`\nOpenRouter / ${llm.id}:`);
-				const { first, second } = await testTotalTokensWithCache(llm, { apiKey: Bun.env.OPENROUTER_API_KEY });
-
-				logUsage("First request", first);
-				logUsage("Second request", second);
-
-				assertTotalTokensEqualsComponents(first);
-				assertTotalTokensEqualsComponents(second);
-			},
-			{ retry: 3, timeout: 60000 },
-		);
-
-		it(
-			"google/gemini-2.0-flash-001 - should return totalTokens equal to sum of components",
-			async () => {
-				const llm = getBundledModel("openrouter", "google/gemini-2.0-flash-001");
-
-				console.log(`\nOpenRouter / ${llm.id}:`);
-				const { first, second } = await testTotalTokensWithCache(llm, { apiKey: Bun.env.OPENROUTER_API_KEY });
-
-				logUsage("First request", first);
-				logUsage("Second request", second);
-
-				assertTotalTokensEqualsComponents(first);
-				assertTotalTokensEqualsComponents(second);
-			},
-			{ retry: 3, timeout: 60000 },
-		);
-
-		it(
-			"meta-llama/llama-4-maverick - should return totalTokens equal to sum of components",
-			async () => {
-				const llm = getBundledModel("openrouter", "meta-llama/llama-4-maverick");
-
-				console.log(`\nOpenRouter / ${llm.id}:`);
-				const { first, second } = await testTotalTokensWithCache(llm, { apiKey: Bun.env.OPENROUTER_API_KEY });
-
-				logUsage("First request", first);
-				logUsage("Second request", second);
-
-				assertTotalTokensEqualsComponents(first);
-				assertTotalTokensEqualsComponents(second);
-			},
-			{ retry: 3, timeout: 60000 },
-		);
-	});
 
 	// =========================================================================
 	// GitHub Copilot (OAuth)
@@ -463,102 +280,14 @@ describe("totalTokens field", () => {
 	// Google Gemini CLI (OAuth)
 	// =========================================================================
 
-	describe("Google Gemini CLI (OAuth)", () => {
-		it.skipIf(!geminiCliToken)(
-			"gemini-2.5-flash - should return totalTokens equal to sum of components",
-			async () => {
-				const llm = getBundledModel("google-gemini-cli", "gemini-2.5-flash");
-
-				console.log(`\nGoogle Gemini CLI / ${llm.id}:`);
-				const { first, second } = await testTotalTokensWithCache(llm, { apiKey: geminiCliToken });
-
-				logUsage("First request", first);
-				logUsage("Second request", second);
-
-				assertTotalTokensEqualsComponents(first);
-				assertTotalTokensEqualsComponents(second);
-			},
-			{ retry: 3, timeout: 60000 },
-		);
-	});
 
 	// =========================================================================
 	// Google Antigravity (OAuth)
 	// =========================================================================
 
-	describe("Google Antigravity (OAuth)", () => {
-		it.skipIf(!antigravityToken)(
-			"gemini-3-flash - should return totalTokens equal to sum of components",
-			async () => {
-				const llm = getBundledModel("google-antigravity", "gemini-3-flash");
-
-				console.log(`\nGoogle Antigravity / ${llm.id}:`);
-				const { first, second } = await testTotalTokensWithCache(llm, { apiKey: antigravityToken });
-
-				logUsage("First request", first);
-				logUsage("Second request", second);
-
-				assertTotalTokensEqualsComponents(first);
-				assertTotalTokensEqualsComponents(second);
-			},
-			{ retry: 3, timeout: 60000 },
-		);
-
-		it.skipIf(!antigravityToken)(
-			"claude-sonnet-4-5 - should return totalTokens equal to sum of components",
-			async () => {
-				const llm = getBundledModel("google-antigravity", "claude-sonnet-4-5");
-
-				console.log(`\nGoogle Antigravity / ${llm.id}:`);
-				const { first, second } = await testTotalTokensWithCache(llm, { apiKey: antigravityToken });
-
-				logUsage("First request", first);
-				logUsage("Second request", second);
-
-				assertTotalTokensEqualsComponents(first);
-				assertTotalTokensEqualsComponents(second);
-			},
-			{ retry: 3, timeout: 60000 },
-		);
-
-		it.skipIf(!antigravityToken)(
-			"gpt-oss-120b-medium - should return totalTokens equal to sum of components",
-			async () => {
-				const llm = getBundledModel("google-antigravity", "gpt-oss-120b-medium");
-
-				console.log(`\nGoogle Antigravity / ${llm.id}:`);
-				const { first, second } = await testTotalTokensWithCache(llm, { apiKey: antigravityToken });
-
-				logUsage("First request", first);
-				logUsage("Second request", second);
-
-				assertTotalTokensEqualsComponents(first);
-				assertTotalTokensEqualsComponents(second);
-			},
-			{ retry: 3, timeout: 60000 },
-		);
-	});
 
 	// =========================================================================
 	// OpenAI code provider (OAuth)
 	// =========================================================================
 
-	describe("OpenAI Codex (OAuth)", () => {
-		it.skipIf(!openaiCodexToken)(
-			"gpt-5.2-codex - should return totalTokens equal to sum of components",
-			async () => {
-				const llm = getBundledModel("openai-codex", "gpt-5.2-codex");
-
-				console.log(`\nOpenAI Codex / ${llm.id}:`);
-				const { first, second } = await testTotalTokensWithCache(llm, { apiKey: openaiCodexToken });
-
-				logUsage("First request", first);
-				logUsage("Second request", second);
-
-				assertTotalTokensEqualsComponents(first);
-				assertTotalTokensEqualsComponents(second);
-			},
-			{ retry: 3, timeout: 60000 },
-		);
-	});
 });

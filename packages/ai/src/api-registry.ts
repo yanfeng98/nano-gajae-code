@@ -17,10 +17,8 @@ import type {
 const BUILTIN_APIS = new Set<KnownApi>([
 	"openai-completions",
 	"openai-responses",
-	"openai-codex-responses",
 	"anthropic-messages",
 	"google-generative-ai",
-	"google-gemini-cli",
 	"ollama-chat",
 ]);
 

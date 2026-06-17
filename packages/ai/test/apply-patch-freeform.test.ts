@@ -1,9 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import {
-	convertOpenAICodexResponsesTools as convertCodexTools,
-	normalizeCodexToolChoice,
-} from "@gajae-code/ai/providers/openai-codex-responses";
-import {
 	convertTools,
 	mapOpenAIResponsesToolChoiceForTools,
 	supportsFreeformApplyPatch,
@@ -38,22 +34,6 @@ function makeModel(overrides: Partial<Model<"openai-responses">> = {}): Model<"o
 		input: ["text"],
 		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 		contextWindow: 400000,
-		maxTokens: 128000,
-		...overrides,
-	};
-}
-
-function makeCodexModel(overrides: Partial<Model<"openai-codex-responses">> = {}): Model<"openai-codex-responses"> {
-	return {
-		id: "gpt-5",
-		name: "GPT-5",
-		api: "openai-codex-responses",
-		provider: "openai-codex",
-		baseUrl: "https://chatgpt.com/backend-api",
-		reasoning: true,
-		input: ["text"],
-		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-		contextWindow: 272000,
 		maxTokens: 128000,
 		...overrides,
 	};
@@ -206,18 +186,6 @@ describe("tool choice mapping: freeform emission", () => {
 		});
 	});
 
-	test("codex backend forced internal edit choice targets custom wire name", () => {
-		expect(
-			normalizeCodexToolChoice(
-				{ type: "tool", name: "edit" },
-				[editTool],
-				makeCodexModel({ applyPatchToolType: "freeform" }),
-			),
-		).toEqual({
-			type: "custom",
-			name: "apply_patch",
-		});
-	});
 });
 
 describe("custom_tool_call stream receive", () => {
@@ -372,28 +340,6 @@ describe("custom_tool_call stream receive", () => {
 				!!e && typeof e === "object" && (e as { type?: string }).type === "toolcall_end",
 		);
 		expect(endEvent?.toolCall.id).toStartWith("call_missing_item|fc_");
-	});
-});
-
-describe("codex-backend convertTools (chatgpt.com/backend-api)", () => {
-	test("edit tool with customFormat becomes a custom grammar tool when flag is set", () => {
-		const [out] = convertCodexTools([editTool], makeCodexModel({ applyPatchToolType: "freeform" }));
-		expect(out.type).toBe("custom");
-		expect(out.name).toBe("apply_patch");
-		if (out.type !== "custom") throw new Error("Expected custom tool payload");
-		expect(out.format).toEqual({ type: "grammar", syntax: "lark", definition: COMPACT_GRAMMAR });
-	});
-
-	test("wire shape matches direct-OpenAI convertTools (single serializer contract)", () => {
-		const [codexOut] = convertCodexTools([editTool], makeCodexModel({ applyPatchToolType: "freeform" }));
-		const [openaiOut] = convertTools([editTool], false, makeModel({ applyPatchToolType: "freeform" }));
-		expect(codexOut).toEqual(openaiOut as unknown as typeof codexOut);
-	});
-
-	test("falls back to function tool when flag is absent", () => {
-		const [out] = convertCodexTools([editTool], makeCodexModel());
-		expect(out.type).toBe("function");
-		expect(out.name).toBe("edit");
 	});
 });
 

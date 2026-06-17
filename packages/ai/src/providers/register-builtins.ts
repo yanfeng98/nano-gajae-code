@@ -24,9 +24,7 @@ import { AssistantMessageEventStream as EventStreamImpl } from "../utils/event-s
 import { getStreamFirstEventTimeoutMs, getStreamIdleTimeoutMs, iterateWithIdleTimeout } from "../utils/idle-iterator";
 import type { AnthropicOptions } from "./anthropic";
 import type { GoogleOptions } from "./google";
-import type { GoogleGeminiCliOptions } from "./google-gemini-cli";
 import type { OllamaChatOptions } from "./ollama";
-import type { OpenAICodexResponsesOptions } from "./openai-codex-responses";
 import type { OpenAICompletionsOptions } from "./openai-completions";
 import type { OpenAIResponsesOptions } from "./openai-responses";
 
@@ -51,22 +49,6 @@ interface GoogleProviderModule {
 		model: Model<"google-generative-ai">,
 		context: Context,
 		options: GoogleOptions,
-	) => AssistantMessageEventStream;
-}
-
-interface GoogleGeminiCliProviderModule {
-	streamGoogleGeminiCli: (
-		model: Model<"google-gemini-cli">,
-		context: Context,
-		options: GoogleGeminiCliOptions,
-	) => AssistantMessageEventStream;
-}
-
-interface OpenAICodexResponsesProviderModule {
-	streamOpenAICodexResponses: (
-		model: Model<"openai-codex-responses">,
-		context: Context,
-		options: OpenAICodexResponsesOptions,
 	) => AssistantMessageEventStream;
 }
 
@@ -100,8 +82,6 @@ interface OllamaProviderModule {
 
 let anthropicProviderModulePromise: Promise<LazyProviderModule<"anthropic-messages">> | undefined;
 let googleProviderModulePromise: Promise<LazyProviderModule<"google-generative-ai">> | undefined;
-let googleGeminiCliProviderModulePromise: Promise<LazyProviderModule<"google-gemini-cli">> | undefined;
-let openAICodexResponsesProviderModulePromise: Promise<LazyProviderModule<"openai-codex-responses">> | undefined;
 let openAICompletionsProviderModulePromise: Promise<LazyProviderModule<"openai-completions">> | undefined;
 let openAIResponsesProviderModulePromise: Promise<LazyProviderModule<"openai-responses">> | undefined;
 let ollamaProviderModulePromise: Promise<LazyProviderModule<"ollama-chat">> | undefined;
@@ -130,19 +110,6 @@ interface LazyStreamLimits {
 	defaultFirstEventTimeoutMs?: number;
 	defaultIdleTimeoutMs?: number;
 }
-
-/**
- * Cloud Code Assist (google-gemini-cli / google-antigravity) routinely takes
- * longer than the global 100s default to emit its first SSE event when serving
- * the heavier Gemini 3.x Pro tiers at high thinking levels. Bump the first-event
- * floor to five minutes so duke et al. stop seeing spurious "stream timed out
- * while waiting for the first event" aborts on legitimate cold reasoning starts.
- * The steady-state idle watchdog stays on the global default since the upstream
- * emits thinking tokens frequently once it gets going.
- */
-const GOOGLE_GEMINI_CLI_LAZY_STREAM_LIMITS: LazyStreamLimits = {
-	defaultFirstEventTimeoutMs: 300_000,
-};
 
 function forwardStream<TApi extends Api>(
 	target: EventStreamImpl,
@@ -265,22 +232,6 @@ function loadGoogleProviderModule(): Promise<LazyProviderModule<"google-generati
 	return googleProviderModulePromise;
 }
 
-function loadGoogleGeminiCliProviderModule(): Promise<LazyProviderModule<"google-gemini-cli">> {
-	googleGeminiCliProviderModulePromise ||= import("./google-gemini-cli").then(module => {
-		const provider = module as GoogleGeminiCliProviderModule;
-		return { stream: provider.streamGoogleGeminiCli };
-	});
-	return googleGeminiCliProviderModulePromise;
-}
-
-function loadOpenAICodexResponsesProviderModule(): Promise<LazyProviderModule<"openai-codex-responses">> {
-	openAICodexResponsesProviderModulePromise ||= import("./openai-codex-responses").then(module => {
-		const provider = module as OpenAICodexResponsesProviderModule;
-		return { stream: provider.streamOpenAICodexResponses };
-	});
-	return openAICodexResponsesProviderModulePromise;
-}
-
 function loadOpenAICompletionsProviderModule(): Promise<LazyProviderModule<"openai-completions">> {
 	openAICompletionsProviderModulePromise ||= import("./openai-completions").then(module => {
 		const provider = module as OpenAICompletionsProviderModule;
@@ -314,11 +265,6 @@ function loadOllamaProviderModule(): Promise<LazyProviderModule<"ollama-chat">> 
 
 export const streamAnthropic = createLazyStream(loadAnthropicProviderModule);
 export const streamGoogle = createLazyStream(loadGoogleProviderModule);
-export const streamGoogleGeminiCli = createLazyStream(
-	loadGoogleGeminiCliProviderModule,
-	GOOGLE_GEMINI_CLI_LAZY_STREAM_LIMITS,
-);
-export const streamOpenAICodexResponses = createLazyStream(loadOpenAICodexResponsesProviderModule);
 export const streamOpenAICompletions = createLazyStream(loadOpenAICompletionsProviderModule);
 export const streamOpenAIResponses = createLazyStream(loadOpenAIResponsesProviderModule);
 export const streamOllama = createLazyStream(loadOllamaProviderModule);

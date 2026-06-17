@@ -57,7 +57,7 @@ function baseContext(): Context {
 function kimiModel(): Model<"openai-completions"> {
 	// OpenRouter-hosted Kimi K2 — the model-id gate engages without pulling
 	// in the kimi-code OAuth/device-id paths.
-	return getBundledModel("openrouter", "moonshotai/kimi-k2");
+	return getBundledModel("litellm", "moonshotai/kimi-k2") as Model<"openai-completions">;
 }
 
 function chunk(model: string, delta: SseChoiceDelta, finish: SseChunk["choices"][0]["finish_reason"] = null): SseChunk {

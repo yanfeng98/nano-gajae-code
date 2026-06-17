@@ -1294,7 +1294,7 @@ export class ModelSelectorComponent extends Container {
 }
 
 function requiresExplicitThinkingChoice(model: Model): boolean {
-	return model.reasoning === true && (model.provider === "openai" || model.provider === "openai-codex");
+	return model.reasoning === true && (model.provider === "openai");
 }
 
 function getSelectableThinkingLevels(model: Model): ThinkingLevel[] {

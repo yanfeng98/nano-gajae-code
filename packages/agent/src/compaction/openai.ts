@@ -12,12 +12,6 @@
  *   with `{ summary, shortSummary? }`.
  */
 
-import {
-	CODEX_BASE_URL,
-	getCodexAccountId,
-	OPENAI_HEADER_VALUES,
-	OPENAI_HEADERS,
-} from "@gajae-code/ai/providers/openai-codex/constants";
 import { parseTextSignature } from "@gajae-code/ai/providers/openai-responses-shared";
 import { transformMessages } from "@gajae-code/ai/providers/transform-messages";
 import type { AssistantMessage, Message, Model } from "@gajae-code/ai/types";
@@ -71,14 +65,10 @@ export interface RemoteCompactionResponse {
 // ============================================================================
 
 export function shouldUseOpenAiRemoteCompaction(model: Model): boolean {
-	return model.provider === "openai" || model.provider === "openai-codex";
+	return model.provider === "openai";
 }
 
 function resolveOpenAiCompactEndpoint(model: Model, authCredentialType?: "api_key" | "oauth"): string {
-	if (model.provider === "openai-codex") {
-		return resolveOpenAiCodexCompactEndpoint(model.baseUrl);
-	}
-
 	const envBaseUrl = $env.OPENAI_BASE_URL?.trim();
 	const configuredBaseUrl = model.baseUrl?.trim();
 	const rawBase =
@@ -90,13 +80,6 @@ function resolveOpenAiCompactEndpoint(model: Model, authCredentialType?: "api_ke
 	const normalizedBase = rawBase.endsWith("/") ? rawBase.slice(0, -1) : rawBase;
 	if (normalizedBase.endsWith("/v1")) return `${normalizedBase}/responses/compact`;
 	return `${normalizedBase}/v1/responses/compact`;
-}
-
-function resolveOpenAiCodexCompactEndpoint(baseUrl: string | undefined): string {
-	const rawBase = baseUrl && baseUrl.length > 0 ? baseUrl : CODEX_BASE_URL;
-	const normalizedBase = rawBase.endsWith("/") ? rawBase.slice(0, -1) : rawBase;
-	if (/\/codex(?:\/v\d+)?$/.test(normalizedBase)) return `${normalizedBase}/responses/compact`;
-	return `${normalizedBase}/codex/responses/compact`;
 }
 
 function normalizeOpenAiCompactionToolCallId(id: string): string {
@@ -481,16 +464,6 @@ export async function requestOpenAiRemoteCompaction(
 		Authorization: `Bearer ${apiKey}`,
 		...(model.headers ?? {}),
 	};
-
-	// OpenAI code backend endpoints require additional auth headers
-	if (model.provider === "openai-codex") {
-		const accountId = getCodexAccountId(apiKey);
-		if (accountId) {
-			headers[OPENAI_HEADERS.ACCOUNT_ID] = accountId;
-		}
-		headers[OPENAI_HEADERS.BETA] = OPENAI_HEADER_VALUES.BETA_RESPONSES;
-		headers[OPENAI_HEADERS.ORIGINATOR] = OPENAI_HEADER_VALUES.ORIGINATOR_CODEX;
-	}
 
 	const response = await fetch(endpoint, {
 		method: "POST",

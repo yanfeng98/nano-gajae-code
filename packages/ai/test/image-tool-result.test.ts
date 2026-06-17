@@ -11,11 +11,8 @@ import { e2eApiKey, resolveApiKey } from "./oauth";
 const oauthTokens = await Promise.all([
 	resolveApiKey("anthropic"),
 	resolveApiKey("anthropic"),
-	resolveApiKey("google-gemini-cli"),
-	resolveApiKey("google-antigravity"),
-	resolveApiKey("openai-codex"),
 ]);
-const [anthropicOAuthToken, githubCopilotToken, geminiCliToken, antigravityToken, openaiCodexToken] = oauthTokens;
+const [anthropicOAuthToken, githubCopilotToken] = oauthTokens;
 
 /**
  * Test that tool results containing only images work correctly across all providers.
@@ -284,45 +281,7 @@ describe("Tool Results with Images", () => {
 		);
 	});
 
-	describe.skipIf(!e2eApiKey("OPENROUTER_API_KEY"))("OpenRouter Provider (glm-4.5v)", () => {
-		const llm = getBundledModel("openrouter", "z-ai/glm-4.5v");
 
-		it(
-			"should handle tool result with only image",
-			async () => {
-				await handleToolWithImageResult(llm);
-			},
-			{ retry: 3, timeout: 30000 },
-		);
-
-		it(
-			"should handle tool result with text and image",
-			async () => {
-				await handleToolWithTextAndImageResult(llm);
-			},
-			{ retry: 3, timeout: 30000 },
-		);
-	});
-
-	describe.skipIf(!e2eApiKey("MISTRAL_API_KEY"))("Mistral Provider (pixtral-12b)", () => {
-		const llm = getBundledModel("mistral", "pixtral-12b");
-
-		it(
-			"should handle tool result with only image",
-			async () => {
-				await handleToolWithImageResult(llm);
-			},
-			{ retry: 3, timeout: 30000 },
-		);
-
-		it(
-			"should handle tool result with text and image",
-			async () => {
-				await handleToolWithTextAndImageResult(llm);
-			},
-			{ retry: 3, timeout: 30000 },
-		);
-	});
 
 	describe("Anthropic OAuth Provider (claude-sonnet-4-5)", () => {
 		const model = getBundledModel("anthropic", "claude-sonnet-4-5");
@@ -382,82 +341,6 @@ describe("Tool Results with Images", () => {
 		);
 	});
 
-	describe("Google Gemini CLI Provider", () => {
-		it.skipIf(!geminiCliToken)(
-			"gemini-2.5-flash - should handle tool result with only image",
-			async () => {
-				const llm = getBundledModel("google-gemini-cli", "gemini-2.5-flash");
-				await handleToolWithImageResult(llm, { apiKey: geminiCliToken });
-			},
-			{ retry: 3, timeout: 30000 },
-		);
 
-		it.skipIf(!geminiCliToken)(
-			"gemini-2.5-flash - should handle tool result with text and image",
-			async () => {
-				const llm = getBundledModel("google-gemini-cli", "gemini-2.5-flash");
-				await handleToolWithTextAndImageResult(llm, { apiKey: geminiCliToken });
-			},
-			{ retry: 3, timeout: 30000 },
-		);
-	});
 
-	describe("Google Antigravity Provider", () => {
-		it.skipIf(!antigravityToken)(
-			"gemini-3-flash - should handle tool result with only image",
-			async () => {
-				const llm = getBundledModel("google-antigravity", "gemini-3-flash");
-				await handleToolWithImageResult(llm, { apiKey: antigravityToken });
-			},
-			{ retry: 3, timeout: 30000 },
-		);
-
-		it.skipIf(!antigravityToken)(
-			"gemini-3-flash - should handle tool result with text and image",
-			async () => {
-				const llm = getBundledModel("google-antigravity", "gemini-3-flash");
-				await handleToolWithTextAndImageResult(llm, { apiKey: antigravityToken });
-			},
-			{ retry: 3, timeout: 30000 },
-		);
-
-		/** These two don't work, the model simply won't call the tool, works in pi
-		it.skipIf(!antigravityToken)(
-			"claude-sonnet-4-5 - should handle tool result with only image",
-			async () => {
-				const llm = getModel("google-antigravity", "claude-sonnet-4-5");
-				await handleToolWithImageResult(llm, { apiKey: antigravityToken });
-			},
-			{ retry: 3, timeout: 30000 });
-
-		it.skipIf(!antigravityToken)(
-			"claude-sonnet-4-5 - should handle tool result with text and image",
-			async () => {
-				const llm = getModel("google-antigravity", "claude-sonnet-4-5");
-				await handleToolWithTextAndImageResult(llm, { apiKey: antigravityToken });
-			},
-			{ retry: 3, timeout: 30000 });**/
-
-		// Note: gpt-oss-120b-medium does not support images, so not tested here
-	});
-
-	describe("OpenAI Codex Provider", () => {
-		it.skipIf(!openaiCodexToken)(
-			"gpt-5.2-codex - should handle tool result with only image",
-			async () => {
-				const llm = getBundledModel("openai-codex", "gpt-5.2-codex");
-				await handleToolWithImageResult(llm, { apiKey: openaiCodexToken });
-			},
-			{ retry: 3, timeout: 30000 },
-		);
-
-		it.skipIf(!openaiCodexToken)(
-			"gpt-5.2-codex - should handle tool result with text and image",
-			async () => {
-				const llm = getBundledModel("openai-codex", "gpt-5.2-codex");
-				await handleToolWithTextAndImageResult(llm, { apiKey: openaiCodexToken });
-			},
-			{ retry: 3, timeout: 30000 },
-		);
-	});
 });

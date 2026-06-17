@@ -1,6 +1,5 @@
 import { describe, expect, it } from "bun:test";
 import { getBundledModel } from "@gajae-code/ai/models";
-import { streamOpenAICodexResponses } from "@gajae-code/ai/providers/openai-codex-responses";
 import { type OpenAIResponsesOptions, streamOpenAIResponses } from "@gajae-code/ai/providers/openai-responses";
 import type { Context, Model, ProviderSessionState } from "@gajae-code/ai/types";
 import { createOpenAIResponsesHistoryPayload, truncateResponseItemId } from "../src/utils";
@@ -9,14 +8,6 @@ function createAbortedSignal(): AbortSignal {
 	const controller = new AbortController();
 	controller.abort();
 	return controller.signal;
-}
-
-function createCodexToken(accountId: string): string {
-	const header = Buffer.from(JSON.stringify({ alg: "none", typ: "JWT" })).toString("base64url");
-	const payload = Buffer.from(
-		JSON.stringify({ "https://api.openai.com/auth": { chatgpt_account_id: accountId } }),
-	).toString("base64url");
-	return `${header}.${payload}.signature`;
 }
 
 /**
@@ -63,29 +54,6 @@ const assistantSnapshotContext: Context = {
 	messages: [
 		{ role: "user", content: "generic history that should be replaced", timestamp: Date.now() },
 		makeAssistantMessage(snapshotHistoryItems),
-		{ role: "user", content: "follow-up user", timestamp: Date.now() },
-	],
-};
-
-const codexAssistantSnapshotContext: Context = {
-	messages: [
-		{ role: "user", content: "generic history that should be replaced", timestamp: Date.now() },
-		makeAssistantMessage(snapshotHistoryItems, false, "openai-codex", "gpt-5.2-codex"),
-		{ role: "user", content: "follow-up user", timestamp: Date.now() },
-	],
-};
-
-const codexToCopilotContext: Context = {
-	messages: [
-		{ role: "user", content: "generic user before switch", timestamp: Date.now() },
-		{
-			...makeAssistantMessage([], false, "openai-codex", "gpt-5.2-codex"),
-			content: [{ type: "text", text: "generic assistant that should be rebuilt" }],
-			providerPayload: createOpenAIResponsesHistoryPayload("openai-codex", [
-				{ type: "reasoning", encrypted_content: "enc_123" },
-				...snapshotHistoryItems,
-			]),
-		},
 		{ role: "user", content: "follow-up user", timestamp: Date.now() },
 	],
 };
@@ -193,16 +161,6 @@ function captureResponsesPayload(
 	return promise;
 }
 
-function captureCodexPayload(model: Model<"openai-codex-responses">, context: Context): Promise<unknown> {
-	const { promise, resolve } = Promise.withResolvers<unknown>();
-	streamOpenAICodexResponses(model, context, {
-		apiKey: createCodexToken("acc_test"),
-		signal: createAbortedSignal(),
-		onPayload: payload => resolve(payload),
-	});
-	return promise;
-}
-
 const incrementalItems1 = [
 	{
 		type: "message",
@@ -226,13 +184,13 @@ const incrementalItems2 = [
 function makeAssistantMessage(
 	items: Record<string, unknown>[],
 	incremental = false,
-	provider: "openai" | "openai-codex" | "anthropic" = "openai",
-	model = provider === "openai-codex" ? "gpt-5.2-codex" : provider === "anthropic" ? "gpt-5.4" : "gpt-5-mini",
+	provider: "openai" | "anthropic" = "openai",
+	model = provider === "anthropic" ? "gpt-5.4" : "gpt-5-mini",
 ) {
 	return {
 		role: "assistant" as const,
 		content: [{ type: "text" as const, text: "ignored" }],
-		api: provider === "openai-codex" ? ("openai-codex-responses" as const) : ("openai-responses" as const),
+		api: "openai-responses" as const,
 		provider,
 		model,
 		usage: {
@@ -450,18 +408,21 @@ describe("OpenAI responses history payload", () => {
 		expect(containsAssistantOutputText(payload.input, "Canonical assistant")).toBe(false);
 	});
 
-	it("prefers assistant native history snapshots for openai-codex-responses", async () => {
-		const model = getBundledModel("openai-codex", "gpt-5.2-codex") as Model<"openai-codex-responses">;
-		const payload = (await captureCodexPayload(model, codexAssistantSnapshotContext)) as { input?: unknown[] };
-		expect(payload.input).toEqual([
-			...snapshotHistoryItems,
-			{ role: "user", content: [{ type: "input_text", text: "follow-up user" }] },
-		]);
-	});
-
 	it("ignores incompatible native history snapshots across providers", async () => {
-		const model = getBundledModel("anthropic", "gpt-5.4") as Model<"openai-responses">;
-		const payload = (await captureResponsesPayload(model, codexToCopilotContext)) as { input?: unknown[] };
+		// When receiving messages from a different provider (e.g., anthropic-messages),
+		// the responses payload builder should fall back to rebuilding history.
+		const crossProviderContext: Context = {
+			messages: [
+				{ role: "user", content: "generic user before switch", timestamp: Date.now() },
+				{
+					...makeAssistantMessage([], false, "anthropic", "gpt-5.4"),
+					content: [{ type: "text", text: "generic assistant that should be rebuilt" }],
+				},
+				{ role: "user", content: "follow-up user", timestamp: Date.now() },
+			],
+		};
+		const model = getBundledModel("openai", "gpt-5-mini") as Model<"openai-responses">;
+		const payload = (await captureResponsesPayload(model, crossProviderContext)) as { input?: unknown[] };
 		expect(containsEncryptedReasoning(payload.input)).toBe(false);
 		expect(containsAssistantOutputText(payload.input, "generic assistant that should be rebuilt")).toBe(true);
 	});
@@ -706,57 +667,6 @@ describe("OpenAI responses history payload", () => {
 		});
 	});
 
-	it("rebuilds failed tool calls before replaying tool results for openai-codex-responses", async () => {
-		const callId = "call_failed_codex_1";
-		const context: Context = {
-			messages: [
-				{ role: "user", content: "Start", timestamp: Date.now() },
-				{
-					role: "assistant",
-					content: [{ type: "toolCall", id: callId, name: "read", arguments: { path: "README.md" } }],
-					api: "openai-codex-responses",
-					provider: "openai-codex",
-					model: "gpt-5.2-codex",
-					usage: {
-						input: 0,
-						output: 0,
-						cacheRead: 0,
-						cacheWrite: 0,
-						totalTokens: 0,
-						cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-					},
-					stopReason: "error",
-					errorMessage: "Tool arguments were invalid.",
-					timestamp: Date.now(),
-				},
-				{
-					role: "toolResult",
-					toolCallId: callId,
-					toolName: "read",
-					content: [{ type: "text", text: "Tool execution was aborted." }],
-					isError: true,
-					timestamp: Date.now(),
-				},
-				{ role: "user", content: "Resume", timestamp: Date.now() },
-			],
-		};
-		const model = getBundledModel("openai-codex", "gpt-5.2-codex") as Model<"openai-codex-responses">;
-		const payload = (await captureCodexPayload(model, context)) as { input?: unknown[] };
-		const functionCallItem = findResponsesInputItem(payload.input, "function_call");
-		const functionCallOutputItem = findResponsesInputItem(payload.input, "function_call_output");
-
-		expect(functionCallItem).toMatchObject({
-			type: "function_call",
-			call_id: callId,
-			name: "read",
-			arguments: '{"path":"README.md"}',
-		});
-		expect(functionCallOutputItem).toMatchObject({
-			type: "function_call_output",
-			call_id: callId,
-			output: "Tool execution was aborted.",
-		});
-	});
 
 	it("converts orphan function_call_output replayed from providerPayload into an assistant note (issue #1351)", async () => {
 		// Reproduces the symptom: a previous turn's snapshot carries a

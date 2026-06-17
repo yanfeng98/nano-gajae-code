@@ -15,10 +15,6 @@ import {
 	type SimpleStreamOptions,
 	streamSimple,
 } from "@gajae-code/ai";
-import {
-	getOpenAICodexTransportDetails,
-	prewarmOpenAICodexResponses,
-} from "@gajae-code/ai/providers/openai-codex-responses";
 import type { Component } from "@gajae-code/tui";
 import {
 	$flag,
@@ -868,7 +864,6 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		imageProvider === "auto" ||
 		imageProvider === "openai" ||
 		imageProvider === "gemini" ||
-		imageProvider === "openrouter" ||
 		imageProvider === "antigravity"
 	) {
 		setPreferredImageProvider(imageProvider);
@@ -2015,36 +2010,6 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			};
 		}
 
-		if (model?.api === "openai-codex-responses") {
-			const codexModel = model;
-			const codexTransport = getOpenAICodexTransportDetails(codexModel, {
-				sessionId: providerSessionId,
-				baseUrl: codexModel.baseUrl,
-				preferWebsockets: preferOpenAICodexWebsockets,
-				providerSessionState: session.providerSessionState,
-			});
-			if (codexTransport.websocketPreferred) {
-				void (async () => {
-					try {
-						const codexPrewarmApiKey = await modelRegistry.getApiKey(codexModel, providerSessionId);
-						if (!codexPrewarmApiKey) return;
-						await logger.time("prewarmOpenAICodexResponses", prewarmOpenAICodexResponses, codexModel, {
-							apiKey: codexPrewarmApiKey,
-							sessionId: providerSessionId,
-							preferWebsockets: preferOpenAICodexWebsockets,
-							providerSessionState: session.providerSessionState,
-						});
-					} catch (error) {
-						const errorMessage = error instanceof Error ? error.message : String(error);
-						logger.debug("Codex websocket prewarm failed", {
-							error: errorMessage,
-							provider: codexModel.provider,
-							model: codexModel.id,
-						});
-					}
-				})();
-			}
-		}
 
 		// Start LSP warmup in the background so startup does not block on language server initialization.
 		// Print/script invocations (`hasUI=false`) don't render the warmup status indicator AND typically

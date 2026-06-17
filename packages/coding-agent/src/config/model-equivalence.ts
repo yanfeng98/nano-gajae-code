@@ -55,8 +55,8 @@ interface CompiledEquivalenceConfigWithCache extends CompiledEquivalenceConfig {
 	[kModelResolutionCache]?: WeakMap<Model<Api>, ResolvedCanonicalModel>;
 }
 const FAMILY_EXTRACTION_PATTERNS = [
-	/(?:^|[/:._-])((?:claude|gemini|gpt|grok|glm|qwen|minimax|kimi|deepseek|llama|gemma|nova|mistral|ministral|pixtral|codestral|devstral|magistral|ernie|doubao|seed|aion|olmo|molmo|nemotron|palmyra|command|codex|coder|o[1345])[-a-z0-9.]+)(?::|$)/i,
-	/(?:^|[/:._-])((?:claude|gemini|gpt|grok|glm|qwen|minimax|kimi|deepseek|llama|gemma|nova|mistral|ministral|pixtral|codestral|devstral|magistral|ernie|doubao|seed|aion|olmo|molmo|nemotron|palmyra|command|codex|coder|o[1345])[-a-z0-9.]+(?:[-_/][a-z0-9.]+)*)(?::|$)/i,
+	/(?:^|[/:._-])((?:claude|gemini|gpt|grok|glm|qwen|minimax|kimi|deepseek|llama|gemma|nova|ernie|doubao|seed|aion|olmo|molmo|nemotron|palmyra|command|codex|coder|o[1345])[-a-z0-9.]+)(?::|$)/i,
+	/(?:^|[/:._-])((?:claude|gemini|gpt|grok|glm|qwen|minimax|kimi|deepseek|llama|gemma|nova|ernie|doubao|seed|aion|olmo|molmo|nemotron|palmyra|command|codex|coder|o[1345])[-a-z0-9.]+(?:[-_/][a-z0-9.]+)*)(?::|$)/i,
 ] as const;
 
 function shouldReplaceReference(existing: Model<Api> | undefined, candidate: Model<Api>): boolean {
@@ -168,7 +168,7 @@ const REORDER_ANTHROPIC_FAMILY_PATTERN = /^claude-(\d+(?:[.-]\d+)+)-(opus|sonnet
 const STRIP_PROVIDER_VERSION_SUFFIX_PATTERN = /-v\d+(?::\d+)?$/i;
 const STRIP_DATE_SUFFIX_PATTERN = /-\d{8}$/i;
 const INSERT_ATTACHED_FAMILY_VERSION_SEPARATOR_PATTERN =
-	/(^|[/:._-])((?:claude|gemini|gpt|grok|glm|qwen|minimax|kimi|deepseek|llama|gemma|nova|mistral|ministral|pixtral|codestral|devstral|magistral|ernie|doubao|seed|aion|olmo|molmo|nemotron|palmyra|command|codex|coder))(\d+(?:[.-]\d+)*)(?=$|[-_/.:a-z])/gi;
+	/(^|[/:._-])((?:claude|gemini|gpt|grok|glm|qwen|minimax|kimi|deepseek|llama|gemma|nova|ernie|doubao|seed|aion|olmo|molmo|nemotron|palmyra|command|codex|coder))(\d+(?:[.-]\d+)*)(?=$|[-_/.:a-z])/gi;
 const SERIES_MINOR_DOT_TO_DASH_PATTERN = /(^|[/:._-])([a-z])(\d)\.(\d)(?=$|[-_/.:a-z])/gi;
 const SERIES_MINOR_DASH_TO_DOT_PATTERN = /(^|[/:._-])([a-z])(\d)-(\d)(?=$|[-_/.:a-z])/gi;
 const EXPAND_COMPACT_SERIES_MINOR_PATTERN = /(^|[/:._-])([a-z])(\d)(\d)(?=$|[-_/.:a-z])/gi;

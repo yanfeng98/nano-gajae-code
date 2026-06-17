@@ -8,13 +8,10 @@ import {
 	enrichModelThinking,
 	getBundledModels,
 	getBundledProviders,
-	googleAntigravityModelManagerOptions,
-	googleGeminiCliModelManagerOptions,
 	type Model,
 	type ModelManagerOptions,
 	type ModelRefreshStrategy,
 	type ModelRequestTransform,
-	openaiCodexModelManagerOptions,
 	PROVIDER_DESCRIPTORS,
 	readModelCache,
 	registerCustomApi,
@@ -405,8 +402,6 @@ interface ProviderOverride {
 const PROVIDER_BASE_URL_ENV_ALIASES: Record<string, readonly string[]> = {
 	anthropic: ["ANTHROPIC_BASE_URL"],
 	google: ["GOOGLE_BASE_URL", "GEMINI_BASE_URL"],
-	"google-antigravity": ["GOOGLE_ANTIGRAVITY_BASE_URL", "GOOGLE_BASE_URL", "GEMINI_BASE_URL"],
-	"google-gemini-cli": ["GOOGLE_GEMINI_CLI_BASE_URL", "GOOGLE_BASE_URL", "GEMINI_BASE_URL"],
 	"google-vertex": ["GOOGLE_VERTEX_BASE_URL", "GOOGLE_BASE_URL", "GEMINI_BASE_URL"],
 	openai: ["OPENAI_BASE_URL"],
 };
@@ -1725,37 +1720,7 @@ export class ModelRegistry {
 			providerId: string;
 			resolveKey: (value: string | undefined) => string | undefined;
 			createOptions: (key: string) => ModelManagerOptions<Api>;
-		}> = [
-			{
-				providerId: "google-antigravity",
-				resolveKey: extractGoogleOAuthToken,
-				createOptions: oauthToken =>
-					googleAntigravityModelManagerOptions({
-						oauthToken,
-						endpoint: this.getProviderBaseUrl("google-antigravity"),
-					}),
-			},
-			{
-				providerId: "google-gemini-cli",
-				resolveKey: extractGoogleOAuthToken,
-				createOptions: oauthToken =>
-					googleGeminiCliModelManagerOptions({
-						oauthToken,
-						endpoint: this.getProviderBaseUrl("google-gemini-cli"),
-					}),
-			},
-			{
-				providerId: "openai-codex",
-				resolveKey: value => value,
-				createOptions: accessToken => {
-					const accountId = resolveOAuthAccountIdForAccessToken(this.authStorage, "openai-codex", accessToken);
-					return openaiCodexModelManagerOptions({
-						accessToken,
-						accountId,
-					});
-				},
-			},
-		];
+		}> = [];
 		const disabledProviders = getDisabledProviderIdsFromSettings();
 		const standardProviderDescriptors = PROVIDER_DESCRIPTORS.filter(
 			descriptor => !disabledProviders.has(descriptor.providerId),

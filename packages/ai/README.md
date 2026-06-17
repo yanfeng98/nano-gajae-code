@@ -51,33 +51,19 @@ Unified LLM API with automatic model discovery, provider configuration, token an
 - **Anthropic**
 - **Google**
 - **Vertex AI** (Gemini via Vertex AI)
-- **Mistral**
-- **Groq**
-- **Cerebras**
-- **Together**
 - **Moonshot** (requires `MOONSHOT_API_KEY`)
-- **Qianfan** (requires `QIANFAN_API_KEY`)
-- **NVIDIA** (requires `NVIDIA_API_KEY`)
-- **NanoGPT** (requires `NANO_GPT_API_KEY`)
 - **Hugging Face Inference**
-- **xAI**
 - **Venice** (requires `VENICE_API_KEY`)
-- **OpenRouter**
-- **Kilo Gateway** (supports OAuth `/login kilo` or `KILO_API_KEY`)
 - **LiteLLM** (requires `LITELLM_API_KEY`)
 - **zAI** (requires `ZAI_API_KEY`)
 - **MiniMax Coding Plan** (requires `MINIMAX_CODE_API_KEY` or `MINIMAX_CODE_CN_API_KEY`)
 - **Xiaomi MiMo** (requires `XIAOMI_API_KEY`)
 - **ZenMux** (requires `ZENMUX_API_KEY`)
-- **Qwen Portal** (supports `QWEN_OAUTH_TOKEN` or `QWEN_PORTAL_API_KEY`)
-- **Cloudflare AI Gateway** (requires `CLOUDFLARE_AI_GATEWAY_API_KEY` and provider-specific gateway base URL)
 - **Ollama** (local OpenAI-compatible runtime; optional `OLLAMA_API_KEY`)
 - **Ollama Cloud** (hosted native Ollama API; requires `OLLAMA_CLOUD_API_KEY`)
 - **llama.cpp** (local OpenAI and Anthropic compatible inference server)
 - **vLLM** (OpenAI-compatible server; `VLLM_API_KEY` for secured deployments)
 - **GitHub Copilot** (requires OAuth, see below)
-- **Google Gemini CLI** (requires OAuth, see below)
-- **Antigravity** (requires OAuth, see below)
 - **Any OpenAI-compatible API**: LM Studio, custom proxies, etc.
 
 ## Installation
@@ -444,10 +430,6 @@ import { getModel, streamSimple, completeSimple } from "@gajae-code/ai";
 const model = getModel("anthropic", "anthropic-model-sonnet-4-20250514");
 // or getModel('openai', 'gpt-5-mini');
 // or getModel('google', 'gemini-2.5-flash');
-// or getModel('xai', 'grok-code-fast-1');
-// or getModel('groq', 'openai/gpt-oss-20b');
-// or getModel('cerebras', 'gpt-oss-120b');
-// or getModel('openrouter', 'z-ai/glm-4.5v');
 
 // Check if model supports reasoning
 if (model.reasoning) {
@@ -663,7 +645,7 @@ A **provider** offers models through a specific API. For example:
 - **Anthropic** models use the `anthropic-messages` API
 - **Google** models use the `google-generative-ai` API
 - **OpenAI** models use the `openai-responses` API
-- **Mistral, xAI, Cerebras, Groq, etc.** models use the `openai-completions` API (OpenAI-compatible)
+- **etc.** models use the `openai-completions` API (OpenAI-compatible)
 
 ### Querying Providers and Models
 
@@ -672,7 +654,7 @@ import { getProviders, getModels, getModel } from "@gajae-code/ai";
 
 // Get all available providers
 const providers = getProviders();
-console.log(providers); // ['openai', 'anthropic', 'google', 'xai', 'groq', ...]
+console.log(providers); // ['openai', 'anthropic', 'google', ...]
 
 // Get all models from a provider (fully typed)
 const anthropicModels = getModels("anthropic");
@@ -932,29 +914,17 @@ In Node.js environments, you can set environment variables to avoid passing API 
 | Anthropic      | `ANTHROPIC_API_KEY` or `ANTHROPIC_OAUTH_TOKEN` (or `ANTHROPIC_FOUNDRY_API_KEY` when `ANTHROPIC_MODEL_CODE_USE_FOUNDRY=true`) |
 | Google         | `GEMINI_API_KEY`                                                             |
 | Vertex AI      | `GOOGLE_CLOUD_PROJECT` (or `GCLOUD_PROJECT`) + `GOOGLE_CLOUD_LOCATION` + ADC |
-| Mistral        | `MISTRAL_API_KEY`                                                            |
-| Groq           | `GROQ_API_KEY`                                                               |
-| Cerebras       | `CEREBRAS_API_KEY`                                                           |
-| Together       | `TOGETHER_API_KEY`                                                           |
-| Qianfan        | `QIANFAN_API_KEY`                                                            |
 | Hugging Face   | `HUGGINGFACE_HUB_TOKEN` or `HF_TOKEN`                                        |
-| Synthetic      | `SYNTHETIC_API_KEY`                                                          |
-| NVIDIA         | `NVIDIA_API_KEY`                                                             |
-| NanoGPT        | `NANO_GPT_API_KEY`                                                          |
 | Venice         | `VENICE_API_KEY`                                                             |
 | Moonshot       | `MOONSHOT_API_KEY`                                                           |
-| xAI            | `XAI_API_KEY`                                                                |
-| OpenRouter     | `OPENROUTER_API_KEY`                                                         |
 | LiteLLM        | `LITELLM_API_KEY`                                                            |
 | Ollama         | `OLLAMA_API_KEY` (optional for local deployments)                            |
 | Ollama Cloud   | `OLLAMA_CLOUD_API_KEY`                                                     |
-| Qwen Portal    | `QWEN_OAUTH_TOKEN` or `QWEN_PORTAL_API_KEY`                                  |
 | zAI            | `ZAI_API_KEY`                                                                |
 | MiniMax Code   | `MINIMAX_CODE_API_KEY` (international) or `MINIMAX_CODE_CN_API_KEY` (China) |
 | Xiaomi MiMo    | `XIAOMI_API_KEY`                                                             |
 | ZenMux         | `ZENMUX_API_KEY`                                                             |
 | vLLM           | `VLLM_API_KEY`                                                               |
-| Cloudflare AI Gateway | `CLOUDFLARE_AI_GATEWAY_API_KEY`                                      |
 | GitHub Copilot | `COPILOT_GITHUB_TOKEN` or `GH_TOKEN` or `GITHUB_TOKEN`                      |
 
 For Cloudflare AI Gateway models, use provider base URL format
@@ -966,11 +936,7 @@ and optional mTLS material (`ANTHROPIC_MODEL_CODE_CLIENT_CERT`, `ANTHROPIC_MODEL
 
 Provider endpoint defaults for the current OpenAI-compatible integrations:
 
-- Together: `https://api.together.xyz/v1`
 - Moonshot: `https://api.moonshot.ai/v1`
-- Qianfan: `https://qianfan.baidubce.com/v2`
-- NVIDIA: `https://integrate.api.nvidia.com/v1`
-- NanoGPT: `https://nano-gpt.com/api/v1`
 - Hugging Face Inference: `https://router.huggingface.co/v1`
 - Venice: `https://api.venice.ai/api/v1`
 - Xiaomi MiMo: `https://api.xiaomimimo.com/anthropic`
@@ -980,8 +946,6 @@ Provider endpoint defaults for the current OpenAI-compatible integrations:
 - Ollama: local OpenAI-compatible runtime (`http://127.0.0.1:11434/v1`)
 - Ollama Cloud: native Ollama API host (`https://ollama.com/api`, configured here as base URL `https://ollama.com`)
 - LiteLLM: `http://localhost:4000/v1`
-- Cloudflare AI Gateway: `https://gateway.ai.cloudflare.com/v1/<account>/<gateway>/anthropic`
-- Qwen Portal: `https://portal.qwen.ai/v1`
 When set, the library automatically uses these keys:
 
 ```typescript
@@ -1011,10 +975,7 @@ Several providers support OAuth authentication (some also support static API key
 - **Anthropic** (Anthropic model Pro/Max subscription)
 - **OpenAI code provider** (ChatGPT Plus/Pro subscription, access to GPT-5.x OpenAI code models)
 - **GitHub Copilot** (Copilot subscription)
-- **Google Gemini CLI** (Gemini 2.0/2.5 via Google Cloud Code Assist; free tier or paid subscription)
-- **Antigravity** (Free Gemini 3, Anthropic model, GPT-OSS via Google Cloud)
 - **Qwen Portal** (Qwen OAuth token or API key)
-- **xAI** (Grok OAuth login via xAI account)
 
 For paid Cloud Code Assist subscriptions, set `GOOGLE_CLOUD_PROJECT` or `GOOGLE_CLOUD_PROJECT_ID` to your project ID.
 
@@ -1064,12 +1025,8 @@ The quickest way to authenticate:
 bunx @gajae-code/ai login              # interactive provider selection
 bunx @gajae-code/ai login anthropic    # login to specific provider
 bunx @gajae-code/ai login vllm         # store vLLM API key (or placeholder for local no-auth)
-bunx @gajae-code/ai login xai          # sign in with xAI/Grok OAuth
 bunx @gajae-code/ai list               # list available providers
 ```
-
-Credentials are saved to `agent.db` in the agent directory. `/login qianfan` opens the Qianfan console and stores the pasted API key; `/login xai` opens xAI/Grok OAuth login and stores refreshable OAuth credentials.
-
 `login` supports OAuth providers (Anthropic, OpenAI code provider, GitHub Copilot, Gemini CLI, Antigravity, xAI) and API-key onboarding flows.
 
 For the current API-key onboarding flows, the library covers Together, Moonshot, Qianfan, NVIDIA, NanoGPT, Hugging Face, Venice, Xiaomi, vLLM, LiteLLM, Cloudflare AI Gateway, Qwen Portal, and Ollama Cloud. Ollama remains the local runtime integration; set `OLLAMA_API_KEY` only when your local or self-hosted deployment enforces bearer auth.
@@ -1104,7 +1061,7 @@ import {
 	getOAuthApiKey, // (provider, credentialsMap) => { newCredentials, apiKey } | null
 
 	// Types
-	type OAuthProvider, // includes 'anthropic', 'openai-code', 'github-copilot', 'google-gemini-cli', 'google-antigravity', 'together', 'moonshot', 'qianfan', 'nvidia', 'nanogpt', 'huggingface', 'venice', 'xiaomi', 'vllm', 'litellm', 'cloudflare-ai-gateway', 'qwen-portal', ...
+	type OAuthProvider,
 	type OAuthCredentials,
 } from "@gajae-code/ai";
 ```

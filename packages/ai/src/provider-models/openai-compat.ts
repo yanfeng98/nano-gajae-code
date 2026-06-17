@@ -9,7 +9,6 @@ import {
 	type OpenAICompatibleModelMapperContext,
 	type OpenAICompatibleModelRecord,
 } from "../utils/discovery/openai-compatible";
-import { toFireworksPublicModelId } from "../utils/fireworks-model-id";
 import { isClaudeForcedToolChoiceIncapableModelId } from "../utils/tool-choice-capability";
 import { createBundledReferenceMap, createReferenceResolver } from "./bundled-references";
 
@@ -405,32 +404,6 @@ function isLikelyOpenAIResponsesModelId(id: string, references: Map<string, Mode
 	);
 }
 
-const NANO_GPT_NON_TEXT_MODEL_TOKENS = [
-	"embedding",
-	"image",
-	"vision",
-	"audio",
-	"speech",
-	"transcribe",
-	"moderation",
-	"realtime",
-	"whisper",
-	"tts",
-] as const;
-
-/** Regex matching NanoGPT `:thinking` suffixed model IDs (with or without a level). */
-const NANO_GPT_THINKING_SUFFIX_RE = /:thinking(:[^:]+)?$/;
-
-function isLikelyNanoGptTextModelId(id: string): boolean {
-	const normalized = id.trim().toLowerCase();
-	if (!normalized) {
-		return false;
-	}
-	if (NANO_GPT_THINKING_SUFFIX_RE.test(normalized)) {
-		return false;
-	}
-	return !NANO_GPT_NON_TEXT_MODEL_TOKENS.some(token => normalized.includes(token));
-}
 
 type SimpleProviderConfig = { apiKey?: string; baseUrl?: string };
 
@@ -532,30 +505,6 @@ export function openaiModelManagerOptions(config?: OpenAIModelManagerConfig): Mo
 // 2. Groq
 // ---------------------------------------------------------------------------
 
-export interface GroqModelManagerConfig {
-	apiKey?: string;
-	baseUrl?: string;
-}
-
-export function groqModelManagerOptions(config?: GroqModelManagerConfig): ModelManagerOptions<"openai-completions"> {
-	return createSimpleOpenAICompletionsOptions("groq", "https://api.groq.com/openai/v1", config);
-}
-
-// ---------------------------------------------------------------------------
-// 3. Cerebras
-// ---------------------------------------------------------------------------
-
-export interface CerebrasModelManagerConfig {
-	apiKey?: string;
-	baseUrl?: string;
-}
-
-export function cerebrasModelManagerOptions(
-	config?: CerebrasModelManagerConfig,
-): ModelManagerOptions<"openai-completions"> {
-	return createSimpleOpenAICompletionsOptions("cerebras", "https://api.cerebras.ai/v1", config);
-}
-
 // ---------------------------------------------------------------------------
 // 4. Hugging Face
 // ---------------------------------------------------------------------------
@@ -571,33 +520,6 @@ export function huggingfaceModelManagerOptions(
 	return createSimpleOpenAICompletionsOptions("huggingface", "https://router.huggingface.co/v1", config);
 }
 
-// ---------------------------------------------------------------------------
-// 5. NVIDIA
-// ---------------------------------------------------------------------------
-
-export interface NvidiaModelManagerConfig {
-	apiKey?: string;
-	baseUrl?: string;
-}
-
-export function nvidiaModelManagerOptions(
-	config?: NvidiaModelManagerConfig,
-): ModelManagerOptions<"openai-completions"> {
-	return createSimpleOpenAICompletionsOptions("nvidia", "https://integrate.api.nvidia.com/v1", config);
-}
-
-// ---------------------------------------------------------------------------
-// 6. xAI
-// ---------------------------------------------------------------------------
-
-export interface XaiModelManagerConfig {
-	apiKey?: string;
-	baseUrl?: string;
-}
-
-export function xaiModelManagerOptions(config?: XaiModelManagerConfig): ModelManagerOptions<"openai-completions"> {
-	return createSimpleOpenAICompletionsOptions("xai", "https://api.x.ai/v1", config);
-}
 
 // ---------------------------------------------------------------------------
 // 6.5 DeepSeek
@@ -614,135 +536,7 @@ export function deepseekModelManagerOptions(
 	return createSimpleOpenAICompletionsOptions("deepseek", "https://api.deepseek.com", config);
 }
 // ---------------------------------------------------------------------------
-// 7.5 Fireworks
-// ---------------------------------------------------------------------------
 
-export interface FireworksModelManagerConfig {
-	apiKey?: string;
-	baseUrl?: string;
-}
-
-function toFireworksModelName(entry: OpenAICompatibleModelRecord, fallback: string): string {
-	const name = toModelName(entry.name, "");
-	if (name) return name;
-	const id = typeof entry.id === "string" ? entry.id : fallback;
-	const shortName = id.split("/").at(-1) ?? fallback;
-	if (fallback !== id && fallback !== shortName) return fallback;
-	return shortName
-		.split("-")
-		.filter(Boolean)
-		.map(part => part.charAt(0).toUpperCase() + part.slice(1))
-		.join(" ");
-}
-
-function createModelsDevReferenceMap<TApi extends Api>(models: readonly Model<Api>[]): Map<string, Model<TApi>> {
-	const references = new Map<string, Model<TApi>>();
-	for (const model of models) {
-		const candidate = model as Model<TApi>;
-		const existing = references.get(candidate.id);
-		if (!existing) {
-			references.set(candidate.id, candidate);
-			continue;
-		}
-		if (candidate.contextWindow > existing.contextWindow) {
-			references.set(candidate.id, candidate);
-			continue;
-		}
-		if (candidate.contextWindow === existing.contextWindow && candidate.maxTokens > existing.maxTokens) {
-			references.set(candidate.id, candidate);
-		}
-	}
-	return references;
-}
-
-async function loadModelsDevReferences<TApi extends Api>(): Promise<Map<string, Model<TApi>>> {
-	try {
-		const payload = await fetchModelsDevPayload();
-		return createModelsDevReferenceMap<TApi>(
-			mapModelsDevToModels(payload as Record<string, unknown>, MODELS_DEV_PROVIDER_DESCRIPTORS),
-		);
-	} catch {
-		return new Map<string, Model<TApi>>();
-	}
-}
-export function fireworksModelManagerOptions(
-	config?: FireworksModelManagerConfig,
-): ModelManagerOptions<"openai-completions"> {
-	const apiKey = config?.apiKey;
-	const baseUrl = config?.baseUrl ?? "https://api.fireworks.ai/inference/v1";
-	const bundledReferences = createReferenceResolver(createBundledReferenceMap<"openai-completions">("fireworks"));
-	return {
-		providerId: "fireworks",
-		...(apiKey && {
-			fetchDynamicModels: async () => {
-				const modelsDevReferences = await loadModelsDevReferences<"openai-completions">();
-				return fetchOpenAICompatibleModels({
-					api: "openai-completions",
-					provider: "fireworks",
-					baseUrl,
-					apiKey,
-					filterModel: entry =>
-						toBoolean(entry.supports_chat) === true && toBoolean(entry.supports_tools) === true,
-					mapModel: (entry, defaults) => {
-						const publicModelId = toFireworksPublicModelId(defaults.id);
-						const reference = modelsDevReferences.get(publicModelId) ?? bundledReferences(publicModelId);
-						const model = mapWithBundledReference(entry, defaults, reference);
-						return {
-							...model,
-							id: publicModelId,
-							api: "openai-completions",
-							provider: "fireworks",
-							baseUrl,
-							name: toFireworksModelName(entry, model.name),
-							input: toBoolean(entry.supports_image_input) === true ? ["text", "image"] : ["text"],
-							contextWindow: toPositiveNumber(entry.context_length, model.contextWindow),
-							maxTokens: toPositiveNumber(entry.max_completion_tokens, model.maxTokens),
-						};
-					},
-				});
-			},
-		}),
-	};
-}
-
-// ---------------------------------------------------------------------------
-// 7.6 Fire Pass (Fireworks Kimi K2.6 Turbo subscription)
-// ---------------------------------------------------------------------------
-
-export interface FirepassModelManagerConfig {
-	apiKey?: string;
-	baseUrl?: string;
-}
-
-/**
- * Fire Pass is a Fireworks subscription product that exposes a single router
- * model (Kimi K2.6 Turbo) under `accounts/fireworks/routers/kimi-k2p6-turbo`.
- * The dedicated `fpk_…` keys do not authorize `/v1/models`, so this manager
- * never performs dynamic discovery — the bundled catalog entry is canonical.
- * See https://docs.fireworks.ai/firepass.
- */
-export function firepassModelManagerOptions(
-	_config?: FirepassModelManagerConfig,
-): ModelManagerOptions<"openai-completions"> {
-	return {
-		providerId: "firepass",
-	};
-}
-
-// ---------------------------------------------------------------------------
-// 7. Mistral
-// ---------------------------------------------------------------------------
-
-export interface MistralModelManagerConfig {
-	apiKey?: string;
-	baseUrl?: string;
-}
-
-export function mistralModelManagerOptions(
-	config?: MistralModelManagerConfig,
-): ModelManagerOptions<"openai-completions"> {
-	return createSimpleOpenAICompletionsOptions("mistral", "https://api.mistral.ai/v1", config);
-}
 
 // ---------------------------------------------------------------------------
 // 8. OpenCode
@@ -844,69 +638,6 @@ export function ollamaModelManagerOptions(config?: OllamaModelManagerConfig): Mo
 			}
 			return openAiCompatible;
 		},
-	};
-}
-
-// ---------------------------------------------------------------------------
-// 10. OpenRouter
-// ---------------------------------------------------------------------------
-
-export interface OpenRouterModelManagerConfig {
-	apiKey?: string;
-	baseUrl?: string;
-}
-
-export function openrouterModelManagerOptions(
-	config?: OpenRouterModelManagerConfig,
-): ModelManagerOptions<"openai-completions"> {
-	const apiKey = config?.apiKey;
-	const baseUrl = config?.baseUrl ?? "https://openrouter.ai/api/v1";
-	return {
-		providerId: "openrouter",
-		fetchDynamicModels: () =>
-			fetchOpenAICompatibleModels({
-				api: "openai-completions",
-				provider: "openrouter",
-				baseUrl,
-				apiKey,
-				filterModel: (entry: OpenAICompatibleModelRecord) => {
-					const params = entry.supported_parameters;
-					return Array.isArray(params) && params.includes("tools");
-				},
-				mapModel: (
-					entry: OpenAICompatibleModelRecord,
-					defaults: Model<"openai-completions">,
-					_context: OpenAICompatibleModelMapperContext<"openai-completions">,
-				): Model<"openai-completions"> => {
-					const pricing = entry.pricing as Record<string, unknown> | undefined;
-					const params = Array.isArray(entry.supported_parameters) ? (entry.supported_parameters as string[]) : [];
-					const modality = String((entry.architecture as Record<string, unknown> | undefined)?.modality ?? "");
-					const topProvider = entry.top_provider as Record<string, unknown> | undefined;
-
-					const supportsToolChoice = params.includes("tool_choice");
-
-					return {
-						...defaults,
-						reasoning: params.includes("reasoning"),
-						input: modality.includes("image") ? ["text", "image"] : ["text"],
-						cost: {
-							input: parseFloat(String(pricing?.prompt ?? "0")) * 1_000_000,
-							output: parseFloat(String(pricing?.completion ?? "0")) * 1_000_000,
-							cacheRead: parseFloat(String(pricing?.input_cache_read ?? "0")) * 1_000_000,
-							cacheWrite: parseFloat(String(pricing?.input_cache_write ?? "0")) * 1_000_000,
-						},
-						contextWindow:
-							typeof entry.context_length === "number" ? entry.context_length : defaults.contextWindow,
-						maxTokens:
-							typeof topProvider?.max_completion_tokens === "number"
-								? topProvider.max_completion_tokens
-								: defaults.maxTokens,
-						...(!supportsToolChoice && {
-							compat: { supportsToolChoice: false },
-						}),
-					};
-				},
-			}),
 	};
 }
 
@@ -1018,124 +749,8 @@ export function zenmuxModelManagerOptions(config?: ZenMuxModelManagerConfig): Mo
 	};
 }
 
-// ---------------------------------------------------------------------------
-// 10.6 Kilo Gateway
-// ---------------------------------------------------------------------------
 
-export interface KiloModelManagerConfig {
-	apiKey?: string;
-	baseUrl?: string;
-}
 
-export function kiloModelManagerOptions(config?: KiloModelManagerConfig): ModelManagerOptions<"openai-completions"> {
-	const apiKey = config?.apiKey;
-	const baseUrl = config?.baseUrl ?? "https://api.kilo.ai/api/gateway";
-	return {
-		providerId: "kilo",
-		fetchDynamicModels: () =>
-			fetchOpenAICompatibleModels({
-				api: "openai-completions",
-				provider: "kilo",
-				baseUrl,
-				apiKey,
-			}),
-	};
-}
-
-// ---------------------------------------------------------------------------
-// Alibaba Coding Plan
-// ---------------------------------------------------------------------------
-
-export interface AlibabaCodingPlanModelManagerConfig {
-	apiKey?: string;
-	baseUrl?: string;
-}
-
-export function alibabaCodingPlanModelManagerOptions(
-	config?: AlibabaCodingPlanModelManagerConfig,
-): ModelManagerOptions<"openai-completions"> {
-	const apiKey = config?.apiKey;
-	const baseUrl = config?.baseUrl ?? "https://coding-intl.dashscope.aliyuncs.com/v1";
-	const references = createBundledReferenceMap<"openai-completions">("alibaba-coding-plan");
-	return {
-		providerId: "alibaba-coding-plan",
-		fetchDynamicModels: () =>
-			fetchOpenAICompatibleModels({
-				api: "openai-completions",
-				provider: "alibaba-coding-plan",
-				baseUrl,
-				apiKey,
-				mapModel: (entry, defaults) => {
-					const reference = references.get(defaults.id);
-					return mapWithBundledReference(entry, defaults, reference);
-				},
-			}),
-	};
-}
-
-// ---------------------------------------------------------------------------
-// 11. Vercel AI Gateway
-// ---------------------------------------------------------------------------
-
-export interface VercelAiGatewayModelManagerConfig {
-	apiKey?: string;
-	baseUrl?: string;
-}
-
-function normalizeVercelAiGatewayBaseUrls(rawBaseUrl: string | undefined): { baseUrl: string; catalogBaseUrl: string } {
-	const baseUrl = (rawBaseUrl === undefined ? "https://ai-gateway.vercel.sh" : rawBaseUrl.trim()).replace(/\/+$/, "");
-	const catalogBaseUrl = baseUrl === "" || baseUrl.endsWith("/v1") ? baseUrl : `${baseUrl}/v1`;
-
-	return {
-		baseUrl: baseUrl.endsWith("/v1") ? baseUrl.slice(0, -3) : baseUrl,
-		catalogBaseUrl,
-	};
-}
-
-export function vercelAiGatewayModelManagerOptions(
-	config?: VercelAiGatewayModelManagerConfig,
-): ModelManagerOptions<"anthropic-messages"> {
-	const apiKey = config?.apiKey;
-	const { baseUrl, catalogBaseUrl } = normalizeVercelAiGatewayBaseUrls(config?.baseUrl);
-	return {
-		providerId: "vercel-ai-gateway",
-		fetchDynamicModels: () =>
-			fetchOpenAICompatibleModels({
-				api: "anthropic-messages",
-				provider: "vercel-ai-gateway",
-				baseUrl: catalogBaseUrl,
-				apiKey,
-				filterModel: (entry: OpenAICompatibleModelRecord) => {
-					const tags = entry.tags;
-					return Array.isArray(tags) && tags.includes("tool-use");
-				},
-				mapModel: (
-					entry: OpenAICompatibleModelRecord,
-					defaults: Model<"anthropic-messages">,
-					_context: OpenAICompatibleModelMapperContext<"anthropic-messages">,
-				): Model<"anthropic-messages"> => {
-					const pricing = entry.pricing as Record<string, unknown> | undefined;
-					const tags = Array.isArray(entry.tags) ? (entry.tags as string[]) : [];
-
-					return {
-						...defaults,
-						baseUrl,
-						reasoning: tags.includes("reasoning"),
-						input: tags.includes("vision") ? ["text", "image"] : ["text"],
-						cost: {
-							input: (toNumber(pricing?.input) ?? 0) * 1_000_000,
-							output: (toNumber(pricing?.output) ?? 0) * 1_000_000,
-							cacheRead: (toNumber(pricing?.input_cache_read) ?? 0) * 1_000_000,
-							cacheWrite: (toNumber(pricing?.input_cache_write) ?? 0) * 1_000_000,
-						},
-						contextWindow:
-							typeof entry.context_window === "number" ? entry.context_window : defaults.contextWindow,
-						maxTokens: typeof entry.max_tokens === "number" ? entry.max_tokens : defaults.maxTokens,
-					};
-				},
-			}),
-	};
-}
 
 // ---------------------------------------------------------------------------
 // 12. Kimi Code
@@ -1220,55 +835,6 @@ export function lmStudioModelManagerOptions(
 	};
 }
 
-// ---------------------------------------------------------------------------
-// 13. Synthetic
-// ---------------------------------------------------------------------------
-
-export interface SyntheticModelManagerConfig {
-	apiKey?: string;
-	baseUrl?: string;
-}
-
-export function syntheticModelManagerOptions(
-	config?: SyntheticModelManagerConfig,
-): ModelManagerOptions<"openai-completions"> {
-	const apiKey = config?.apiKey;
-	const baseUrl = config?.baseUrl ?? "https://api.synthetic.new/openai/v1";
-	const references = new Map(
-		(getBundledModels("synthetic") as Model<"openai-completions">[]).map(model => [model.id, model]),
-	);
-	return {
-		providerId: "synthetic",
-		...(apiKey && {
-			fetchDynamicModels: () =>
-				fetchOpenAICompatibleModels({
-					api: "openai-completions",
-					provider: "synthetic",
-					baseUrl,
-					apiKey,
-					mapModel: (
-						entry: OpenAICompatibleModelRecord,
-						defaults: Model<"openai-completions">,
-						_context: OpenAICompatibleModelMapperContext<"openai-completions">,
-					): Model<"openai-completions"> => {
-						const reference = references.get(defaults.id);
-						const referenceSupportsImage = reference?.input.includes("image") ?? false;
-						return {
-							...(reference ? { ...reference, id: defaults.id, baseUrl } : defaults),
-							name: toModelName(entry.name, reference?.name ?? defaults.name),
-							reasoning: entry.supports_reasoning === true || (reference?.reasoning ?? false),
-							input: entry.supports_vision === true || referenceSupportsImage ? ["text", "image"] : ["text"],
-							contextWindow: toPositiveNumber(
-								entry.context_length,
-								reference?.contextWindow ?? defaults.contextWindow,
-							),
-							maxTokens: toPositiveNumber(entry.max_tokens, reference?.maxTokens ?? 8192),
-						};
-					},
-				}),
-		}),
-	};
-}
 
 // ---------------------------------------------------------------------------
 // 14. Venice
@@ -1305,20 +871,6 @@ export function veniceModelManagerOptions(
 	};
 }
 
-// ---------------------------------------------------------------------------
-// 15. Together
-// ---------------------------------------------------------------------------
-
-export interface TogetherModelManagerConfig {
-	apiKey?: string;
-	baseUrl?: string;
-}
-
-export function togetherModelManagerOptions(
-	config?: TogetherModelManagerConfig,
-): ModelManagerOptions<"openai-completions"> {
-	return createSimpleOpenAICompletionsOptions("together", "https://api.together.xyz/v1", config);
-}
 
 // ---------------------------------------------------------------------------
 // 16. Moonshot
@@ -1361,54 +913,8 @@ export function moonshotModelManagerOptions(
 	};
 }
 
-// ---------------------------------------------------------------------------
-// 17. Qwen Portal
-// ---------------------------------------------------------------------------
 
-export interface QwenPortalModelManagerConfig {
-	apiKey?: string;
-	baseUrl?: string;
-}
 
-export function qwenPortalModelManagerOptions(
-	config?: QwenPortalModelManagerConfig,
-): ModelManagerOptions<"openai-completions"> {
-	return createSimpleOpenAICompletionsOptions("qwen-portal", "https://portal.qwen.ai/v1", config);
-}
-
-// ---------------------------------------------------------------------------
-// 18. Qianfan
-// ---------------------------------------------------------------------------
-
-export interface QianfanModelManagerConfig {
-	apiKey?: string;
-	baseUrl?: string;
-}
-
-export function qianfanModelManagerOptions(
-	config?: QianfanModelManagerConfig,
-): ModelManagerOptions<"openai-completions"> {
-	return createSimpleOpenAICompletionsOptions("qianfan", "https://qianfan.baidubce.com/v2", config);
-}
-
-// ---------------------------------------------------------------------------
-// 19. Cloudflare AI Gateway
-// ---------------------------------------------------------------------------
-
-export interface CloudflareAiGatewayModelManagerConfig {
-	apiKey?: string;
-	baseUrl?: string;
-}
-
-export function cloudflareAiGatewayModelManagerOptions(
-	config?: CloudflareAiGatewayModelManagerConfig,
-): ModelManagerOptions<"anthropic-messages"> {
-	return createSimpleAnthropicProviderOptions(
-		"cloudflare-ai-gateway",
-		"https://gateway.ai.cloudflare.com/v1/<account>/<gateway>/anthropic",
-		config,
-	);
-}
 
 // ---------------------------------------------------------------------------
 // 20. Xiaomi
@@ -1539,60 +1045,6 @@ export function vllmModelManagerOptions(config?: VllmModelManagerConfig): ModelM
 	};
 }
 
-// ---------------------------------------------------------------------------
-// 23. NanoGPT
-// ---------------------------------------------------------------------------
-
-export interface NanoGptModelManagerConfig {
-	apiKey?: string;
-	baseUrl?: string;
-}
-
-export function nanoGptModelManagerOptions(
-	config?: NanoGptModelManagerConfig,
-): ModelManagerOptions<"openai-completions"> {
-	const apiKey = config?.apiKey;
-	const baseUrl = config?.baseUrl ?? "https://nano-gpt.com/api/v1";
-	const resolveReference = createReferenceResolver(
-		createBundledReferenceMap<"openai-completions">("nanogpt" as Parameters<typeof getBundledModels>[0]),
-	);
-	return {
-		providerId: "nanogpt",
-		...(apiKey && {
-			fetchDynamicModels: async () => {
-				// Track base IDs that have :thinking variants so we can mark them reasoning-capable.
-				const thinkingBaseIds = new Set<string>();
-				const models = await fetchOpenAICompatibleModels({
-					api: "openai-completions",
-					provider: "nanogpt",
-					baseUrl,
-					apiKey,
-					mapModel: (entry, defaults) => {
-						const reference = resolveReference(defaults.id);
-						const mapped = mapWithBundledReference(entry, defaults, reference);
-						return { ...mapped, api: "openai-completions", provider: "nanogpt" };
-					},
-					filterModel: (_entry, model) => {
-						const match = NANO_GPT_THINKING_SUFFIX_RE.exec(model.id);
-						if (match) {
-							thinkingBaseIds.add(model.id.slice(0, match.index));
-							return false;
-						}
-						return isLikelyNanoGptTextModelId(model.id);
-					},
-				});
-				if (!models) return null;
-				// Mark base models as reasoning-capable when a :thinking variant existed.
-				for (const model of models) {
-					if (!model.reasoning && thinkingBaseIds.has(model.id)) {
-						(model as { reasoning: boolean }).reasoning = true;
-					}
-				}
-				return models;
-			},
-		}),
-	};
-}
 
 // ---------------------------------------------------------------------------
 // 24. GitHub Copilot
@@ -1992,19 +1444,6 @@ const MODELS_DEV_PROVIDER_DESCRIPTORS_CORE: readonly ModelsDevProviderDescriptor
 	),
 	// --- OpenAI ---
 	simpleModelsDevDescriptor("openai", "openai", "openai-responses", ""),
-	// --- Groq ---
-	openAiCompletionsDescriptor("groq", "groq", "https://api.groq.com/openai/v1"),
-	// --- Cerebras ---
-	openAiCompletionsDescriptor("cerebras", "cerebras", "https://api.cerebras.ai/v1"),
-	// --- Together ---
-	openAiCompletionsDescriptor("together", "together", "https://api.together.xyz/v1"),
-	// --- NVIDIA ---
-	openAiCompletionsDescriptor("nvidia", "nvidia", "https://integrate.api.nvidia.com/v1", {
-		defaultContextWindow: 131072,
-	}),
-	// --- xAI ---
-	openAiCompletionsDescriptor("xai", "xai", "https://api.x.ai/v1"),
-	// --- DeepSeek ---
 	openAiCompletionsDescriptor("deepseek", "deepseek", "https://api.deepseek.com", {
 		// Only ship the v4 family as built-ins; older deepseek-chat / deepseek-reasoner
 		// ids are kept off the catalog until the issue thread asks for them.
@@ -2059,17 +1498,6 @@ const MODELS_DEV_PROVIDER_DESCRIPTORS_CODING_PLANS: readonly ModelsDevProviderDe
 			reasoningContentField: "reasoning_content",
 		},
 	}),
-	// --- Alibaba Coding Plan ---
-	openAiCompletionsDescriptor(
-		"alibaba-coding-plan",
-		"alibaba-coding-plan",
-		"https://coding-intl.dashscope.aliyuncs.com/v1",
-		{
-			compat: {
-				supportsDeveloperRole: false,
-			},
-		},
-	),
 ];
 
 const filterActiveToolCallModels = (_id: string, m: ModelsDevModel): boolean => {
@@ -2079,14 +1507,6 @@ const filterActiveToolCallModels = (_id: string, m: ModelsDevModel): boolean => 
 };
 
 const MODELS_DEV_PROVIDER_DESCRIPTORS_SPECIALIZED: readonly ModelsDevProviderDescriptor[] = [
-	// --- Cloudflare AI Gateway ---
-	anthropicMessagesDescriptor(
-		"cloudflare-ai-gateway",
-		"cloudflare-ai-gateway",
-		"https://gateway.ai.cloudflare.com/v1/<account>/<gateway>/anthropic",
-	),
-	// --- Mistral ---
-	openAiCompletionsDescriptor("mistral", "mistral", "https://api.mistral.ai/v1"),
 	// --- OpenCode Zen ---
 	openAiCompletionsDescriptor("opencode", "opencode-zen", "https://opencode.ai/zen/v1", {
 		filterModel: filterActiveToolCallModels,
@@ -2109,16 +1529,9 @@ const MODELS_DEV_PROVIDER_DESCRIPTORS_SPECIALIZED: readonly ModelsDevProviderDes
 				OPENCODE_GO_API_RESOLUTION.defaultResolution,
 			),
 	}),
-	// --- GitHub Copilot ---
 	// --- MiniMax (Anthropic) ---
 	anthropicMessagesDescriptor("minimax", "minimax", "https://api.minimax.io/anthropic"),
 	anthropicMessagesDescriptor("minimax-cn", "minimax-cn", "https://api.minimaxi.com/anthropic"),
-	// --- Qwen Portal ---
-	openAiCompletionsDescriptor("qwen-portal", "qwen-portal", "https://portal.qwen.ai/v1", {
-		defaultContextWindow: 128000,
-		defaultMaxTokens: 8192,
-	}),
-
 	// --- ZenMux ---
 	openAiCompletionsDescriptor("zenmux", "zenmux", ZENMUX_OPENAI_BASE_URL, {
 		filterModel: filterActiveToolCallModels,

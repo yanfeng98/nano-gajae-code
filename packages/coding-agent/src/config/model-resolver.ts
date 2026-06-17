@@ -162,9 +162,6 @@ export function resolveProviderModelReference(
 		return exact;
 	}
 
-	if (normalizedProvider !== "openrouter") {
-		return undefined;
-	}
 
 	for (const fallbackId of getOpenRouterFallbackModelIds(modelId).slice(1)) {
 		const fallback = index.get(`${normalizedProvider}\u0000${fallbackId.toLowerCase()}`);
@@ -219,7 +216,7 @@ function buildPreferenceContext(
 		}
 	}
 
-	const deprioritizedProviders = new Set(preferences?.deprioritizeProviders ?? ["openrouter"]);
+	const deprioritizedProviders = new Set(preferences?.deprioritizeProviders ?? []);
 	const modelOrder = new Map<string, number>();
 	for (let i = 0; i < availableModels.length; i += 1) {
 		modelOrder.set(formatModelString(availableModels[i]), i);
@@ -1055,7 +1052,7 @@ export function resolveCliModel(options: {
 		const lower = trimmedModel.toLowerCase();
 		// When input has provider/id format (e.g. "zai/glm-5"), prefer decomposed
 		// provider+id match over flat id match. Without this, a model with id
-		// "zai/glm-5" on provider "vercel-ai-gateway" wins over provider "zai"
+		// model that would otherwise conflict gets correct provider resolution
 		// with id "glm-5", because Array.find returns the first catalog hit.
 		const slashIdx = lower.indexOf("/");
 		let exact: (typeof availableModels)[number] | undefined;

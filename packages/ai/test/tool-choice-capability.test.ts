@@ -192,17 +192,10 @@ describe("isForcedToolChoiceUnsupportedError", () => {
 	});
 });
 
-const bedrockModel = {
-	...model(),
-	api: "bedrock-converse-stream",
-	compat: { toolChoiceSupport: "required" },
-} satisfies Model<"bedrock-converse-stream">;
-
 const googleModel = {
 	...model(),
 	api: "google-generative-ai",
 	compat: { toolChoiceSupport: "named" },
 } satisfies Model<"google-generative-ai">;
 
-void bedrockModel;
 void googleModel;

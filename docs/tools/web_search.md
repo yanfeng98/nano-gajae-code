@@ -23,7 +23,6 @@
   - `packages/coding-agent/src/web/search/providers/parallel.ts` — Parallel provider wrapper.
   - `packages/coding-agent/src/web/search/providers/perplexity.ts` — Perplexity API / OAuth adapter.
   - `packages/coding-agent/src/web/search/providers/searxng.ts` — self-hosted SearXNG adapter.
-  - `packages/coding-agent/src/web/search/providers/synthetic.ts` — Synthetic search adapter.
   - `packages/coding-agent/src/web/search/providers/tavily.ts` — Tavily search adapter.
   - `packages/coding-agent/src/web/search/providers/zai.ts` — Z.AI remote search adapter.
   - `packages/coding-agent/src/web/parallel.ts` — Parallel search/extract HTTP client.
@@ -92,7 +91,7 @@ Streaming: none. `WebSearchTool.execute()` does not forward its `_signal` argume
 - **Provider selection**
   - **Forced provider**: internal callers may pass `provider`; an unavailable forced provider falls back to the chain (which always ends in DuckDuckGo) instead of hard-failing (`packages/coding-agent/src/web/search/index.ts`). This field is not in the model-facing schema.
   - **Preferred provider**: `setPreferredSearchProvider()` sets a module-global default consumed by `resolveProviderChain()`. `packages/coding-agent/src/sdk.ts` and `packages/coding-agent/src/modes/controllers/selector-controller.ts` wire this from settings.
-  - **Active-model-gated auto**: in `auto` mode, resolution maps the active model's provider to its own native search via `MODEL_PROVIDER_TO_SEARCH` (`openai|openai-codex→codex`, `anthropic→anthropic`, `google|google-gemini-cli|google-antigravity|gemini→gemini`, `moonshot|kimi-code|kimi→kimi`, `zai`, `perplexity`, `synthetic`), used only if that provider's creds exist; everything else falls to DuckDuckGo. `SEARCH_PROVIDER_ORDER` no longer drives auto credential scanning — it is retained for explicit selection, labels, and CLI option lists.
+  - **Active-model-gated auto**: in `auto` mode, resolution maps the active model's provider to its own native search via `MODEL_PROVIDER_TO_SEARCH` (`openai→codex`, `anthropic→anthropic`, `google|gemini→gemini`, `moonshot|kimi-code|kimi→kimi`, `zai`, `perplexity`), used only if that provider's creds exist; everything else falls to DuckDuckGo. `SEARCH_PROVIDER_ORDER` no longer drives auto credential scanning — it is retained for explicit selection, labels, and CLI option lists.
 - **Provider adapters**
   - **Tavily** — `packages/coding-agent/src/web/search/providers/tavily.ts`
     - Availability: API key from env or `agent.db` via `findCredential()`.
@@ -129,7 +128,7 @@ Streaming: none. `WebSearchTool.execute()` does not forward its `_signal` argume
     - `limit` and `num_search_results` are collapsed together before dispatch: `num_results = params.numSearchResults ?? params.limit`.
     - Output may include `answer`, `sources`, `citations`, `searchQueries`, `usage.searchRequests`, `model`, `requestId`.
   - **Gemini** — `packages/coding-agent/src/web/search/providers/gemini.ts`
-    - Availability: OAuth credentials in `agent.db` for `google-gemini-cli` or `google-antigravity`.
+    - Availability: Google OAuth credentials in `agent.db`.
     - Querying: SSE `streamGenerateContent` call with Google Search grounding enabled. Antigravity auth tries two fallback endpoints and retries `401/403/400 invalid auth` once after token refresh; `429/5xx` retry with exponential backoff and server-provided retry delay, capped by a `5 * 60 * 1000` ms rate-limit budget.
     - `max_tokens` and `temperature` pass through as `generationConfig.maxOutputTokens` / `generationConfig.temperature`.
     - `limit` and `num_search_results` are collapsed together before dispatch.
@@ -162,12 +161,6 @@ Streaming: none. `WebSearchTool.execute()` does not forward its `_signal` argume
     - Querying: GET `https://kagi.com/api/v0/search?q=<query>&limit=<n>` with `Authorization: Bot <key>`.
     - `limit` and `num_search_results` are collapsed together before dispatch, clamped to `1..40`, default `10`.
     - Output: `sources`, `relatedQuestions`, `requestId`.
-  - **Synthetic** — `packages/coding-agent/src/web/search/providers/synthetic.ts`
-    - Availability: env or `agent.db` credential for `synthetic`.
-    - Querying: POST `https://api.synthetic.new/v2/search` with `{ query }`.
-    - Ignores `recency`, `max_tokens`, and `temperature`.
-    - `limit` and `num_search_results` are collapsed together before dispatch.
-    - Output: `sources` only.
   - **SearXNG** — `packages/coding-agent/src/web/search/providers/searxng.ts`
     - Availability: endpoint from `searxng.endpoint` setting or `SEARXNG_ENDPOINT` env.
     - Querying: GET `<endpoint>/search?format=json&q=...`; optional settings add `categories` and `language`.

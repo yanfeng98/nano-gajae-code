@@ -64,7 +64,6 @@ const MINIMAX_OPENAI_COMPAT: ProviderCompatConfig = {
 const GLM_OPENAI_COMPAT: ProviderCompatConfig = {
 	supportsDeveloperRole: false,
 	supportsReasoningEffort: false,
-	thinkingFormat: "zai",
 	reasoningContentField: "reasoning_content",
 };
 

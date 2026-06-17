@@ -22,7 +22,6 @@ export function buildNamedToolChoiceResult(toolName: string, model?: Model<Api>)
 		namedChoice = { type: "tool", name: toolName };
 		namedShape = true;
 	} else if (
-		model.api === "openai-codex-responses" ||
 		model.api === "openai-responses" ||
 		model.api === "openai-completions" ||
 		model.api === "azure-openai-responses" ||
@@ -32,7 +31,6 @@ export function buildNamedToolChoiceResult(toolName: string, model?: Model<Api>)
 		namedShape = true;
 	} else if (
 		model.api === "google-generative-ai" ||
-		model.api === "google-gemini-cli" ||
 		model.api === "google-vertex"
 	) {
 		namedChoice = "required";

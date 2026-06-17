@@ -16,16 +16,6 @@ const builtInOAuthProviders: OAuthProviderInfo[] = [
 		available: true,
 	},
 	{
-		id: "openai-codex",
-		name: "ChatGPT Plus/Pro (Codex Subscription)",
-		available: true,
-	},
-	{
-		id: "openai-codex-device",
-		name: "ChatGPT Plus/Pro (Codex, headless/device)",
-		available: true,
-	},
-	{
 		id: "kimi-code",
 		name: "Kimi Code",
 		available: true,
@@ -36,33 +26,8 @@ const builtInOAuthProviders: OAuthProviderInfo[] = [
 		available: true,
 	},
 	{
-		id: "cerebras",
-		name: "Cerebras",
-		available: true,
-	},
-	{
 		id: "deepseek",
 		name: "DeepSeek",
-		available: true,
-	},
-	{
-		id: "xai",
-		name: "xAI",
-		available: true,
-	},
-	{
-		id: "fireworks",
-		name: "Fireworks",
-		available: true,
-	},
-	{
-		id: "google-gemini-cli",
-		name: "Google Cloud Code Assist (Gemini CLI)",
-		available: true,
-	},
-	{
-		id: "google-antigravity",
-		name: "Antigravity (Gemini 3, Claude, GPT-OSS)",
 		available: true,
 	},
 	{
@@ -88,11 +53,6 @@ const builtInOAuthProviders: OAuthProviderInfo[] = [
 	{
 		id: "tavily",
 		name: "Tavily",
-		available: true,
-	},
-	{
-		id: "together",
-		name: "Together",
 		available: true,
 	},
 	{
@@ -133,11 +93,6 @@ const builtInOAuthProviders: OAuthProviderInfo[] = [
 	{
 		id: "perplexity",
 		name: "Perplexity (Pro/Max)",
-		available: true,
-	},
-	{
-		id: "nvidia",
-		name: "NVIDIA",
 		available: true,
 	},
 	{
@@ -187,57 +142,24 @@ export async function refreshOAuthToken(
 	}
 
 	let newCredentials: OAuthCredentials;
-	switch (provider) {
-		case "anthropic": {
-			const { refreshAnthropicToken } = await import("./anthropic");
-			newCredentials = await refreshAnthropicToken(credentials.refresh);
-			break;
-		}
-		case "github-copilot": {
-			const { refreshGitHubCopilotToken } = await import("./github-copilot");
-			newCredentials = await refreshGitHubCopilotToken(credentials.refresh, credentials.enterpriseUrl);
-			break;
-		}
-		case "google-gemini-cli": {
-			const { refreshGoogleCloudToken } = await import("./google-gemini-cli");
-			if (!credentials.projectId) {
-				throw new Error("Google Cloud credentials missing projectId");
+		switch (provider) {
+			case "anthropic": {
+				const { refreshAnthropicToken } = await import("./anthropic");
+				newCredentials = await refreshAnthropicToken(credentials.refresh);
+				break;
 			}
-			newCredentials = await refreshGoogleCloudToken(credentials.refresh, credentials.projectId);
-			break;
-		}
-		case "google-antigravity": {
-			const { refreshAntigravityToken } = await import("./google-antigravity");
-			if (!credentials.projectId) {
-				throw new Error("Antigravity credentials missing projectId");
+			case "github-copilot":
+			case "gitlab-duo": {
+				throw new Error("OAuth refresh is not available for " + provider);
 			}
-			newCredentials = await refreshAntigravityToken(credentials.refresh, credentials.projectId);
-			break;
+			case "kimi-code": {
+				const { refreshKimiToken } = await import("./kimi");
+				newCredentials = await refreshKimiToken(credentials.refresh);
+				break;
+			}
+			default:
+				throw new Error(`Unknown OAuth provider: ${provider}`);
 		}
-		case "openai-codex":
-		case "openai-codex-device": {
-			const { refreshOpenAICodexToken } = await import("./openai-codex");
-			newCredentials = await refreshOpenAICodexToken(credentials.refresh);
-			break;
-		}
-		case "kimi-code": {
-			const { refreshKimiToken } = await import("./kimi");
-			newCredentials = await refreshKimiToken(credentials.refresh);
-			break;
-		}
-		case "gitlab-duo": {
-			const { refreshGitLabDuoToken } = await import("./gitlab-duo");
-			newCredentials = await refreshGitLabDuoToken(credentials);
-			break;
-		}
-		case "xai": {
-			const { refreshXaiToken } = await import("./xai");
-			newCredentials = await refreshXaiToken(credentials.refresh);
-			break;
-		}
-		default:
-			throw new Error(`Unknown OAuth provider: ${provider}`);
-	}
 	return newCredentials;
 }
 function getPerplexityJwtExpiryMs(token: string): number | undefined {
@@ -307,19 +229,7 @@ export async function getOAuthApiKey(
 			`OAuth credential for ${provider} is expired and must be refreshed via AuthStorage before getOAuthApiKey is called`,
 		);
 	}
-	// For providers that need request-time credential metadata, return JSON.
-	const needsStructuredApiKey = provider === "google-gemini-cli" || provider === "google-antigravity";
-	const apiKey = needsStructuredApiKey
-		? JSON.stringify({
-				token: creds.access,
-				enterpriseUrl: creds.enterpriseUrl,
-				projectId: creds.projectId,
-				refreshToken: creds.refresh,
-				expiresAt: creds.expires,
-				email: creds.email,
-				accountId: creds.accountId,
-			})
-		: creds.access;
+	const apiKey = creds.access;
 	return { newCredentials: creds, apiKey };
 }
 

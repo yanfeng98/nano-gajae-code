@@ -1,7 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { buildRequest } from "@gajae-code/ai/providers/google-gemini-cli";
 import { convertTools } from "@gajae-code/ai/providers/google-shared";
-import type { Context, Model, TJsonSchema, Tool } from "@gajae-code/ai/types";
+import type { Model, TJsonSchema, Tool } from "@gajae-code/ai/types";
 import {
 	enforceStrictSchema,
 	mergeCompatibleEnumSchemas,
@@ -16,12 +15,12 @@ import {
 	upgradeJsonSchemaTo202012,
 } from "@gajae-code/ai/utils/schema";
 
-function createGoogleCliModel(id: string): Model<"google-gemini-cli"> {
+function createGoogleModel(id: string): Model<"google-generative-ai"> {
 	return {
 		id,
 		name: id,
-		api: "google-gemini-cli",
-		provider: "google-antigravity",
+		api: "google-generative-ai",
+		provider: "google",
 		baseUrl: "https://example.com",
 		reasoning: false,
 		input: ["text"],
@@ -805,7 +804,7 @@ describe("normalizeSchemaForCCA", () => {
 		expect(normalized.description).toBe('ID\n\n{pattern: "^\\\\d+$", minLength: 1, maxLength: 8}');
 	});
 
-	it("uses the same merged object output in shared and gemini-cli Antigravity paths", () => {
+	it("merges object-union anyOf variants into a merged output", () => {
 		const parameters = {
 			anyOf: [
 				{
@@ -828,18 +827,8 @@ describe("normalizeSchemaForCCA", () => {
 		} as TJsonSchema;
 		const tools: Tool[] = [{ name: "merge_test", description: "Merge test", parameters }];
 
-		const sharedTools = convertTools(tools, createGoogleCliModel("claude-sonnet-4-5"));
+		const sharedTools = convertTools(tools, createGoogleModel("claude-sonnet-4-5"));
 		const sharedDeclaration = sharedTools?.[0]?.functionDeclarations[0] as Record<string, unknown>;
-
-		const context: Context = {
-			messages: [{ role: "user", content: "hello", timestamp: 0 }],
-			tools,
-		};
-		const antigravityRequest = buildRequest(createGoogleCliModel("gemini-2.5-pro"), context, "project", {}, true);
-		const antigravityDeclaration = antigravityRequest.request.tools?.[0]?.functionDeclarations[0] as Record<
-			string,
-			unknown
-		>;
 
 		const expected = {
 			type: "object",
@@ -851,9 +840,6 @@ describe("normalizeSchemaForCCA", () => {
 			required: ["shared"],
 		};
 		expect(sharedDeclaration.parameters).toEqual(expected);
-		expect(antigravityDeclaration.parameters).toEqual(expected);
-		expect(antigravityDeclaration.parameters).toEqual(sharedDeclaration.parameters);
-		expect(antigravityDeclaration.parametersJsonSchema).toBeUndefined();
 	});
 
 	it("does not retain stale required keys after an object-union anyOf merge", () => {

@@ -50,7 +50,7 @@ export type {
 } from "./google-types";
 export { normalizeSchemaForGoogle };
 
-type GoogleApiType = "google-generative-ai" | "google-gemini-cli" | "google-vertex";
+type GoogleApiType = "google-generative-ai" | "google-vertex";
 
 /**
  * Thinking level for Gemini 3 models. Mirrors Google's `ThinkingLevel` enum values.
@@ -61,7 +61,7 @@ export type GoogleThinkingLevel = "THINKING_LEVEL_UNSPECIFIED" | "MINIMAL" | "LO
 
 /**
  * Sampling/thinking options shared by `streamGoogle` and `streamGoogleVertex`.
- * `google-gemini-cli` uses a different transport and request shape — do not extend this for it.
+ * `google-vertex` uses a different transport and request shape — do not extend this for it.
  */
 export interface GoogleSharedStreamOptions extends StreamOptions {
 	toolChoice?: "auto" | "none" | "any" | "required";
@@ -338,7 +338,7 @@ export function convertMessages<T extends GoogleApiType>(model: Model<T>, contex
  */
 export function convertTools(
 	tools: Tool[],
-	model: Model<"google-generative-ai" | "google-gemini-cli" | "google-vertex">,
+	model: Model<"google-generative-ai" | "google-vertex">,
 ): { functionDeclarations: Record<string, unknown>[] }[] | undefined {
 	if (tools.length === 0) return undefined;
 
@@ -668,8 +668,8 @@ interface GoogleGenerationConfig extends GenerateContentConfig {
  * Both surfaces accept the same `GenerateContentConfig` shape — every numeric/string knob,
  * tool-config, thinking-config, and system-instruction conversion is identical.
  *
- * `google-gemini-cli` is NOT routed through here: its `CloudCodeAssistRequest` body has a
- * distinct top-level shape (project/request/requestType) and a different thinking-config
+ * `google-vertex` is NOT routed through here: its request body has a
+ * distinct top-level shape and a different thinking-config
  * placement on `generationConfig`.
  */
 export function buildGoogleGenerateContentParams<T extends "google-generative-ai" | "google-vertex">(

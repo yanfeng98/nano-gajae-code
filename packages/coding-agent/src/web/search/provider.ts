@@ -58,17 +58,7 @@ const PROVIDER_META: Record<SearchProviderId, ProviderMeta> = {
 		label: "Anthropic",
 		load: async () => new (await import("./providers/anthropic")).AnthropicProvider(),
 	},
-	gemini: {
-		id: "gemini",
-		label: "Gemini",
-		load: async () => new (await import("./providers/gemini")).GeminiProvider(),
-	},
-	codex: {
-		id: "codex",
-		label: "OpenAI",
-		load: async () => new (await import("./providers/codex")).CodexProvider(),
-	},
-	tavily: {
+tavily: {
 		id: "tavily",
 		label: "Tavily",
 		load: async () => new (await import("./providers/tavily")).TavilyProvider(),
@@ -82,11 +72,6 @@ const PROVIDER_META: Record<SearchProviderId, ProviderMeta> = {
 		id: "kagi",
 		label: "Kagi",
 		load: async () => new (await import("./providers/kagi")).KagiProvider(),
-	},
-	synthetic: {
-		id: "synthetic",
-		label: "Synthetic",
-		load: async () => new (await import("./providers/synthetic")).SyntheticProvider(),
 	},
 	searxng: {
 		id: "searxng",
@@ -131,13 +116,11 @@ export const SEARCH_PROVIDER_ORDER: SearchProviderId[] = [
 	"jina",
 	"kimi",
 	"anthropic",
-	"gemini",
-	"codex",
+	// "gemini", "codex" removed (deleted providers)
 	"zai",
 	"exa",
 	"parallel",
 	"kagi",
-	"synthetic",
 	"searxng",
 ];
 
@@ -149,20 +132,12 @@ export const SEARCH_PROVIDER_ORDER: SearchProviderId[] = [
  * DuckDuckGo.
  */
 const MODEL_PROVIDER_TO_SEARCH: Record<string, SearchProviderId> = {
-	openai: "codex",
-	"openai-codex": "codex",
-	"openai-responses": "codex",
 	anthropic: "anthropic",
-	google: "gemini",
-	"google-gemini-cli": "gemini",
-	"google-antigravity": "gemini",
-	gemini: "gemini",
 	moonshot: "kimi",
 	"kimi-code": "kimi",
 	kimi: "kimi",
 	zai: "zai",
 	perplexity: "perplexity",
-	synthetic: "synthetic",
 };
 
 /** Preferred provider set via settings (default: auto) */

@@ -24,11 +24,8 @@ import { e2eApiKey, resolveApiKey } from "./oauth";
 // Resolve OAuth tokens at module level (async, runs before tests)
 const oauthTokens = await Promise.all([
 	resolveApiKey("anthropic"),
-	resolveApiKey("google-gemini-cli"),
-	resolveApiKey("google-antigravity"),
-	resolveApiKey("openai-codex"),
 ]);
-const [githubCopilotToken, geminiCliToken, antigravityToken, openaiCodexToken] = oauthTokens;
+const [githubCopilotToken] = oauthTokens;
 
 // Lorem ipsum paragraph for realistic token estimation
 const LOREM_IPSUM = `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. `;
@@ -205,136 +202,11 @@ describe("Context overflow error handling", () => {
 		}, 120000);
 	});
 
-	// =============================================================================
-	// Google Gemini CLI (OAuth)
-	// Uses same API as Google, expects same error pattern
-	// =============================================================================
 
-	describe("Google Gemini CLI (OAuth)", () => {
-		it.skipIf(!geminiCliToken)(
-			"gemini-2.5-flash - should detect overflow via isContextOverflow",
-			async () => {
-				const model = getBundledModel("google-gemini-cli", "gemini-2.5-flash");
-				const result = await testContextOverflow(model, geminiCliToken!);
-				logResult(result);
 
-				expect(result.stopReason).toBe("error");
-				expect(result.errorMessage).toMatch(/input token count.*exceeds the maximum/i);
-				expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
-			},
-			120000,
-		);
-	});
 
-	// =============================================================================
-	// Google Antigravity (OAuth)
-	// Tests both Gemini and Anthropic models via Antigravity
-	// =============================================================================
 
-	describe("Google Antigravity (OAuth)", () => {
-		// Gemini model
-		it.skipIf(!antigravityToken)(
-			"gemini-3-flash - should detect overflow via isContextOverflow",
-			async () => {
-				const model = getBundledModel("google-antigravity", "gemini-3-flash");
-				const result = await testContextOverflow(model, antigravityToken!);
-				logResult(result);
 
-				expect(result.stopReason).toBe("error");
-				expect(result.errorMessage).toMatch(/input token count.*exceeds the maximum/i);
-				expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
-			},
-			120000,
-		);
-
-		// Anthropic model via Antigravity
-		it.skipIf(!antigravityToken)(
-			"claude-sonnet-4-5 - should detect overflow via isContextOverflow",
-			async () => {
-				const model = getBundledModel("google-antigravity", "claude-sonnet-4-5");
-				const result = await testContextOverflow(model, antigravityToken!);
-				logResult(result);
-
-				expect(result.stopReason).toBe("error");
-				// Anthropic models return "prompt is too long" pattern
-				expect(result.errorMessage).toMatch(/prompt is too long/i);
-				expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
-			},
-			120000,
-		);
-	});
-
-	// =============================================================================
-	// OpenAI code provider (OAuth)
-	// Uses ChatGPT Plus/Pro subscription via OAuth
-	// =============================================================================
-
-	describe("OpenAI Codex (OAuth)", () => {
-		it.skipIf(!openaiCodexToken)(
-			"gpt-5.2-codex - should detect overflow via isContextOverflow",
-			async () => {
-				const model = getBundledModel("openai-codex", "gpt-5.2-codex");
-				const result = await testContextOverflow(model, openaiCodexToken!);
-				logResult(result);
-
-				expect(result.stopReason).toBe("error");
-				expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
-			},
-			120000,
-		);
-	});
-
-	// =============================================================================
-	// xAI
-	// Expected pattern: "maximum prompt length is X but the request contains Y"
-	// =============================================================================
-
-	describe.skipIf(!e2eApiKey("XAI_API_KEY"))("xAI", () => {
-		it("grok-3-fast - should detect overflow via isContextOverflow", async () => {
-			const model = getBundledModel("xai", "grok-3-fast");
-			const result = await testContextOverflow(model, Bun.env.XAI_API_KEY!);
-			logResult(result);
-
-			expect(result.stopReason).toBe("error");
-			expect(result.errorMessage).toMatch(/maximum prompt length is \d+/i);
-			expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
-		}, 120000);
-	});
-
-	// =============================================================================
-	// Groq
-	// Expected pattern: "reduce the length of the messages"
-	// =============================================================================
-
-	describe.skipIf(!e2eApiKey("GROQ_API_KEY"))("Groq", () => {
-		it("llama-3.3-70b-versatile - should detect overflow via isContextOverflow", async () => {
-			const model = getBundledModel("groq", "llama-3.3-70b-versatile");
-			const result = await testContextOverflow(model, Bun.env.GROQ_API_KEY!);
-			logResult(result);
-
-			expect(result.stopReason).toBe("error");
-			expect(result.errorMessage).toMatch(/reduce the length of the messages/i);
-			expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
-		}, 120000);
-	});
-
-	// =============================================================================
-	// Cerebras
-	// Expected: 400/413 status code with no body
-	// =============================================================================
-
-	describe.skipIf(!e2eApiKey("CEREBRAS_API_KEY"))("Cerebras", () => {
-		it("qwen-3-235b - should detect overflow via isContextOverflow", async () => {
-			const model = getBundledModel("cerebras", "qwen-3-235b-a22b-instruct-2507");
-			const result = await testContextOverflow(model, Bun.env.CEREBRAS_API_KEY!);
-			logResult(result);
-
-			expect(result.stopReason).toBe("error");
-			// Cerebras returns status code with no body (400, 413, or 429 for token rate limit)
-			expect(result.errorMessage).toMatch(/4(00|13|29).*\(no body\)/i);
-			expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
-		}, 120000);
-	});
 
 	// =============================================================================
 	// z.ai
@@ -363,83 +235,7 @@ describe("Context overflow error handling", () => {
 		}, 120000);
 	});
 
-	// =============================================================================
-	// Mistral
-	// Expected pattern: TBD - need to test actual error message
-	// =============================================================================
 
-	describe.skipIf(!e2eApiKey("MISTRAL_API_KEY"))("Mistral", () => {
-		it("devstral-medium-latest - should detect overflow via isContextOverflow", async () => {
-			const model = getBundledModel("mistral", "devstral-medium-latest");
-			const result = await testContextOverflow(model, Bun.env.MISTRAL_API_KEY!);
-			logResult(result);
-
-			expect(result.stopReason).toBe("error");
-			expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
-		}, 120000);
-	});
-
-	// =============================================================================
-	// OpenRouter - Multiple backend providers
-	// Expected pattern: "maximum context length is X tokens"
-	// =============================================================================
-
-	describe.skipIf(!e2eApiKey("OPENROUTER_API_KEY"))("OpenRouter", () => {
-		// Anthropic backend
-		it("anthropic/claude-sonnet-4 via OpenRouter - should detect overflow via isContextOverflow", async () => {
-			const model = getBundledModel("openrouter", "anthropic/claude-sonnet-4");
-			const result = await testContextOverflow(model, Bun.env.OPENROUTER_API_KEY!);
-			logResult(result);
-
-			expect(result.stopReason).toBe("error");
-			expect(result.errorMessage).toMatch(/maximum context length is \d+ tokens/i);
-			expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
-		}, 120000);
-
-		// DeepSeek backend
-		it("deepseek/deepseek-v3.2 via OpenRouter - should detect overflow via isContextOverflow", async () => {
-			const model = getBundledModel("openrouter", "deepseek/deepseek-v3.2");
-			const result = await testContextOverflow(model, Bun.env.OPENROUTER_API_KEY!);
-			logResult(result);
-
-			expect(result.stopReason).toBe("error");
-			expect(result.errorMessage).toMatch(/maximum context length is \d+ tokens/i);
-			expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
-		}, 120000);
-
-		// Mistral backend
-		it("mistralai/mistral-large-2512 via OpenRouter - should detect overflow via isContextOverflow", async () => {
-			const model = getBundledModel("openrouter", "mistralai/mistral-large-2512");
-			const result = await testContextOverflow(model, Bun.env.OPENROUTER_API_KEY!);
-			logResult(result);
-
-			expect(result.stopReason).toBe("error");
-			expect(result.errorMessage).toMatch(/maximum context length is \d+ tokens/i);
-			expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
-		}, 120000);
-
-		// Google backend
-		it("google/gemini-2.5-flash via OpenRouter - should detect overflow via isContextOverflow", async () => {
-			const model = getBundledModel("openrouter", "google/gemini-2.5-flash");
-			const result = await testContextOverflow(model, Bun.env.OPENROUTER_API_KEY!);
-			logResult(result);
-
-			expect(result.stopReason).toBe("error");
-			expect(result.errorMessage).toMatch(/maximum context length is \d+ tokens/i);
-			expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
-		}, 120000);
-
-		// Meta/Llama backend
-		it("meta-llama/llama-4-maverick via OpenRouter - should detect overflow via isContextOverflow", async () => {
-			const model = getBundledModel("openrouter", "meta-llama/llama-4-maverick");
-			const result = await testContextOverflow(model, Bun.env.OPENROUTER_API_KEY!);
-			logResult(result);
-
-			expect(result.stopReason).toBe("error");
-			expect(result.errorMessage).toMatch(/maximum context length is \d+ tokens/i);
-			expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
-		}, 120000);
-	});
 
 	// =============================================================================
 	// Ollama (local)

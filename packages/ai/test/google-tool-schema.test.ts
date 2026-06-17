@@ -3,12 +3,12 @@ import { convertTools } from "@gajae-code/ai/providers/google-shared";
 import type { Model, TJsonSchema, Tool } from "@gajae-code/ai/types";
 import { normalizeSchemaForCCA, normalizeSchemaForGoogle } from "@gajae-code/ai/utils/schema";
 
-function createModel(id: string): Model<"google-gemini-cli"> {
+function createModel(id: string): Model<"google-generative-ai"> {
 	return {
 		id,
 		name: id,
-		api: "google-gemini-cli",
-		provider: "google-antigravity",
+		api: "google-generative-ai",
+		provider: "google",
 		baseUrl: "https://example.com",
 		reasoning: false,
 		input: ["text"],

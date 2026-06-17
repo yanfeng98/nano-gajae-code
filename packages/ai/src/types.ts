@@ -1,9 +1,9 @@
 import type { ZodType, z } from "zod/v4";
 import type { AnthropicOptions } from "./providers/anthropic";
 import type { GoogleOptions } from "./providers/google";
-import type { GoogleGeminiCliOptions } from "./providers/google-gemini-cli";
+
 import type { OllamaChatOptions } from "./providers/ollama";
-import type { OpenAICodexResponsesOptions } from "./providers/openai-codex-responses";
+
 import type { OpenAICompletionsOptions } from "./providers/openai-completions";
 import type { OpenAIResponsesOptions } from "./providers/openai-responses";
 import type { AssistantMessageEventStream } from "./utils/event-stream";
@@ -13,19 +13,15 @@ export type { AssistantMessageEventStream } from "./utils/event-stream";
 export type KnownApi =
 	| "openai-completions"
 	| "openai-responses"
-	| "openai-codex-responses"
 	| "anthropic-messages"
 	| "google-generative-ai"
-	| "google-gemini-cli"
 	| "ollama-chat";
 export type Api = KnownApi | (string & {});
 export interface ApiOptionsMap {
 	"anthropic-messages": AnthropicOptions;
 	"openai-completions": OpenAICompletionsOptions;
 	"openai-responses": OpenAIResponsesOptions;
-	"openai-codex-responses": OpenAICodexResponsesOptions;
 	"google-generative-ai": GoogleOptions;
-	"google-gemini-cli": GoogleGeminiCliOptions;
 	"ollama-chat": OllamaChatOptions;
 }
 // Compile-time exhaustiveness check - this will fail if ApiOptionsMap doesn't have all KnownApi keys
@@ -69,31 +65,20 @@ export interface ThinkingConfig {
 export type KnownProvider =
 	| "anthropic"
 	| "google"
-	| "google-gemini-cli"
-	| "google-antigravity"
 	| "openai"
-	| "openai-codex"
 	| "kimi-code"
 	| "minimax-code"
 	| "minimax-code-cn"
-	| "fireworks"
 	| "deepseek"
-	| "xai"
-	| "groq"
-	| "cerebras"
-	| "openrouter"
 	| "zai"
-	| "mistral"
 	| "minimax"
 	| "opencode-go"
 	| "opencode-zen"
 	| "huggingface"
 	| "litellm"
 	| "moonshot"
-	| "nvidia"
 	| "ollama"
 	| "ollama-cloud"
-	| "together"
 	| "vllm"
 	| "lm-studio";
 export type Provider = KnownProvider | string;
@@ -142,7 +127,7 @@ export type CacheRetention = "none" | "short" | "long";
  * They let users opt into priority on one family without paying premium
  * costs on the other when switching models mid-session.
  *
- * - `"openai-only"` → `"priority"` on `openai` and `OpenAI code provider`; ignored elsewhere.
+ * - `"openai-only"` → `"priority"` on `openai`; ignored elsewhere.
  * - `"Anthropic model-only"` → `"priority"` on direct `anthropic` (not Bedrock/Vertex Anthropic model).
  */
 export type ServiceTier = "auto" | "default" | "flex" | "scale" | "priority" | "openai-only" | "claude-only";
@@ -162,7 +147,7 @@ export function resolveServiceTier(
 	if (!serviceTier) return undefined;
 	switch (serviceTier) {
 		case "openai-only":
-			return provider === "openai" || provider === "openai-codex" ? "priority" : undefined;
+			return provider === "openai" ? "priority" : undefined;
 		case "claude-only":
 			return provider === "anthropic" ? "priority" : undefined;
 		default:
@@ -180,7 +165,7 @@ export function shouldSendServiceTier(
 	serviceTier: ServiceTier | null | undefined,
 	provider: Provider | undefined,
 ): boolean {
-	if (provider !== "openai" && provider !== "openai-codex") return false;
+	if (provider !== "openai") return false;
 	const resolved = resolveServiceTier(serviceTier, provider);
 	return resolved === "flex" || resolved === "scale" || resolved === "priority";
 }
@@ -200,7 +185,7 @@ export function getPriorityPremiumRequests(
 	if (resolveServiceTier(serviceTier, provider) !== "priority") return 0;
 	// Only providers that realize `priority` on the wire bill the user.
 	// Everywhere else, the field is silently dropped and nothing is charged.
-	return provider === "openai" || provider === "openai-codex" || provider === "anthropic" ? 1 : 0;
+	return provider === "openai" || provider === "anthropic" ? 1 : 0;
 }
 
 export interface ProviderSessionState {
@@ -824,7 +809,7 @@ export interface Model<TApi extends Api = any> {
 		? OpenAICompat
 		: TApi extends "anthropic-messages"
 			? AnthropicCompat
-			: TApi extends "google-generative-ai" | "google-gemini-cli" | "ollama-chat" | "openai-codex-responses"
+			: TApi extends "google-generative-ai" | "ollama-chat"
 				? ToolChoiceCompat
 				: never;
 	/**

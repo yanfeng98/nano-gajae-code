@@ -604,17 +604,9 @@ function mapProviderNameToOtel(provider: string | undefined): string | undefined
 		case "amazon-bedrock":
 			return "aws.bedrock";
 		case "google":
-		case "google-antigravity":
-		case "google-gemini-cli":
 			return "gcp.gemini";
 		case "google-vertex":
 			return "gcp.vertex_ai";
-		case "mistral":
-			return "mistral_ai";
-		case "openai-codex":
-			return "openai";
-		case "xai":
-			return "x_ai";
 		default:
 			return provider;
 	}
@@ -1288,7 +1280,6 @@ export function detectGatewayFromHeaders(
 		// undefined here. The `gen-` prefix on `x-generation-id` is OpenRouter-
 		// specific and disambiguates from other proxies that also expose a
 		// `x-generation-id` header.
-		return { name: "openrouter", callId: openRouterGenerationId, routedTo: undefined };
 	}
 	return undefined;
 }

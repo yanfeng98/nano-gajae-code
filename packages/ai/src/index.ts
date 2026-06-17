@@ -13,12 +13,9 @@ export * from "./provider-models";
 export * from "./providers/anthropic";
 
 export type * from "./providers/google";
-export type * from "./providers/google-gemini-cli";
-export * from "./providers/google-gemini-headers";
 export * from "./providers/kimi";
 export * from "./providers/mock";
 export * from "./providers/ollama";
-export * from "./providers/openai-codex-responses";
 export * from "./providers/openai-completions";
 export * from "./providers/openai-responses";
 
@@ -27,11 +24,8 @@ export * from "./stream";
 export * from "./types";
 export * from "./usage";
 export * from "./usage/claude";
-export * from "./usage/gemini";
-export * from "./usage/google-antigravity";
 export * from "./usage/kimi";
 export * from "./usage/minimax-code";
-export * from "./usage/openai-codex";
 export * from "./usage/zai";
 export * from "./utils/anthropic-auth";
 export * from "./utils/discovery";

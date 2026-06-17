@@ -212,7 +212,6 @@ Provider-specific (not fully abstracted):
 - [`../../ai/src/utils/json-parse.ts`](../packages/ai/src/utils/json-parse.ts) — partial JSON parsing for streamed tool arguments.
 - [`../../ai/src/providers/anthropic.ts`](../packages/ai/src/providers/anthropic.ts) — Anthropic event translation and tool JSON delta accumulation.
 - [`../../ai/src/providers/openai-responses.ts`](../packages/ai/src/providers/openai-responses.ts), [`openai-code-responses.ts`](../packages/ai/src/providers/openai-code-responses.ts), [`azure-openai-responses.ts`](../packages/ai/src/providers/azure-openai-responses.ts) — Responses-family event translation and status mapping.
-- [`../../ai/src/providers/google.ts`](../packages/ai/src/providers/google.ts), [`google-gemini-cli.ts`](../packages/ai/src/providers/google-gemini-cli.ts), [`google-vertex.ts`](../packages/ai/src/providers/google-vertex.ts) — Gemini stream chunk-to-block translation variants.
 - [`../../ai/src/providers/google-shared.ts`](../packages/ai/src/providers/google-shared.ts) — Gemini finish-reason mapping and shared conversion rules.
 - [`../../ai/src/providers/amazon-bedrock.ts`](../packages/ai/src/providers/amazon-bedrock.ts), [`openai-completions.ts`](../packages/ai/src/providers/openai-completions.ts), [`ollama.ts`](../packages/ai/src/providers/ollama.ts) — additional built-in stream adapters using the same event contract.
 - [`../../agent/src/agent-loop.ts`](../packages/agent/src/agent-loop.ts) — provider stream consumption and `message_update` bridging.

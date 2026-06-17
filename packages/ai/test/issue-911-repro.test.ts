@@ -47,7 +47,8 @@ function baseContext(): Context {
 // the literal `[object Object]` sequence the user observes.
 describe("issue #911 - Mistral Medium 3.5 array content parts", () => {
 	const model: Model<"openai-completions"> = {
-		...getBundledModel("mistral", "mistral-medium-2604"),
+		...getBundledModel("openai", "gpt-4o-mini"),
+		id: "mistral-medium-2604",
 	};
 
 	it("normalizes array-of-parts delta.content into the assembled text without [object Object]", async () => {

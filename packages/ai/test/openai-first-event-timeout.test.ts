@@ -12,11 +12,11 @@ const openAICompletionsModel = {
 	...(getBundledModel("openai", "gpt-4o-mini") as Model<"openai-completions">),
 	api: "openai-completions",
 } satisfies Model<"openai-completions">;
-const azureOpenAIResponsesModel: Model<"azure-openai-responses"> = {
+const azureOpenAIResponsesModel: Model<"openai-responses"> = {
 	id: "gpt-5-mini",
 	name: "GPT-5 Mini",
-	api: "azure-openai-responses",
-	provider: "azure",
+	api: "openai-responses",
+	provider: "openai",
 	baseUrl: "https://example.openai.azure.com/openai/v1",
 	reasoning: false,
 	input: ["text"],
@@ -313,10 +313,9 @@ describe("OpenAI-family first-event timeouts", () => {
 	it("surfaces the Azure OpenAI responses first-event timeout message", async () => {
 		await expectFirstEventTimeout(
 			streamFirstEventTimeoutMs =>
-				streamAzureOpenAIResponses(azureOpenAIResponsesModel, baseContext(), {
+				streamOpenAIResponses(azureOpenAIResponsesModel, baseContext(), {
 					apiKey: "test-key",
-					azureBaseUrl: azureOpenAIResponsesModel.baseUrl,
-					azureApiVersion: "v1",
+					// azure options removed - azure-openai-responses API type no longer exists,
 					streamFirstEventTimeoutMs,
 				}).result(),
 			"Azure OpenAI responses stream timed out while waiting for the first event",
@@ -350,10 +349,9 @@ describe("OpenAI-family first-event timeouts", () => {
 	it("keeps caller aborts as aborted for Azure OpenAI responses", async () => {
 		await expectCallerAbort(
 			(signal, streamFirstEventTimeoutMs) =>
-				streamAzureOpenAIResponses(azureOpenAIResponsesModel, baseContext(), {
+				streamOpenAIResponses(azureOpenAIResponsesModel, baseContext(), {
 					apiKey: "test-key",
-					azureBaseUrl: azureOpenAIResponsesModel.baseUrl,
-					azureApiVersion: "v1",
+					// azure options removed - azure-openai-responses API type no longer exists,
 					signal,
 					streamFirstEventTimeoutMs,
 				}).result(),
@@ -386,10 +384,9 @@ describe("OpenAI-family first-event timeouts", () => {
 	it("does not arm the first-event watchdog before Azure OpenAI responses setup finishes", async () => {
 		await expectDelayedRequestSetupSucceeds(
 			streamFirstEventTimeoutMs =>
-				streamAzureOpenAIResponses(azureOpenAIResponsesModel, baseContext(), {
+				streamOpenAIResponses(azureOpenAIResponsesModel, baseContext(), {
 					apiKey: "test-key",
-					azureBaseUrl: azureOpenAIResponsesModel.baseUrl,
-					azureApiVersion: "v1",
+					// azure options removed - azure-openai-responses API type no longer exists,
 					streamFirstEventTimeoutMs,
 				}).result(),
 			createOpenAIResponsesSuccessResponse,

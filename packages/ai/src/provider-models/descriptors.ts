@@ -10,26 +10,16 @@ import { googleModelManagerOptions } from "./google";
 import { ollamaCloudModelManagerOptions } from "./ollama";
 import {
 	anthropicModelManagerOptions,
-	cerebrasModelManagerOptions,
 	deepseekModelManagerOptions,
-	fireworksModelManagerOptions,
-	groqModelManagerOptions,
 	huggingfaceModelManagerOptions,
 	kimiCodeModelManagerOptions,
 	litellmModelManagerOptions,
-	mistralModelManagerOptions,
 	moonshotModelManagerOptions,
-	nanoGptModelManagerOptions,
-	nvidiaModelManagerOptions,
 	ollamaModelManagerOptions,
 	openaiModelManagerOptions,
 	opencodeGoModelManagerOptions,
 	opencodeZenModelManagerOptions,
-	openrouterModelManagerOptions,
-	syntheticModelManagerOptions,
-	togetherModelManagerOptions,
 	vllmModelManagerOptions,
-	xaiModelManagerOptions,
 } from "./openai-compat";
 import { zaiModelManagerOptions } from "./special";
 
@@ -110,18 +100,11 @@ function catalogDescriptor(
 }
 
 /**
- * All standard providers. Special providers (google-antigravity, google-gemini-cli,
- * OpenAI code provider) are handled separately because they require different config shapes.
+ * All standard providers.
  */
 export const PROVIDER_DESCRIPTORS: readonly ProviderDescriptor[] = [
 	descriptor("anthropic", "claude-sonnet-4-6", config => anthropicModelManagerOptions(config)),
-	catalogDescriptor(
-		"alibaba-coding-plan",
-		"qwen3.5-plus",
-		catalog("Alibaba Coding Plan", ["ALIBABA_CODING_PLAN_API_KEY"]),
-	),
 	descriptor("openai", "gpt-5.4", config => openaiModelManagerOptions(config)),
-	descriptor("groq", "openai/gpt-oss-120b", config => groqModelManagerOptions(config)),
 	catalogDescriptor(
 		"huggingface",
 		"deepseek-ai/DeepSeek-R1",
@@ -129,46 +112,13 @@ export const PROVIDER_DESCRIPTORS: readonly ProviderDescriptor[] = [
 		catalog("Hugging Face", ["HUGGINGFACE_HUB_TOKEN", "HF_TOKEN"]),
 	),
 	catalogDescriptor(
-		"cerebras",
-		"zai-glm-4.6",
-		config => cerebrasModelManagerOptions(config),
-		catalog("Cerebras", ["CEREBRAS_API_KEY"]),
-	),
-	catalogDescriptor(
-		"fireworks",
-		"kimi-k2.6",
-		config => fireworksModelManagerOptions(config),
-		catalog("Fireworks", ["FIREWORKS_API_KEY"]),
-	),
-	descriptor("xai", "grok-4-fast-non-reasoning", config => xaiModelManagerOptions(config)),
-	catalogDescriptor(
 		"deepseek",
 		"deepseek-v4-pro",
 		config => deepseekModelManagerOptions(config),
 		catalog("DeepSeek", ["DEEPSEEK_API_KEY"]),
 	),
-	descriptor("mistral", "devstral-medium-latest", config => mistralModelManagerOptions(config)),
-	catalogDescriptor(
-		"nvidia",
-		"nvidia/llama-3.1-nemotron-70b-instruct",
-		config => nvidiaModelManagerOptions(config),
-		catalog("NVIDIA", ["NVIDIA_API_KEY"]),
-	),
-	catalogDescriptor("nanogpt", "openai/gpt-5.4", config => nanoGptModelManagerOptions(config)),
 	descriptor("opencode-zen", "claude-sonnet-4-6", config => opencodeZenModelManagerOptions(config)),
 	descriptor("opencode-go", "kimi-k2.5", config => opencodeGoModelManagerOptions(config)),
-	catalogDescriptor(
-		"openrouter",
-		"openai/gpt-5.4",
-		config => openrouterModelManagerOptions(config),
-		catalog("OpenRouter", ["OPENROUTER_API_KEY"], { allowUnauthenticated: true }),
-	),
-	catalogDescriptor("kilo", "anthropic/claude-sonnet-4.5"),
-	catalogDescriptor(
-		"vercel-ai-gateway",
-		"anthropic/claude-sonnet-4-6",
-		catalog("Vercel AI Gateway", ["VERCEL_AI_GATEWAY_API_KEY"], { allowUnauthenticated: true }),
-	),
 	catalogDescriptor(
 		"ollama",
 		"gpt-oss:20b",
@@ -183,18 +133,11 @@ export const PROVIDER_DESCRIPTORS: readonly ProviderDescriptor[] = [
 		catalog("Ollama Cloud", ["OLLAMA_CLOUD_API_KEY"], { oauthProvider: "ollama-cloud" }),
 	),
 	catalogDescriptor(
-		"cloudflare-ai-gateway",
-		"claude-sonnet-4-5",
-		catalog("Cloudflare AI Gateway", ["CLOUDFLARE_AI_GATEWAY_API_KEY"]),
-	),
-	catalogDescriptor(
 		"kimi-code",
 		"kimi-k2.5",
 		config => kimiCodeModelManagerOptions(config),
 		catalog("Kimi Code", ["KIMI_API_KEY"]),
 	),
-	catalogDescriptor("qwen-portal", "coder-model"),
-	catalogDescriptor("synthetic", "hf:moonshotai/Kimi-K2.5", config => syntheticModelManagerOptions(config)),
 	catalogDescriptor(
 		"litellm",
 		"claude-opus-4-6",
@@ -213,12 +156,6 @@ export const PROVIDER_DESCRIPTORS: readonly ProviderDescriptor[] = [
 		config => moonshotModelManagerOptions(config),
 		catalog("Moonshot", ["MOONSHOT_API_KEY"]),
 	),
-	catalogDescriptor(
-		"together",
-		"moonshotai/Kimi-K2.5",
-		config => togetherModelManagerOptions(config),
-		catalog("Together", ["TOGETHER_API_KEY"]),
-	),
 	catalogDescriptor("zai", "glm-5.1", config => zaiModelManagerOptions(config), catalog("zAI", ["ZAI_API_KEY"])),
 	descriptor("google", "gemini-2.5-pro", config => googleModelManagerOptions(config)),
 ] as const;
@@ -227,13 +164,8 @@ export const PROVIDER_DESCRIPTORS: readonly ProviderDescriptor[] = [
 export const DEFAULT_MODEL_PER_PROVIDER: Record<KnownProvider, string> = {
 	...Object.fromEntries(PROVIDER_DESCRIPTORS.map(d => [d.providerId, d.defaultModel])),
 	// Providers not in PROVIDER_DESCRIPTORS (special auth or no standard discovery)
-	"alibaba-coding-plan": "qwen3.5-plus",
-	"google-antigravity": "gemini-3-pro-high",
-	"google-gemini-cli": "gemini-2.5-pro",
-	"google-vertex": "gemini-3-pro-preview",
 	minimax: "minimax-m3",
 	"minimax-code": "minimax-m3",
 	"minimax-code-cn": "minimax-m3",
-	"openai-codex": "gpt-5.5",
-	"gitlab-duo": "duo-chat-sonnet-4-5",
+	"lm-studio": "llama-4",
 } as Record<KnownProvider, string>;

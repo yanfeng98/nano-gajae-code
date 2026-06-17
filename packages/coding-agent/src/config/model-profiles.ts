@@ -54,27 +54,6 @@ const profile = (
 });
 
 export const BUILTIN_MODEL_PROFILES: readonly ModelProfileDefinition[] = [
-	profile("codex-eco", ["openai-codex"], {
-		default: "openai-codex/gpt-5.5:low",
-		executor: "openai-codex/gpt-5.5:minimal",
-		planner: "openai-codex/gpt-5.5:low",
-		critic: "openai-codex/gpt-5.5:medium",
-		architect: "openai-codex/gpt-5.5:high",
-	}),
-	profile("codex-medium", ["openai-codex"], {
-		default: "openai-codex/gpt-5.5:medium",
-		executor: "openai-codex/gpt-5.5:low",
-		planner: "openai-codex/gpt-5.5:medium",
-		critic: "openai-codex/gpt-5.5:high",
-		architect: "openai-codex/gpt-5.5:xhigh",
-	}),
-	profile("codex-pro", ["openai-codex"], {
-		default: "openai-codex/gpt-5.5:xhigh",
-		executor: "openai-codex/gpt-5.5:medium",
-		planner: "openai-codex/gpt-5.5:high",
-		critic: "openai-codex/gpt-5.5:xhigh",
-		architect: "openai-codex/gpt-5.5:xhigh",
-	}),
 	profile("opencodego", ["opencode-go"], {
 		default: "opencode-go/kimi-k2.6",
 		executor: "opencode-go/deepseek-v4-flash",
@@ -152,27 +131,6 @@ export const BUILTIN_MODEL_PROFILES: readonly ModelProfileDefinition[] = [
 		critic: "xiaomi/mimo-v2.5-pro:xhigh",
 		architect: "xiaomi/mimo-v2.5-pro:xhigh",
 	}),
-	profile("grok-eco", ["xai"], {
-		default: "xai/grok-4.3:low",
-		executor: "xai/grok-4.3:minimal",
-		planner: "xai/grok-4.3:low",
-		critic: "xai/grok-4.3:medium",
-		architect: "xai/grok-4.3:high",
-	}),
-	profile("grok-medium", ["xai"], {
-		default: "xai/grok-4.3:medium",
-		executor: "xai/grok-4.3:low",
-		planner: "xai/grok-4.3:medium",
-		critic: "xai/grok-4.3:high",
-		architect: "xai/grok-4.3:xhigh",
-	}),
-	profile("grok-pro", ["xai"], {
-		default: "xai/grok-4.3:xhigh",
-		executor: "xai/grok-4.3:medium",
-		planner: "xai/grok-4.3:high",
-		critic: "xai/grok-4.3:xhigh",
-		architect: "xai/grok-4.3:xhigh",
-	}),
 	profile("minimax-eco", ["minimax-code"], {
 		default: "minimax-code/minimax-v3:low",
 		executor: "minimax-code/minimax-v3:minimal",
@@ -194,20 +152,6 @@ export const BUILTIN_MODEL_PROFILES: readonly ModelProfileDefinition[] = [
 		critic: "minimax-code/minimax-v3:xhigh",
 		architect: "minimax-code/minimax-v3:xhigh",
 	}),
-	profile("opus-codex", ["anthropic", "openai-codex"], {
-		default: "anthropic/claude-opus-4-8:xhigh",
-		executor: "openai-codex/gpt-5.5:low",
-		planner: "openai-codex/gpt-5.5:medium",
-		critic: "openai-codex/gpt-5.5:high",
-		architect: "openai-codex/gpt-5.5:xhigh",
-	}),
-	profile("codex-opencodego", ["openai-codex", "opencode-go"], {
-		default: "openai-codex/gpt-5.5:medium",
-		executor: "opencode-go/deepseek-v4-pro",
-		planner: "opencode-go/kimi-k2.6",
-		critic: "opencode-go/mimo-v2.5-pro",
-		architect: "openai-codex/gpt-5.5:xhigh",
-	}),
 ];
 
 export interface ModelProfilePresentation {
@@ -216,9 +160,6 @@ export interface ModelProfilePresentation {
 }
 
 const PROFILE_PRESENTATION: Record<string, ModelProfilePresentation> = {
-	"codex-eco": { displayName: "Codex Eco", providerGroup: "CODEX" },
-	"codex-medium": { displayName: "Codex Medium", providerGroup: "CODEX" },
-	"codex-pro": { displayName: "Codex Pro", providerGroup: "CODEX" },
 	opencodego: { displayName: "OpenCodeGo", providerGroup: "OPENCODEGO" },
 	"claude-opus": { displayName: "Claude Opus", providerGroup: "CLAUDE" },
 	"glm-eco": { displayName: "GLM Eco", providerGroup: "GLM" },
@@ -230,36 +171,27 @@ const PROFILE_PRESENTATION: Record<string, ModelProfilePresentation> = {
 	"mimo-eco": { displayName: "Mimo Eco", providerGroup: "MIMO" },
 	"mimo-medium": { displayName: "Mimo Medium", providerGroup: "MIMO" },
 	"mimo-pro": { displayName: "Mimo Pro", providerGroup: "MIMO" },
-	"grok-eco": { displayName: "Grok Eco", providerGroup: "GROK" },
-	"grok-medium": { displayName: "Grok Medium", providerGroup: "GROK" },
-	"grok-pro": { displayName: "Grok Pro", providerGroup: "GROK" },
 	"minimax-eco": { displayName: "MiniMax Eco", providerGroup: "MINIMAX" },
 	"minimax-medium": { displayName: "MiniMax Medium", providerGroup: "MINIMAX" },
 	"minimax-pro": { displayName: "MiniMax Pro", providerGroup: "MINIMAX" },
-	"opus-codex": { displayName: "Opus + Codex", providerGroup: "COMBOS" },
-	"codex-opencodego": { displayName: "Codex + OpenCodeGo", providerGroup: "COMBOS" },
 };
 
 const PROFILE_GROUP_ORDER = [
-	"CODEX",
 	"OPENCODEGO",
 	"CLAUDE",
 	"GLM",
 	"KIMI CODING PLAN",
 	"MIMO",
-	"GROK",
 	"MINIMAX",
 	"COMBOS",
 ];
 
 const PROFILE_RECOMMENDATIONS: Record<string, string> = {
-	"openai-codex": "codex-medium",
 	anthropic: "claude-opus",
 	"opencode-go": "opencodego",
 	zai: "glm-medium",
 	"kimi-code": "kimi-coding-plan-medium",
 	xiaomi: "mimo-medium",
-	xai: "grok-medium",
 	"minimax-code": "minimax-medium",
 };
 

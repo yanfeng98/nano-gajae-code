@@ -104,7 +104,7 @@ export interface HarmonyRecoveredToolCall {
 }
 
 export function isHarmonyLeakMitigationTarget(model: Model): boolean {
-	return model.provider === "openai-codex";
+	return false;
 }
 
 export function signalListLabel(signals: readonly HarmonySignal[]): string {

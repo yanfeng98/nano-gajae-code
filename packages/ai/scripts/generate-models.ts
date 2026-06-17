@@ -11,11 +11,10 @@ const COPILOT_PREMIUM_MULTIPLIERS: Record<string, number> = {
 
 import * as path from "node:path";
 import { $env } from "@gajae-code/utils";
-import { AuthStorage, type OAuthAccess, SqliteAuthCredentialStore } from "../src/auth-storage";
+import { AuthStorage, SqliteAuthCredentialStore } from "../src/auth-storage";
 import { createModelManager } from "../src/model-manager";
 import {
 	applyGeneratedModelPolicies,
-	CLOUDFLARE_FALLBACK_MODEL,
 	linkOpenAIPromotionTargets,
 } from "../src/model-thinking";
 import prevModelsJson from "../src/models.json" with { type: "json" };
@@ -32,11 +31,7 @@ import {
 	UNK_CONTEXT_WINDOW,
 	UNK_MAX_TOKENS,
 } from "../src/provider-models/openai-compat";
-import { JWT_CLAIM_PATH } from "../src/providers/openai-codex/constants";
 import type { Model } from "../src/types";
-import { fetchAntigravityDiscoveryModels } from "../src/utils/discovery/antigravity";
-import { fetchCodexModels } from "../src/utils/discovery/codex";
-import type { OAuthProvider } from "../src/utils/oauth/types";
 
 const packageRoot = path.join(import.meta.dir, "..");
 const RETIRED_BUNDLED_MODEL_KEYS = new Set<string>(["anthropic/claude-fable-5"]);
@@ -184,39 +179,9 @@ function applyPremiumMultiplierOverrides(models: readonly Model[]): Model[] {
 		};
 	});
 }
-function hasBillableCost(cost: Model["cost"]): boolean {
-	return cost.input !== 0 || cost.output !== 0 || cost.cacheRead !== 0 || cost.cacheWrite !== 0;
-}
-
-function applyCodexPricingFallback(models: readonly Model[]): Model[] {
-	const openAIModels = new Map(
-		models
-			.filter(model => model.provider === "openai" && hasBillableCost(model.cost))
-			.map(model => [model.id, model.cost]),
-	);
-
-	return models.map(model => {
-		if (model.provider !== "openai-codex" || model.api !== "openai-codex-responses") {
-			return model;
-		}
-		if (hasBillableCost(model.cost)) {
-			return model;
-		}
-
-		const openAICost = openAIModels.get(model.id);
-		if (!openAICost) {
-			return model;
-		}
-
-		return {
-			...model,
-			cost: { ...openAICost },
-		};
-	});
-}
 
 // Catalog sources occasionally omit image input for Claude Opus 4.8 variants
-// (e.g. kilo/venice "-fast" entries) even though every Claude Opus model is
+// even though every Claude Opus model is
 // vision-capable. Correct those so capability advertising stays consistent
 // across providers. Runs after the dynamic merge so it survives regeneration.
 function applyClaudeOpusVisionCorrections(models: readonly Model[]): Model[] {
@@ -232,103 +197,6 @@ function applyClaudeOpusVisionCorrections(models: readonly Model[]): Model[] {
 	});
 }
 
-const ANTIGRAVITY_ENDPOINT = "https://daily-cloudcode-pa.sandbox.googleapis.com";
-
-async function getOAuthAccessFromStorage(provider: OAuthProvider): Promise<OAuthAccess | null> {
-	try {
-		const store = await SqliteAuthCredentialStore.open();
-		const authStorage = new AuthStorage(store);
-		try {
-			await authStorage.reload();
-			// `getOAuthAccess` runs the full AuthStorage refresh pipeline so an
-			// expired-but-refreshable credential gets rotated before discovery,
-			// and identity metadata (accountId/projectId/email) flows through
-			// for OpenAI code backend/Antigravity downstream calls.
-			return (await authStorage.getOAuthAccess(provider)) ?? null;
-		} finally {
-			store.close();
-		}
-	} catch {
-		return null;
-	}
-}
-
-/**
- * Fetch available Antigravity models from the API using the discovery module.
- * Returns empty array if no auth is available (previous models used as fallback).
- */
-async function fetchAntigravityModels(): Promise<Model<"google-gemini-cli">[]> {
-	const access = await getOAuthAccessFromStorage("google-antigravity");
-	if (!access) {
-		console.log("No Antigravity credentials found, will use previous models");
-		return [];
-	}
-	try {
-		console.log("Fetching models from Antigravity API...");
-		const discovered = await fetchAntigravityDiscoveryModels({
-			token: access.accessToken,
-			endpoint: ANTIGRAVITY_ENDPOINT,
-		});
-		if (discovered === null) {
-			console.warn("Antigravity API fetch failed, will use previous models");
-			return [];
-		}
-		if (discovered.length > 0) {
-			console.log(`Fetched ${discovered.length} models from Antigravity API`);
-			return discovered;
-		}
-		console.warn("Antigravity API returned no models, will use previous models");
-		return [];
-	} catch (error) {
-		console.error("Failed to fetch Antigravity models:", error);
-		return [];
-	}
-}
-
-/**
- * Extract accountId from a OpenAI code backend JWT access token.
- */
-function extractCodexAccountId(accessToken: string): string | null {
-	try {
-		const parts = accessToken.split(".");
-		if (parts.length !== 3) return null;
-		const payload = parts[1] ?? "";
-		const decoded = JSON.parse(Buffer.from(payload, "base64").toString("utf-8"));
-		const accountId = decoded?.[JWT_CLAIM_PATH]?.chatgpt_account_id;
-		return typeof accountId === "string" && accountId.length > 0 ? accountId : null;
-	} catch {
-		return null;
-	}
-}
-
-async function fetchCodexDiscoveryModels(): Promise<Model<"openai-codex-responses">[]> {
-	const access = await getOAuthAccessFromStorage("openai-codex");
-	if (!access) {
-		return [];
-	}
-	try {
-		console.log("Fetching models from OpenAI code API...");
-		const accessToken = access.accessToken;
-		const accountId = access.accountId ?? extractCodexAccountId(accessToken);
-		const codexDiscovery = await fetchCodexModels({
-			accessToken,
-			accountId: accountId ?? undefined,
-		});
-		if (codexDiscovery === null) {
-			console.warn("OpenAI code API fetch failed");
-			return [];
-		}
-		if (codexDiscovery.models.length > 0) {
-			console.log(`Fetched ${codexDiscovery.models.length} models from OpenAI code API`);
-			return codexDiscovery.models;
-		}
-		return [];
-	} catch (error) {
-		console.error("Failed to fetch OpenAI code models:", error);
-		return [];
-	}
-}
-
 async function generateModels() {
 	// Fetch models from dynamic sources
 	const modelsDevModels = await loadModelsDevData();
@@ -339,30 +207,10 @@ async function generateModels() {
 	).flat();
 	// Combine models (models.dev has priority)
 	let allModels = applyGlobalModelsDevFallback(modelsDevModels, catalogProviderModels);
-	if (!allModels.some(model => model.provider === "cloudflare-ai-gateway")) {
-		allModels.push(CLOUDFLARE_FALLBACK_MODEL);
-	}
-
-	const specialDiscoverySources = [
-		{ label: "Antigravity", fetch: fetchAntigravityModels },
-		{ label: "OpenAI code", fetch: fetchCodexDiscoveryModels },
-	] as const;
-	const specialDiscoveries = await Promise.all(
-		specialDiscoverySources.map(async source => ({
-			label: source.label,
-			models: await source.fetch(),
-		})),
-	);
-	for (const discovery of specialDiscoveries) {
-		if (discovery.models.length > 0) {
-			console.log(`Added ${discovery.models.length} models from ${discovery.label} discovery`);
-			allModels.push(...discovery.models);
-		}
-	}
 
 	// Merge previous models.json entries as fallback for any provider/model
 	// not fetched dynamically. This replaces all hardcoded fallback lists —
-	// static-only providers (vertex, gemini-cli), auth-gated providers when
+	// static-only providers (vertex), auth-gated providers when
 	// credentials are unavailable, and ad-hoc model additions all persist
 	// through the existing models.json seed.
 	// Discovery-only providers (local inference servers) — never bundle static models.
@@ -380,11 +228,9 @@ async function generateModels() {
 			}
 		}
 	}
-	allModels = allModels.filter(model => !isRetiredBundledModel(model));
 
 	allModels = applyGlobalModelsDevFallback(allModels, modelsDevModels);
 	allModels = applyPremiumMultiplierOverrides(allModels);
-	allModels = applyCodexPricingFallback(allModels);
 	allModels = applyClaudeOpusVisionCorrections(allModels);
 	applyGeneratedModelPolicies(allModels);
 	linkOpenAIPromotionTargets(allModels);

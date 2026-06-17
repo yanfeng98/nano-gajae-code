@@ -14,12 +14,9 @@ export type SearchProviderId =
 	| "zai"
 	| "anthropic"
 	| "perplexity"
-	| "gemini"
-	| "codex"
 	| "tavily"
 	| "parallel"
 	| "kagi"
-	| "synthetic"
 	| "searxng";
 
 export function isSearchProviderId(value: string): value is SearchProviderId {
@@ -32,12 +29,9 @@ export function isSearchProviderId(value: string): value is SearchProviderId {
 		"zai",
 		"anthropic",
 		"perplexity",
-		"gemini",
-		"codex",
 		"tavily",
 		"parallel",
 		"kagi",
-		"synthetic",
 		"searxng",
 	].includes(value);
 }

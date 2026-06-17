@@ -1,7 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { convertAnthropicMessages } from "../src/providers/anthropic";
 import { convertMessages as convertGoogleMessages } from "../src/providers/google-shared";
-import { convertCodexResponsesMessages } from "../src/providers/openai-codex-responses";
 import { convertMessages as convertOpenAICompletionsMessages } from "../src/providers/openai-completions";
 import {
 	appendResponsesToolResultMessages,
@@ -181,38 +180,6 @@ describe("issue #967 vision guard", () => {
 				output: `saved plot to /tmp/plot.png\n${NON_VISION_IMAGE_PLACEHOLDER}`,
 			},
 		]);
-	});
-
-	it("strips non-vision images from Codex responses user and tool-result payloads", () => {
-		const model = makeModel("openai-codex-responses", "openai-codex");
-		const context: Context = {
-			messages: [
-				{
-					role: "user",
-					content: [
-						{ type: "text", text: "plot summary" },
-						{ type: "image", mimeType: "image/png", data: "ZmFrZQ==" },
-					],
-					timestamp: 1,
-				},
-				makeAssistant(model.api, model.provider, model.id),
-				makeToolResult([{ type: "image", mimeType: "image/png", data: "ZmFrZQ==" }]),
-			],
-		};
-
-		const messages = convertCodexResponsesMessages(model, context);
-		expect(countTaggedValues(messages, "input_image")).toBe(0);
-		expect(messages.filter(item => (item as { role?: string }).role === "user")).toHaveLength(1);
-		expect(messages[0]).toMatchObject({
-			role: "user",
-			content: [
-				{ type: "input_text", text: "plot summary" },
-				{ type: "input_text", text: NON_VISION_IMAGE_PLACEHOLDER },
-			],
-		});
-		expect(messages.find(item => (item as { type?: string }).type === "function_call_output")).toMatchObject({
-			output: NON_VISION_IMAGE_PLACEHOLDER,
-		});
 	});
 
 	it("strips non-vision images from Anthropic payloads", () => {

@@ -20,9 +20,6 @@ export type ResolvedOpenAICompat = Required<
 function detectStrictModeSupport(provider: string, baseUrl: string): boolean {
 	if (
 		provider === "openai" ||
-		provider === "openrouter" ||
-		provider === "cerebras" ||
-		provider === "together" ||
 		provider === "github-copilot" ||
 		provider === "zenmux"
 	) {
@@ -34,9 +31,6 @@ function detectStrictModeSupport(provider: string, baseUrl: string): boolean {
 		normalizedBaseUrl.includes("api.openai.com") ||
 		normalizedBaseUrl.includes(".openai.azure.com") ||
 		normalizedBaseUrl.includes("models.inference.ai.azure.com") ||
-		normalizedBaseUrl.includes("api.cerebras.ai") ||
-		normalizedBaseUrl.includes("api.together.xyz") ||
-		normalizedBaseUrl.includes("openrouter.ai") ||
 		normalizedBaseUrl.includes("api.deepseek.com") ||
 		normalizedBaseUrl.includes("deepseek.com")
 	);
@@ -54,9 +48,7 @@ export function detectOpenAICompat(model: Model<"openai-completions">, resolvedB
 	// Use resolvedBaseUrl if provided (e.g., after GitHub Copilot proxy-ep resolution)
 	const baseUrl = resolvedBaseUrl ?? model.baseUrl;
 
-	const isCerebras = provider === "cerebras" || baseUrl.includes("cerebras.ai");
 	const isZai = provider === "zai" || baseUrl.includes("api.z.ai");
-	const isKilo = provider === "kilo" || baseUrl.includes("api.kilo.ai");
 	const isKimiModel = model.id.includes("moonshotai/kimi") || /(^|\/)kimi[-.]/i.test(model.id);
 	const isMoonshotKimi =
 		isKimiModel &&
@@ -69,8 +61,6 @@ export function detectOpenAICompat(model: Model<"openai-completions">, resolvedB
 		baseUrl.includes("api.anthropic.com") ||
 		/(^|\/)claude[-.]/i.test(model.id) ||
 		/(^|\/)anthropic\//i.test(model.id);
-	const isAlibaba = provider === "alibaba-coding-plan" || baseUrl.includes("dashscope");
-	const isQwen = model.id.toLowerCase().includes("qwen");
 	// DeepSeek V4 (and other reasoning-capable DeepSeek models) reject follow-up requests in
 	// thinking mode unless prior assistant tool-call turns include `reasoning_content`. The
 	// upstream model is reachable through many OpenAI-compat hosts (api.deepseek.com, Deepinfra,
@@ -87,36 +77,21 @@ export function detectOpenAICompat(model: Model<"openai-completions">, resolvedB
 	const isDirectDeepseekApi = provider === "deepseek" || baseUrl.includes("api.deepseek.com");
 	const isDirectDeepseekReasoning = isDirectDeepseekApi && isDeepseekFamily && Boolean(model.reasoning);
 	const isNonStandard =
-		isCerebras ||
-		provider === "xai" ||
-		baseUrl.includes("api.x.ai") ||
-		provider === "mistral" ||
-		baseUrl.includes("mistral.ai") ||
+		isZai ||
 		baseUrl.includes("chutes.ai") ||
 		baseUrl.includes("deepseek.com") ||
-		baseUrl.includes("fireworks.ai") ||
-		isAlibaba ||
-		isZai ||
-		isKilo ||
-		isQwen ||
 		provider === "opencode-zen" ||
 		provider === "opencode-go" ||
 		baseUrl.includes("opencode.ai");
 	const isOpenCodeProvider = provider === "opencode-go" || provider === "opencode-zen";
 
 	const useMaxTokens =
-		provider === "mistral" ||
-		baseUrl.includes("mistral.ai") ||
-		baseUrl.includes("chutes.ai") ||
-		baseUrl.includes("fireworks.ai") ||
 		isDirectDeepseekApi;
-	const isGrok = provider === "xai" || baseUrl.includes("api.x.ai");
-	const isMistral = provider === "mistral" || baseUrl.includes("mistral.ai");
 
 	// Hosts whose chat-completions endpoints are known to accept multiple
 	// leading `system`/`developer` messages (preferred for KV-cache reuse).
 	// Anything outside this allowlist defaults to coalescing because
-	// strict chat templates (Qwen 3.5+ via vLLM, MiniMax, etc.) reject
+	// strict chat templates (MiniMax, etc.) reject
 	// follow-up system messages with a 400.
 	const isOpenAIHost = provider === "openai" || baseUrl.includes("api.openai.com");
 	const isAzureHost =
@@ -124,114 +99,73 @@ export function detectOpenAICompat(model: Model<"openai-completions">, resolvedB
 		baseUrl.includes(".openai.azure.com") ||
 		baseUrl.includes("models.inference.ai.azure.com") ||
 		baseUrl.includes("azure.com/openai");
-	const isOpenRouter = provider === "openrouter" || baseUrl.includes("openrouter.ai");
-	const isTogether = provider === "together" || baseUrl.includes("api.together.xyz");
-	const isFireworks = baseUrl.includes("fireworks.ai");
-	const isGroqHost = provider === "groq" || baseUrl.includes("api.groq.com");
 	const isCopilotHost = provider === "github-copilot";
 	const isZenmuxHost = provider === "zenmux";
 	// Endpoints that MUST receive a single system block. MiniMax's OpenAI
-	// endpoint returns error 2013 on multiple system messages; Alibaba's
-	// Dashscope and Qwen Portal serve Qwen models whose chat template
-	// raises "System message must be at the beginning" if any system
-	// message appears past index 0.
+	// endpoint returns error 2013 on multiple system messages.
 	const isMiniMaxHost =
 		provider === "minimax-code" ||
 		provider === "minimax-code-cn" ||
 		baseUrl.includes("api.minimax.io") ||
 		baseUrl.includes("api.minimaxi.com");
-	const isQwenPortal = provider === "qwen-portal" || baseUrl.includes("portal.qwen.ai");
 	const supportsMultipleSystemMessagesDefault =
 		!isMiniMaxHost &&
-		!isAlibaba &&
-		!isQwenPortal &&
 		(isOpenAIHost ||
 			isAzureHost ||
-			isOpenRouter ||
-			isCerebras ||
-			isTogether ||
-			isFireworks ||
-			isGroqHost ||
 			isDeepseekFamily ||
-			isMistral ||
-			isGrok ||
 			isZai ||
 			isCopilotHost ||
 			isZenmuxHost);
 
 	const reasoningEffortMap: NonNullable<OpenAICompat["reasoningEffortMap"]> =
-		provider === "groq" && model.id === "qwen/qwen3-32b"
+		isDeepseekFamily && model.reasoning
 			? ({
-					minimal: "default",
-					low: "default",
-					medium: "default",
-					high: "default",
-					xhigh: "default",
-					max: "default",
+					minimal: "high",
+					low: "high",
+					medium: "high",
+					high: "high",
+					xhigh: "max",
+					max: "max",
 				} satisfies Partial<Record<OpenAIReasoningEffort, string>>)
-			: isDeepseekFamily && model.reasoning
-				? ({
-						minimal: "high",
-						low: "high",
-						medium: "high",
-						high: "high",
-						xhigh: "max",
-						max: "max",
-					} satisfies Partial<Record<OpenAIReasoningEffort, string>>)
-				: isFireworks
-					? ({
-							// Fireworks' OpenAI-compatible endpoint rejects OpenAI's
-							// `minimal` literal but accepts `none` for the lowest setting.
-							minimal: "none",
-						} satisfies Partial<Record<OpenAIReasoningEffort, string>>)
-					: {};
+			: {};
 
 	return {
 		supportsStore: !isNonStandard,
 		supportsDeveloperRole: !isNonStandard,
 		supportsMultipleSystemMessages: supportsMultipleSystemMessagesDefault,
-		supportsReasoningEffort: !isGrok && !isZai,
+		supportsReasoningEffort: !isZai,
 		reasoningEffortMap,
-		supportsUsageInStreaming: !isCerebras,
+		supportsUsageInStreaming: true,
 		disableReasoningOnForcedToolChoice: isKimiModel || isAnthropicModel,
-		disableReasoningOnToolChoice: isDeepseekFamily && Boolean(model.reasoning) && !isOpenRouter,
+		disableReasoningOnToolChoice: isDeepseekFamily && Boolean(model.reasoning),
 		supportsToolChoice: !isDirectDeepseekReasoning,
 		supportsForcedToolChoice: true,
 		maxTokensField: useMaxTokens ? "max_tokens" : "max_completion_tokens",
-		requiresToolResultName: isMistral,
+		requiresToolResultName: false,
 		requiresAssistantAfterToolResult: false,
-		requiresThinkingAsText: isMistral,
-		requiresMistralToolIds: isMistral,
+		requiresThinkingAsText: false,
+		requiresMistralToolIds: false,
 		thinkingFormat:
 			isZai || isMoonshotKimi
 				? "zai"
-				: provider === "openrouter" || baseUrl.includes("openrouter.ai")
-					? "openrouter"
-					: isAlibaba || isQwen
-						? "qwen"
-						: "openai",
+				: "openai",
 		reasoningContentField: "reasoning_content",
 		// Backends that 400 follow-up requests when prior assistant tool-call turns lack `reasoning_content`:
 		//   - Kimi: documented invariant on its native API.
-		//   - Any reasoning-capable model reached through OpenRouter: DeepSeek V4 Pro and similar enforce
-		//     this server-side whenever the request is in thinking mode. We can't translate Anthropic's
-		//     redacted/encrypted reasoning into DeepSeek's plaintext form, so cross-provider continuations
-		//     rely on a placeholder — see `convertMessages` for the placeholder injection.
 		//   - OpenCode-Go and OpenCode-Zen handle reasoning content internally and reject
 		//     `reasoning_content` in client-sent messages — exclude them even for Kimi models.
 		requiresReasoningContentForToolCalls:
 			(isKimiModel && !isOpenCodeProvider) ||
-			(isDeepseekFamily && Boolean(model.reasoning)) ||
-			((provider === "openrouter" || baseUrl.includes("openrouter.ai")) && Boolean(model.reasoning)),
+			(isDeepseekFamily && Boolean(model.reasoning)),
 		// DeepSeek V4 rejects synthetic reasoning_content placeholders (".") on tool-call turns.
-		// Kimi and OpenRouter accept them when actual reasoning is unavailable.
+		// Kimi accepts them when actual reasoning is unavailable.
 		allowsSyntheticReasoningContentForToolCalls: !isDeepseekFamily || !model.reasoning,
 		requiresAssistantContentForToolCalls: isKimiModel || isDirectDeepseekReasoning,
 		openRouterRouting: undefined,
 		vercelGatewayRouting: undefined,
 		supportsStrictMode: detectStrictModeSupport(provider, baseUrl),
 		extraBody: isDirectDeepseekReasoning ? { thinking: { type: "enabled" } } : undefined,
-		toolStrictMode: isCerebras ? "all_strict" : "mixed",
+		toolStrictMode: "mixed",
 	};
 }
 
