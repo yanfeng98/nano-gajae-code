@@ -21,7 +21,7 @@ import { e2eApiKey, resolveApiKey } from "./oauth";
 // Resolve OAuth tokens at module level (async, runs before tests)
 const oauthTokens = await Promise.all([
 	resolveApiKey("anthropic"),
-	resolveApiKey("github-copilot"),
+	resolveApiKey("anthropic"),
 	resolveApiKey("google-gemini-cli"),
 	resolveApiKey("google-antigravity"),
 	resolveApiKey("openai-codex"),
@@ -427,7 +427,7 @@ describe("totalTokens field", () => {
 		it.skipIf(!githubCopilotToken)(
 			"gpt-4o - should return totalTokens equal to sum of components",
 			async () => {
-				const llm = getBundledModel("github-copilot", "gpt-4o");
+				const llm = getBundledModel("anthropic", "gpt-4o");
 
 				console.log(`\nGitHub Copilot / ${llm.id}:`);
 				const { first, second } = await testTotalTokensWithCache(llm, { apiKey: githubCopilotToken });
@@ -444,7 +444,7 @@ describe("totalTokens field", () => {
 		it.skipIf(!githubCopilotToken)(
 			"claude-sonnet-4 - should return totalTokens equal to sum of components",
 			async () => {
-				const llm = getBundledModel("github-copilot", "claude-sonnet-4");
+				const llm = getBundledModel("anthropic", "claude-sonnet-4");
 
 				console.log(`\nGitHub Copilot / ${llm.id}:`);
 				const { first, second } = await testTotalTokensWithCache(llm, { apiKey: githubCopilotToken });

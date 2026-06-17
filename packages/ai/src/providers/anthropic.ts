@@ -58,7 +58,6 @@ import { isFoundryEnabled } from "../utils/foundry";
 import { finalizeErrorMessage, type RawHttpRequestDump, rewriteCopilotError } from "../utils/http-inspector";
 import { getStreamFirstEventTimeoutMs, getStreamIdleTimeoutMs, iterateWithIdleTimeout } from "../utils/idle-iterator";
 import { parseJsonWithRepair, parseStreamingJson } from "../utils/json-parse";
-import { parseGitHubCopilotApiKey } from "../utils/oauth/github-copilot";
 import { notifyProviderResponse } from "../utils/provider-response";
 import { isCopilotTransientModelError } from "../utils/retry";
 import { resolveRetryBudget } from "../utils/retry-budget";
@@ -71,11 +70,6 @@ import {
 	type ResolveToolChoiceResult,
 	resolveToolChoice,
 } from "../utils/tool-choice-capability";
-import {
-	buildCopilotDynamicHeaders,
-	hasCopilotVisionInput,
-	resolveGitHubCopilotBaseUrl,
-} from "./github-copilot-headers";
 import { transformMessages } from "./transform-messages";
 import { NON_VISION_IMAGE_PLACEHOLDER } from "./vision-guard";
 
@@ -659,10 +653,7 @@ type FoundryTlsOptions = {
 	key?: string;
 };
 
-function resolveAnthropicBaseUrl(model: Model<"anthropic-messages">, apiKey?: string): string | undefined {
-	if (model.provider === "github-copilot") {
-		return normalizeAnthropicBaseUrl(resolveGitHubCopilotBaseUrl(model.baseUrl, apiKey) ?? model.baseUrl);
-	}
+function resolveAnthropicBaseUrl(model: Model<"anthropic-messages">, _apiKey?: string): string | undefined {
 	if (model.provider === "anthropic" && isFoundryEnabled()) {
 		const foundryBaseUrl = normalizeAnthropicBaseUrl($env.FOUNDRY_BASE_URL);
 		if (foundryBaseUrl) {
@@ -1000,12 +991,6 @@ export function applyAnthropicUsageExtras(usage: Usage, source: AnthropicUsageLi
 	if (serverToolUse) {
 		const webSearch = serverToolUse.web_search_requests ?? 0;
 		const webFetch = serverToolUse.web_fetch_requests ?? 0;
-		if (webSearch > 0 || webFetch > 0) {
-			usage.server = {
-				...(webSearch > 0 ? { webSearch } : {}),
-				...(webFetch > 0 ? { webFetch } : {}),
-			};
-		}
 	}
 }
 
@@ -1019,24 +1004,12 @@ export const streamAnthropic: StreamFunction<"anthropic-messages"> = (
 	(async () => {
 		const startTime = Date.now();
 		let firstTokenTime: number | undefined;
-
-		const copilotDynamicHeaders =
-			model.provider === "github-copilot"
-				? buildCopilotDynamicHeaders({
-						messages: context.messages,
-						hasImages: hasCopilotVisionInput(context.messages),
-						premiumMultiplier: model.premiumMultiplier,
-						headers: { ...(model.headers ?? {}), ...(options?.headers ?? {}) },
-						initiatorOverride: options?.initiatorOverride,
-					})
-				: undefined;
 		const output: AssistantMessage = {
 			role: "assistant",
 			content: [],
 			api: model.api as Api,
 			provider: model.provider,
 			model: model.id,
-			usage: createEmptyUsage(copilotDynamicHeaders?.premiumRequests),
 			stopReason: "stop",
 			timestamp: Date.now(),
 		};
@@ -1066,7 +1039,6 @@ export const streamAnthropic: StreamFunction<"anthropic-messages"> = (
 					stream: true,
 					interleavedThinking: options?.interleavedThinking ?? true,
 					headers: options?.headers,
-					dynamicHeaders: copilotDynamicHeaders?.headers,
 					isOAuth: options?.isOAuth,
 					hasTools: !!context.tools?.length,
 					onSseEvent: options?.onSseEvent,
@@ -1409,7 +1381,6 @@ export const streamAnthropic: StreamFunction<"anthropic-messages"> = (
 						output.content.length = 0;
 						output.responseId = undefined;
 						output.providerPayload = undefined;
-						output.usage = createEmptyUsage(copilotDynamicHeaders?.premiumRequests);
 						output.stopReason = "stop";
 						firstTokenTime = undefined;
 						continue;
@@ -1442,7 +1413,6 @@ export const streamAnthropic: StreamFunction<"anthropic-messages"> = (
 						output.content.length = 0;
 						output.responseId = undefined;
 						output.providerPayload = undefined;
-						output.usage = createEmptyUsage(copilotDynamicHeaders?.premiumRequests);
 						output.stopReason = "stop";
 						firstTokenTime = undefined;
 						continue;
@@ -1462,7 +1432,6 @@ export const streamAnthropic: StreamFunction<"anthropic-messages"> = (
 						output.content.length = 0;
 						output.responseId = undefined;
 						output.providerPayload = undefined;
-						output.usage = createEmptyUsage(copilotDynamicHeaders?.premiumRequests);
 						output.stopReason = "stop";
 						firstTokenTime = undefined;
 						continue;
@@ -1486,7 +1455,6 @@ export const streamAnthropic: StreamFunction<"anthropic-messages"> = (
 						output.content.length = 0;
 						output.responseId = undefined;
 						output.providerPayload = undefined;
-						output.usage = createEmptyUsage(copilotDynamicHeaders?.premiumRequests);
 						output.stopReason = "stop";
 						firstTokenTime = undefined;
 						continue;
@@ -1514,7 +1482,6 @@ export const streamAnthropic: StreamFunction<"anthropic-messages"> = (
 					output.responseId = undefined;
 					output.errorMessage = strictFallbackErrorMessage;
 					output.providerPayload = undefined;
-					output.usage = createEmptyUsage(copilotDynamicHeaders?.premiumRequests);
 					output.stopReason = "stop";
 					firstTokenTime = undefined;
 				}
@@ -1634,37 +1601,6 @@ export function buildAnthropicClientOptions(args: AnthropicClientOptionsArgs): A
 		: args.fetch
 			? baseFetch
 			: undefined;
-	if (model.provider === "github-copilot") {
-		const copilotApiKey = parseGitHubCopilotApiKey(apiKey).accessToken;
-		const betaFeatures = [...extraBetas];
-		if (needsFineGrainedToolStreamingBeta) {
-			betaFeatures.push(fineGrainedToolStreamingBeta);
-		}
-		const defaultHeaders = mergeHeaders(
-			{
-				Accept: stream ? "text/event-stream" : "application/json",
-				"Anthropic-Dangerous-Direct-Browser-Access": "true",
-				Authorization: `Bearer ${copilotApiKey}`,
-				...(betaFeatures.length > 0 ? { "anthropic-beta": buildBetaHeader([], betaFeatures) } : {}),
-			},
-			model.headers,
-			dynamicHeaders,
-			headers,
-		);
-
-		return {
-			isOAuthToken: false,
-			apiKey: null,
-			authToken: copilotApiKey,
-			baseURL: baseUrl,
-			maxRetries: resolveRetryBudget(args.requestMaxRetries, 5),
-			dangerouslyAllowBrowser: true,
-			defaultHeaders,
-			logLevel: ANTHROPIC_SDK_LOG_LEVEL,
-			...(debugFetch ? { fetch: debugFetch } : {}),
-			...(tlsFetchOptions ? { fetchOptions: tlsFetchOptions } : {}),
-		};
-	}
 
 	const betaFeatures = [...extraBetas];
 	if (needsFineGrainedToolStreamingBeta) {
@@ -2006,7 +1942,7 @@ function buildParams(
 	context: Context,
 	isOAuthToken: boolean,
 	options?: AnthropicOptions,
-	disableStrictTools = false,
+	_disableStrictTools = false,
 	repairLatestAssistantThinking = false,
 ): MessageCreateParamsStreaming {
 	const { cacheControl } = getCacheControl(model, baseUrl, options?.cacheRetention);
@@ -2044,15 +1980,6 @@ function buildParams(
 		delete params.top_p;
 		delete params.top_k;
 		delete params.temperature;
-	}
-
-	if (context.tools) {
-		params.tools = convertTools(
-			context.tools,
-			isOAuthToken,
-			disableStrictTools || model.provider === "github-copilot",
-			getAnthropicCompat(model).supportsEagerToolInputStreaming,
-		);
 	}
 
 	if (model.reasoning) {

@@ -131,7 +131,7 @@ describe("ModelRegistry runtime provider registration", () => {
 			modelsJsonPath,
 			JSON.stringify({
 				providers: {
-					"amazon-bedrock": {
+					anthropic: {
 						baseUrl: "https://bedrock-runtime.us-east-1.amazonaws.com",
 						api: "bedrock-converse-stream",
 						models: [{ id: "us.anthropic.claude-opus-4-6-v1" }],
@@ -141,7 +141,7 @@ describe("ModelRegistry runtime provider registration", () => {
 		);
 
 		const registry = new ModelRegistry(authStorage, modelsJsonPath);
-		const model = registry.find("amazon-bedrock", "us.anthropic.claude-opus-4-6-v1");
+		const model = registry.find("anthropic", "us.anthropic.claude-opus-4-6-v1");
 
 		expect(registry.getError()).toBeUndefined();
 		expect(model?.api).toBe("bedrock-converse-stream");

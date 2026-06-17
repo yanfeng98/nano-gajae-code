@@ -966,7 +966,7 @@ describe("ModelRegistry", () => {
 
 		test("custom same-id replacement does not keep bundled headers", () => {
 			writeRawModelsJson({
-				"github-copilot": {
+				anthropic: {
 					baseUrl: "https://proxy.example.com/v1",
 					headers: { "X-Proxy": "proxy" },
 					apiKey: "TEST_KEY",
@@ -976,7 +976,7 @@ describe("ModelRegistry", () => {
 			});
 
 			const registry = new ModelRegistry(authStorage, modelsJsonPath);
-			const model = registry.find("github-copilot", "gpt-4o");
+			const model = registry.find("anthropic", "gpt-4o");
 
 			expect(model?.headers).toEqual({ "X-Proxy": "proxy" });
 			expect(model?.headers?.["User-Agent"]).toBeUndefined();
@@ -1430,7 +1430,7 @@ describe("ModelRegistry", () => {
 					modelOverrides: {
 						"anthropic/claude-sonnet-4": {
 							compat: {
-								openRouterRouting: { only: ["amazon-bedrock"] },
+								openRouterRouting: { only: ["anthropic"] },
 							},
 						},
 					},
@@ -1442,7 +1442,7 @@ describe("ModelRegistry", () => {
 
 			const sonnet = models.find(m => m.id === "anthropic/claude-sonnet-4");
 			const compat = sonnet?.compat as OpenAICompat | undefined;
-			expect(compat?.openRouterRouting).toEqual({ only: ["amazon-bedrock"] });
+			expect(compat?.openRouterRouting).toEqual({ only: ["anthropic"] });
 		});
 
 		test("model override deep merges compat settings", () => {
@@ -1500,7 +1500,7 @@ describe("ModelRegistry", () => {
 				openrouter: {
 					modelOverrides: {
 						"anthropic/claude-sonnet-4": {
-							compat: { openRouterRouting: { only: ["amazon-bedrock"] } },
+							compat: { openRouterRouting: { only: ["anthropic"] } },
 						},
 						"anthropic/claude-opus-4": {
 							compat: { openRouterRouting: { only: ["anthropic"] } },
@@ -1517,7 +1517,7 @@ describe("ModelRegistry", () => {
 
 			const sonnetCompat = sonnet?.compat as OpenAICompat | undefined;
 			const opusCompat = opus?.compat as OpenAICompat | undefined;
-			expect(sonnetCompat?.openRouterRouting).toEqual({ only: ["amazon-bedrock"] });
+			expect(sonnetCompat?.openRouterRouting).toEqual({ only: ["anthropic"] });
 			expect(opusCompat?.openRouterRouting).toEqual({ only: ["anthropic"] });
 		});
 
@@ -1669,7 +1669,7 @@ describe("ModelRegistry", () => {
 
 	describe("github-copilot oauth endpoint alignment", () => {
 		test("getApiKey does not mutate bundled github-copilot baseUrl", async () => {
-			await authStorage.set("github-copilot", [
+			await authStorage.set("anthropic", [
 				{
 					type: "oauth",
 					access: "ghu_individual_token_123",
@@ -1686,7 +1686,7 @@ describe("ModelRegistry", () => {
 			]);
 
 			const registry = new ModelRegistry(authStorage, modelsJsonPath);
-			const model = registry.find("github-copilot", "gpt-4o");
+			const model = registry.find("anthropic", "gpt-4o");
 			expect(model).toBeDefined();
 			if (!model) throw new Error("Expected github-copilot/gpt-4o model");
 
@@ -1705,7 +1705,7 @@ describe("ModelRegistry", () => {
 		});
 
 		test("refreshProvider uses enterprise Copilot discovery host for peeked credentials", async () => {
-			await authStorage.set("github-copilot", [
+			await authStorage.set("anthropic", [
 				{
 					type: "oauth",
 					access: "ghu_enterprise_token_456",
@@ -1741,7 +1741,7 @@ describe("ModelRegistry", () => {
 			});
 
 			const registry = new ModelRegistry(authStorage, modelsJsonPath);
-			await registry.refreshProvider("github-copilot", "online");
+			await registry.refreshProvider("anthropic", "online");
 			expect(requestedUrls).toContain("https://copilot-api.ghe.example.com/models");
 			expect(requestedUrls).not.toContain("https://api.githubcopilot.com/models");
 		});
@@ -1757,7 +1757,7 @@ describe("ModelRegistry", () => {
 					discovery: { type: "ollama" },
 				},
 			});
-			await authStorage.set("github-copilot", [
+			await authStorage.set("anthropic", [
 				{
 					type: "oauth",
 					access: "ghu_test_token_for_disabled",
@@ -1768,13 +1768,13 @@ describe("ModelRegistry", () => {
 			await Settings.init({
 				inMemory: true,
 				overrides: {
-					disabledProviders: ["github-copilot", "ollama"],
+					disabledProviders: ["anthropic", "ollama"],
 				},
 			});
 
 			const registry = new ModelRegistry(authStorage, modelsJsonPath);
 
-			expect(registry.getAvailable().some(model => model.provider === "github-copilot")).toBe(false);
+			expect(registry.getAvailable().some(model => model.provider === "anthropic")).toBe(false);
 			expect(registry.getDiscoverableProviders()).not.toContain("ollama");
 		});
 

@@ -46,7 +46,6 @@ import {
 	getStreamFirstEventTimeoutMs,
 	iterateWithIdleTimeout,
 } from "../utils/idle-iterator";
-import { parseGitHubCopilotApiKey } from "../utils/oauth/github-copilot";
 import { notifyProviderResponse } from "../utils/provider-response";
 import { callWithCopilotModelRetry } from "../utils/retry";
 import { resolveRetryBudget } from "../utils/retry-budget";
@@ -58,11 +57,6 @@ import {
 	markToolChoiceIncapability,
 	resolveToolChoice,
 } from "../utils/tool-choice-capability";
-import {
-	buildCopilotDynamicHeaders,
-	hasCopilotVisionInput,
-	resolveGitHubCopilotBaseUrl,
-} from "./github-copilot-headers";
 import { compactGrammarDefinition } from "./grammar";
 import {
 	applyOpenAIRequestTransformBody,
@@ -256,7 +250,7 @@ export const streamOpenAIResponses: StreamFunction<"openai-responses"> = (
 			// Keep request headers and prompt-cache routing on the same session-derived value.
 			const cacheSessionId = getOpenAIResponsesCacheSessionId(options);
 			const apiKey = options?.apiKey || getEnvApiKey(model.provider) || "";
-			const { client, copilotPremiumRequests, baseUrl } = createClient(
+			const { client, baseUrl } = createClient(
 				model,
 				context,
 				apiKey,
@@ -268,7 +262,6 @@ export const streamOpenAIResponses: StreamFunction<"openai-responses"> = (
 				options?.authCredentialType,
 				options?.requestMaxRetries,
 			);
-			const premiumRequestsTotal = copilotPremiumRequests;
 			const providerSessionState = getOpenAIResponsesProviderSessionState(model, options?.providerSessionState);
 			const { params } = buildParams(model, context, options, providerSessionState, baseUrl);
 			const idleTimeoutMs = options?.streamIdleTimeoutMs ?? getOpenAIStreamIdleTimeoutMs();
@@ -319,7 +312,7 @@ export const streamOpenAIResponses: StreamFunction<"openai-responses"> = (
 				options?.streamFirstEventTimeoutMs ?? getStreamFirstEventTimeoutMs(idleTimeoutMs),
 				() => abortTracker.abortLocally(firstEventTimeoutAbortError),
 			);
-			if (premiumRequestsTotal !== undefined) output.usage.premiumRequests = premiumRequestsTotal;
+			if (undefined !== undefined) output.usage.premiumRequests = undefined;
 			stream.push({ type: "start", partial: output });
 
 			const nativeOutputItems: Array<Record<string, unknown>> = [];
@@ -344,7 +337,7 @@ export const streamOpenAIResponses: StreamFunction<"openai-responses"> = (
 					},
 				},
 			);
-			if (premiumRequestsTotal !== undefined) output.usage.premiumRequests = premiumRequestsTotal;
+			if (undefined !== undefined) output.usage.premiumRequests = undefined;
 
 			const firstEventTimeoutError = abortTracker.getLocalAbortReason();
 			if (firstEventTimeoutError) {
@@ -384,7 +377,7 @@ export const streamOpenAIResponses: StreamFunction<"openai-responses"> = (
 
 function createClient(
 	model: Model<"openai-responses">,
-	context: Context,
+	_context: Context,
 	apiKey?: string,
 	extraHeaders?: Record<string, string>,
 	initiatorOverride?: MessageAttribution,
@@ -395,7 +388,6 @@ function createClient(
 	requestMaxRetries?: number,
 ): {
 	client: OpenAI;
-	copilotPremiumRequests: number | undefined;
 	baseUrl: string | undefined;
 } {
 	if (!apiKey) {
@@ -413,26 +405,11 @@ function createClient(
 		model.requestTransform,
 		`Gajae-Code/${packageJson.version}`,
 	);
-	let copilotPremiumRequests: number | undefined;
 
 	let baseUrl =
 		model.provider === "openai" ? resolveOpenAIProviderBaseUrl(model.baseUrl, authCredentialType) : model.baseUrl;
 	if (model.provider === "openai" && !baseUrl) {
 		baseUrl = OPENAI_DEFAULT_BASE_URL;
-	}
-	if (model.provider === "github-copilot") {
-		apiKey = parseGitHubCopilotApiKey(rawApiKey).accessToken;
-		const hasImages = hasCopilotVisionInput(context.messages);
-		const copilot = buildCopilotDynamicHeaders({
-			messages: context.messages,
-			hasImages,
-			premiumMultiplier: model.premiumMultiplier,
-			headers,
-			initiatorOverride,
-		});
-		Object.assign(headers, copilot.headers);
-		copilotPremiumRequests = copilot.premiumRequests;
-		baseUrl = resolveGitHubCopilotBaseUrl(model.baseUrl, rawApiKey) ?? model.baseUrl;
 	}
 	if (sessionId && model.provider === "openai" && (!model.baseUrl || (baseUrl && isDefaultOpenAIBaseUrl(baseUrl)))) {
 		headers.session_id ??= sessionId;
@@ -455,7 +432,6 @@ function createClient(
 				? wrapFetchForSseDebug(transformedFetch, event => onSseEvent(event, model))
 				: transformedFetch,
 		}),
-		copilotPremiumRequests,
 		baseUrl,
 	};
 }
@@ -473,9 +449,7 @@ function buildParams(
 	providerSessionState: OpenAIResponsesProviderSessionState | undefined,
 	resolvedBaseUrl?: string,
 ): { conversationMessages: ResponseInput; params: OpenAIResponsesSamplingParams } {
-	const strictResponsesPairing =
-		options?.strictResponsesPairing ??
-		(isAzureOpenAIBaseUrl(model.baseUrl ?? "") || model.provider === "github-copilot");
+	const strictResponsesPairing = options?.strictResponsesPairing ?? isAzureOpenAIBaseUrl(model.baseUrl ?? "");
 	const conversationMessages = convertConversationMessages(
 		model,
 		context,
@@ -568,7 +542,7 @@ function isAzureOpenAIBaseUrl(baseUrl: string): boolean {
 }
 
 function supportsStrictMode(model: Model<"openai-responses">): boolean {
-	if (model.provider === "openai" || model.provider === "azure" || model.provider === "github-copilot") return true;
+	if (model.provider === "openai" || model.provider === "azure") return true;
 
 	const baseUrl = model.baseUrl;
 	const lowerBaseUrl = baseUrl.toLowerCase();
@@ -589,9 +563,7 @@ export function supportsDeveloperRole(modelOrBaseUrl: Pick<Model, "provider" | "
 		isOpenAIHostBaseUrl(baseUrl) ||
 		lowerBaseUrl.includes(".openai.azure.com") ||
 		lowerBaseUrl.includes("azure.com/openai") ||
-		lowerBaseUrl.includes("models.inference.ai.azure.com") ||
-		lowerBaseUrl.includes("githubcopilot.com") ||
-		lowerBaseUrl.includes("copilot-api.")
+		lowerBaseUrl.includes("models.inference.ai.azure.com")
 	);
 }
 

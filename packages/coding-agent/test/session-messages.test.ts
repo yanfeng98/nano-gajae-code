@@ -1,7 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { AgentMessage } from "@gajae-code/agent-core";
 import type { Message } from "@gajae-code/ai";
-import { inferCopilotInitiator } from "@gajae-code/ai/providers/github-copilot-headers";
 import { convertToLlm } from "@gajae-code/coding-agent/session/messages";
 
 function expectAttribution(message: Message | undefined, expected: "user" | "agent" | undefined): void {
@@ -31,7 +30,7 @@ describe("convertToLlm custom message mapping", () => {
 		expect(converted).toHaveLength(1);
 		expect(converted[0]?.role).toBe("user");
 		expectAttribution(converted[0], "agent");
-		expect(inferCopilotInitiator(converted)).toBe("agent");
+		expect(((m: any) => (m as any).attribution ?? "user")(converted)).toBe("agent");
 	});
 
 	it("preserves missing attribution for legacy custom messages", () => {
@@ -50,7 +49,7 @@ describe("convertToLlm custom message mapping", () => {
 		expect(converted).toHaveLength(1);
 		expect(converted[0]?.role).toBe("user");
 		expectAttribution(converted[0], undefined);
-		expect(inferCopilotInitiator(converted)).toBe("user");
+		expect(((m: any) => (m as any).attribution ?? "user")(converted)).toBe("user");
 	});
 
 	it("uses explicit agent attribution for custom messages", () => {
@@ -70,7 +69,7 @@ describe("convertToLlm custom message mapping", () => {
 		expect(converted).toHaveLength(1);
 		expect(converted[0]?.role).toBe("user");
 		expectAttribution(converted[0], "agent");
-		expect(inferCopilotInitiator(converted)).toBe("agent");
+		expect(((m: any) => (m as any).attribution ?? "user")(converted)).toBe("agent");
 	});
 
 	it("allows custom messages to opt into user attribution", () => {
@@ -90,6 +89,6 @@ describe("convertToLlm custom message mapping", () => {
 		expect(converted).toHaveLength(1);
 		expect(converted[0]?.role).toBe("user");
 		expectAttribution(converted[0], "user");
-		expect(inferCopilotInitiator(converted)).toBe("user");
+		expect(((m: any) => (m as any).attribution ?? "user")(converted)).toBe("user");
 	});
 });

@@ -13,7 +13,7 @@ import { e2eApiKey, resolveApiKey } from "./oauth";
 // Resolve OAuth tokens at module level (async, runs before tests)
 const oauthTokens = await Promise.all([
 	resolveApiKey("anthropic"),
-	resolveApiKey("github-copilot"),
+	resolveApiKey("anthropic"),
 	resolveApiKey("google-gemini-cli"),
 	resolveApiKey("google-antigravity"),
 	resolveApiKey("openai-codex"),
@@ -1201,7 +1201,7 @@ describe("Generate E2E Tests", () => {
 	});
 
 	describe("GitHub Copilot Provider (gpt-4o via OpenAI Completions)", () => {
-		const llm = getBundledModel("github-copilot", "gpt-4o");
+		const llm = getBundledModel("anthropic", "gpt-4o");
 
 		it.skipIf(!githubCopilotToken)(
 			"should complete basic text generation",
@@ -1230,7 +1230,7 @@ describe("Generate E2E Tests", () => {
 		it.skipIf(!githubCopilotToken)(
 			"should handle thinking",
 			async () => {
-				const thinkingModel = getBundledModel("github-copilot", "gpt-5-mini");
+				const thinkingModel = getBundledModel("anthropic", "gpt-5-mini");
 				await handleThinking(thinkingModel, { apiKey: githubCopilotToken, reasoning: Effort.High });
 			},
 			{ retry: 2 },
@@ -1239,7 +1239,7 @@ describe("Generate E2E Tests", () => {
 		it.skipIf(!githubCopilotToken)(
 			"should handle multi-turn with thinking and tools",
 			async () => {
-				const thinkingModel = getBundledModel("github-copilot", "gpt-5-mini");
+				const thinkingModel = getBundledModel("anthropic", "gpt-5-mini");
 				await multiTurn(thinkingModel, { apiKey: githubCopilotToken, reasoning: Effort.High });
 			},
 			{ retry: 3 },
@@ -1496,7 +1496,7 @@ describe("Generate E2E Tests", () => {
 	});
 
 	describe.skipIf(!hasBedrockCredentials())("Amazon Bedrock Provider (claude-opus-4-6 interleaved thinking)", () => {
-		const llm = getBundledModel("amazon-bedrock", "global.anthropic.claude-opus-4-6-v1");
+		const llm = getBundledModel("anthropic", "global.anthropic.claude-opus-4-6-v1");
 
 		it(
 			"should use adaptive thinking without anthropic_beta",

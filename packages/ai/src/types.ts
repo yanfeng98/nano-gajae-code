@@ -1,10 +1,7 @@
 import type { ZodType, z } from "zod/v4";
-import type { BedrockOptions } from "./providers/amazon-bedrock";
 import type { AnthropicOptions } from "./providers/anthropic";
-import type { AzureOpenAIResponsesOptions } from "./providers/azure-openai-responses";
 import type { GoogleOptions } from "./providers/google";
 import type { GoogleGeminiCliOptions } from "./providers/google-gemini-cli";
-import type { GoogleVertexOptions } from "./providers/google-vertex";
 import type { OllamaChatOptions } from "./providers/ollama";
 import type { OpenAICodexResponsesOptions } from "./providers/openai-codex-responses";
 import type { OpenAICompletionsOptions } from "./providers/openai-completions";
@@ -17,24 +14,18 @@ export type KnownApi =
 	| "openai-completions"
 	| "openai-responses"
 	| "openai-codex-responses"
-	| "azure-openai-responses"
 	| "anthropic-messages"
-	| "bedrock-converse-stream"
 	| "google-generative-ai"
 	| "google-gemini-cli"
-	| "google-vertex"
 	| "ollama-chat";
 export type Api = KnownApi | (string & {});
 export interface ApiOptionsMap {
 	"anthropic-messages": AnthropicOptions;
-	"bedrock-converse-stream": BedrockOptions;
 	"openai-completions": OpenAICompletionsOptions;
 	"openai-responses": OpenAIResponsesOptions;
 	"openai-codex-responses": OpenAICodexResponsesOptions;
-	"azure-openai-responses": AzureOpenAIResponsesOptions;
 	"google-generative-ai": GoogleOptions;
 	"google-gemini-cli": GoogleGeminiCliOptions;
-	"google-vertex": GoogleVertexOptions;
 	"ollama-chat": OllamaChatOptions;
 }
 // Compile-time exhaustiveness check - this will fail if ApiOptionsMap doesn't have all KnownApi keys
@@ -76,51 +67,34 @@ export interface ThinkingConfig {
 }
 
 export type KnownProvider =
-	| "alibaba-coding-plan"
-	| "amazon-bedrock"
-	| "azure-openai"
 	| "anthropic"
 	| "google"
 	| "google-gemini-cli"
 	| "google-antigravity"
-	| "google-vertex"
 	| "openai"
 	| "openai-codex"
 	| "kimi-code"
 	| "minimax-code"
 	| "minimax-code-cn"
-	| "github-copilot"
 	| "fireworks"
-	| "firepass"
-	| "gitlab-duo"
 	| "deepseek"
 	| "xai"
 	| "groq"
 	| "cerebras"
 	| "openrouter"
-	| "kilo"
-	| "vercel-ai-gateway"
 	| "zai"
 	| "mistral"
 	| "minimax"
 	| "opencode-go"
 	| "opencode-zen"
-	| "synthetic"
-	| "cloudflare-ai-gateway"
 	| "huggingface"
 	| "litellm"
 	| "moonshot"
 	| "nvidia"
-	| "nanogpt"
 	| "ollama"
 	| "ollama-cloud"
-	| "qianfan"
-	| "qwen-portal"
 	| "together"
-	| "venice"
 	| "vllm"
-	| "xiaomi"
-	| "zenmux"
 	| "lm-studio";
 export type Provider = KnownProvider | string;
 
@@ -396,8 +370,6 @@ export interface SimpleStreamOptions extends StreamOptions {
 	serviceTier?: ServiceTier;
 	/** API format for Kimi Code provider: "openai" or "anthropic" (default: "anthropic") */
 	kimiApiFormat?: "openai" | "anthropic";
-	/** API format for Synthetic provider: "openai" or "anthropic" (default: "openai") */
-	syntheticApiFormat?: "openai" | "anthropic";
 	/** Hint that websocket transport should be preferred when supported by the provider implementation. */
 	preferWebsockets?: boolean;
 }
@@ -852,14 +824,7 @@ export interface Model<TApi extends Api = any> {
 		? OpenAICompat
 		: TApi extends "anthropic-messages"
 			? AnthropicCompat
-			: TApi extends
-						| "bedrock-converse-stream"
-						| "google-generative-ai"
-						| "google-gemini-cli"
-						| "google-vertex"
-						| "ollama-chat"
-						| "azure-openai-responses"
-						| "openai-codex-responses"
+			: TApi extends "google-generative-ai" | "google-gemini-cli" | "ollama-chat" | "openai-codex-responses"
 				? ToolChoiceCompat
 				: never;
 	/**

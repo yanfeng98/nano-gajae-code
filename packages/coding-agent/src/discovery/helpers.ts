@@ -55,11 +55,6 @@ export const SOURCE_PATHS = {
 		userAgent: ".config/opencode",
 		projectDir: ".opencode",
 	},
-	cursor: {
-		userBase: ".cursor",
-		userAgent: ".cursor",
-		projectDir: ".cursor",
-	},
 	windsurf: {
 		userBase: ".codeium/windsurf",
 		userAgent: ".codeium/windsurf",

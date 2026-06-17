@@ -89,7 +89,7 @@ describe("provider onboarding setup core", () => {
 						api: "azure-openai-responses",
 						models: [{ id: "gpt-4.1" }],
 					},
-					"amazon-bedrock": {
+					anthropic: {
 						baseUrl: "https://bedrock-runtime.us-east-1.amazonaws.com",
 						api: "bedrock-converse-stream",
 						models: [{ id: "us.anthropic.claude-opus-4-6-v1" }],

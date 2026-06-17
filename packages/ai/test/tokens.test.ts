@@ -7,7 +7,7 @@ import { e2eApiKey, resolveApiKey } from "./oauth";
 // Resolve OAuth tokens at module level (async, runs before tests)
 const oauthTokens = await Promise.all([
 	resolveApiKey("anthropic"),
-	resolveApiKey("github-copilot"),
+	resolveApiKey("anthropic"),
 	resolveApiKey("google-gemini-cli"),
 	resolveApiKey("google-antigravity"),
 	resolveApiKey("openai-codex"),
@@ -196,7 +196,7 @@ describe("Token Statistics on Abort", () => {
 		it.skipIf(!githubCopilotToken)(
 			"gpt-4o - should include token stats when aborted mid-stream",
 			async () => {
-				const llm = getBundledModel("github-copilot", "gpt-4o");
+				const llm = getBundledModel("anthropic", "gpt-4o");
 				await testTokensOnAbort(llm, { apiKey: githubCopilotToken });
 			},
 			{ retry: 3, timeout: 30000 },
@@ -205,7 +205,7 @@ describe("Token Statistics on Abort", () => {
 		it.skipIf(!githubCopilotToken)(
 			"claude-sonnet-4 - should include token stats when aborted mid-stream",
 			async () => {
-				const llm = getBundledModel("github-copilot", "claude-sonnet-4");
+				const llm = getBundledModel("anthropic", "claude-sonnet-4");
 				await testTokensOnAbort(llm, { apiKey: githubCopilotToken });
 			},
 			{ retry: 3, timeout: 30000 },

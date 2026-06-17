@@ -11,27 +11,23 @@ export * from "./models";
 export * from "./provider-details";
 export * from "./provider-models";
 export * from "./providers/anthropic";
-export * from "./providers/azure-openai-responses";
 
-export * from "./providers/gitlab-duo";
 export type * from "./providers/google";
 export type * from "./providers/google-gemini-cli";
 export * from "./providers/google-gemini-headers";
-export type * from "./providers/google-vertex";
 export * from "./providers/kimi";
 export * from "./providers/mock";
 export * from "./providers/ollama";
 export * from "./providers/openai-codex-responses";
 export * from "./providers/openai-completions";
 export * from "./providers/openai-responses";
-export * from "./providers/synthetic";
+
 export * from "./rate-limit-utils";
 export * from "./stream";
 export * from "./types";
 export * from "./usage";
 export * from "./usage/claude";
 export * from "./usage/gemini";
-export * from "./usage/github-copilot";
 export * from "./usage/google-antigravity";
 export * from "./usage/kimi";
 export * from "./usage/minimax-code";

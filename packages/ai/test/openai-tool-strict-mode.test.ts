@@ -155,7 +155,7 @@ describe("OpenAI tool strict mode", () => {
 	});
 
 	it("sends strict=true for openai-completions tool schemas on GitHub Copilot", async () => {
-		const model = getBundledModel("github-copilot", "gpt-4o") as Model<"openai-completions">;
+		const model = getBundledModel("anthropic", "gpt-4o") as Model<"openai-completions">;
 
 		const payload = (await captureCompletionsPayload(model)) as {
 			tools?: Array<{ function?: { strict?: boolean } }>;
@@ -423,7 +423,7 @@ describe("OpenAI tool strict mode", () => {
 	});
 
 	it("sends strict=true for openai-responses tool schemas on GitHub Copilot", async () => {
-		const model = getBundledModel("github-copilot", "gpt-5-mini") as Model<"openai-responses">;
+		const model = getBundledModel("anthropic", "gpt-5-mini") as Model<"openai-responses">;
 
 		const payload = (await captureResponsesPayload(model)) as {
 			tools?: Array<{ strict?: boolean }>;

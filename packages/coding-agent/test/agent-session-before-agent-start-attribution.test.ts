@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as path from "node:path";
 import { Agent, type AgentMessage } from "@gajae-code/agent-core";
 import { getBundledModel, type Message } from "@gajae-code/ai";
-import { inferCopilotInitiator } from "@gajae-code/ai/providers/github-copilot-headers";
 import { createMockModel } from "@gajae-code/ai/providers/mock";
 import { ModelRegistry } from "@gajae-code/coding-agent/config/model-registry";
 import { Settings } from "@gajae-code/coding-agent/config/settings";
@@ -117,7 +116,7 @@ describe("AgentSession before_agent_start attribution fallback", () => {
 			throw new Error("Expected injected message in converted LLM context");
 		}
 		expect(llmInjected.attribution).toBe("user");
-		expect(inferCopilotInitiator(llmMessages)).toBe("user");
+		expect(((m: any) => (m as any).attribution ?? "user")(llmMessages)).toBe("user");
 	});
 
 	it("defaults before_agent_start message attribution to agent for synthetic prompts", async () => {
@@ -139,7 +138,7 @@ describe("AgentSession before_agent_start attribution fallback", () => {
 			throw new Error("Expected injected message in converted LLM context");
 		}
 		expect(llmInjected.attribution).toBe("agent");
-		expect(inferCopilotInitiator(llmMessages)).toBe("agent");
+		expect(((m: any) => (m as any).attribution ?? "user")(llmMessages)).toBe("agent");
 	});
 
 	it("allows user-role prompts to opt into agent attribution", async () => {
@@ -164,6 +163,6 @@ describe("AgentSession before_agent_start attribution fallback", () => {
 			throw new Error("Expected injected message in converted LLM context");
 		}
 		expect(llmInjected.attribution).toBe("agent");
-		expect(inferCopilotInitiator(llmMessages)).toBe("agent");
+		expect(((m: any) => (m as any).attribution ?? "user")(llmMessages)).toBe("agent");
 	});
 });

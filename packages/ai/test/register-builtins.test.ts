@@ -8,7 +8,7 @@ function createModel(): Model<"bedrock-converse-stream"> {
 		id: "mock-bedrock",
 		name: "Mock Bedrock",
 		api: "bedrock-converse-stream",
-		provider: "amazon-bedrock",
+		provider: "anthropic",
 		baseUrl: "https://example.invalid",
 		reasoning: false,
 		input: ["text"],
@@ -26,7 +26,7 @@ function createAssistantMessage(
 		role: "assistant",
 		content: [{ type: "text", text: errorMessage ? `error: ${errorMessage}` : "ok" }],
 		api: "bedrock-converse-stream",
-		provider: "amazon-bedrock",
+		provider: "anthropic",
 		model: "mock-bedrock",
 		usage: {
 			input: 0,

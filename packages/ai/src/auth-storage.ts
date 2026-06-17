@@ -25,7 +25,6 @@ import type {
 } from "./usage";
 import { claudeRankingStrategy, claudeUsageProvider } from "./usage/claude";
 import { googleGeminiCliUsageProvider } from "./usage/gemini";
-import { githubCopilotUsageProvider } from "./usage/github-copilot";
 import { antigravityUsageProvider } from "./usage/google-antigravity";
 import { kimiUsageProvider } from "./usage/kimi";
 import { codexRankingStrategy, openaiCodexUsageProvider } from "./usage/openai-codex";
@@ -369,7 +368,6 @@ const DEFAULT_USAGE_PROVIDERS: UsageProvider[] = [
 	googleGeminiCliUsageProvider,
 	claudeUsageProvider,
 	zaiUsageProvider,
-	githubCopilotUsageProvider,
 ];
 
 const DEFAULT_USAGE_PROVIDER_MAP = new Map<Provider, UsageProvider>(
@@ -1360,22 +1358,6 @@ export class AuthStorage {
 				});
 				break;
 			}
-			case "alibaba-coding-plan": {
-				const { loginAlibabaCodingPlan } = await import("./utils/oauth/alibaba-coding-plan");
-				const apiKey = await loginAlibabaCodingPlan(ctrl);
-				await saveApiKeyCredential(apiKey);
-				return;
-			}
-			case "github-copilot": {
-				const { loginGitHubCopilot } = await import("./utils/oauth/github-copilot");
-				credentials = await loginGitHubCopilot({
-					onAuth: (url, instructions) => ctrl.onAuth({ url, instructions }),
-					onPrompt: ctrl.onPrompt,
-					onProgress: ctrl.onProgress,
-					signal: ctrl.signal,
-				});
-				break;
-			}
 			case "google-gemini-cli": {
 				const { loginGeminiCli } = await import("./utils/oauth/google-gemini-cli");
 				credentials = await loginGeminiCli({
@@ -1408,22 +1390,9 @@ export class AuthStorage {
 				await this.#upsertOAuthCredential("openai-codex", newCredential);
 				return;
 			}
-			case "gitlab-duo": {
-				const { loginGitLabDuo } = await import("./utils/oauth/gitlab-duo");
-				credentials = await loginGitLabDuo({
-					...ctrl,
-					onManualCodeInput: ctrl.onManualCodeInput ?? manualCodeInput,
-				});
-				break;
-			}
 			case "kimi-code": {
 				const { loginKimi } = await import("./utils/oauth/kimi");
 				credentials = await loginKimi(ctrl);
-				break;
-			}
-			case "kilo": {
-				const { loginKilo } = await import("./utils/oauth/kilo");
-				credentials = await loginKilo(ctrl);
 				break;
 			}
 			case "perplexity": {
@@ -1441,12 +1410,6 @@ export class AuthStorage {
 			case "opencode-go": {
 				const { loginOpenCode } = await import("./utils/oauth/opencode");
 				const apiKey = await loginOpenCode(ctrl);
-				await saveApiKeyCredential(apiKey);
-				return;
-			}
-			case "lm-studio": {
-				const { loginLmStudio } = await import("./utils/oauth/lm-studio");
-				const apiKey = await loginLmStudio(ctrl);
 				await saveApiKeyCredential(apiKey);
 				return;
 			}
@@ -1490,21 +1453,9 @@ export class AuthStorage {
 				await saveApiKeyCredential(apiKey);
 				return;
 			}
-			case "firepass": {
-				const { loginFirepass } = await import("./utils/oauth/firepass");
-				const apiKey = await loginFirepass(ctrl);
-				await saveApiKeyCredential(apiKey);
-				return;
-			}
 			case "zai": {
 				const { loginZai } = await import("./utils/oauth/zai");
 				const apiKey = await loginZai(ctrl);
-				await saveApiKeyCredential(apiKey);
-				return;
-			}
-			case "qianfan": {
-				const { loginQianfan } = await import("./utils/oauth/qianfan");
-				const apiKey = await loginQianfan(ctrl);
 				await saveApiKeyCredential(apiKey);
 				return;
 			}
@@ -1520,21 +1471,9 @@ export class AuthStorage {
 				await saveApiKeyCredential(apiKey);
 				return;
 			}
-			case "synthetic": {
-				const { loginSynthetic } = await import("./utils/oauth/synthetic");
-				const apiKey = await loginSynthetic(ctrl);
-				await saveApiKeyCredential(apiKey);
-				return;
-			}
 			case "tavily": {
 				const { loginTavily } = await import("./utils/oauth/tavily");
 				const apiKey = await loginTavily(ctrl);
-				await saveApiKeyCredential(apiKey);
-				return;
-			}
-			case "venice": {
-				const { loginVenice } = await import("./utils/oauth/venice");
-				const apiKey = await loginVenice(ctrl);
 				await saveApiKeyCredential(apiKey);
 				return;
 			}
@@ -1556,30 +1495,14 @@ export class AuthStorage {
 				await saveApiKeyCredential(apiKey);
 				return;
 			}
-			case "nanogpt": {
-				const { loginNanoGPT } = await import("./utils/oauth/nanogpt");
-				const apiKey = await loginNanoGPT(ctrl);
-				await saveApiKeyCredential(apiKey);
-				return;
-			}
+
 			case "together": {
 				const { loginTogether } = await import("./utils/oauth/together");
 				const apiKey = await loginTogether(ctrl);
 				await saveApiKeyCredential(apiKey);
 				return;
 			}
-			case "cloudflare-ai-gateway": {
-				const { loginCloudflareAiGateway } = await import("./utils/oauth/cloudflare-ai-gateway");
-				const apiKey = await loginCloudflareAiGateway(ctrl);
-				await saveApiKeyCredential(apiKey);
-				return;
-			}
-			case "vercel-ai-gateway": {
-				const { loginVercelAiGateway } = await import("./utils/oauth/vercel-ai-gateway");
-				const apiKey = await loginVercelAiGateway(ctrl);
-				await saveApiKeyCredential(apiKey);
-				return;
-			}
+
 			case "vllm": {
 				const { loginVllm } = await import("./utils/oauth/vllm");
 				const apiKey = await loginVllm(ctrl);
@@ -1592,30 +1515,13 @@ export class AuthStorage {
 				await saveApiKeyCredential(apiKey);
 				return;
 			}
-			case "qwen-portal": {
-				const { loginQwenPortal } = await import("./utils/oauth/qwen-portal");
-				const apiKey = await loginQwenPortal(ctrl);
-				await saveApiKeyCredential(apiKey);
-				return;
-			}
 			case "nvidia": {
 				const { loginNvidia } = await import("./utils/oauth/nvidia");
 				const apiKey = await loginNvidia(ctrl);
 				await saveApiKeyCredential(apiKey);
 				return;
 			}
-			case "xiaomi": {
-				const { loginXiaomi } = await import("./utils/oauth/xiaomi");
-				const apiKey = await loginXiaomi(ctrl);
-				await saveApiKeyCredential(apiKey);
-				return;
-			}
-			case "zenmux": {
-				const { loginZenMux } = await import("./utils/oauth/zenmux");
-				const apiKey = await loginZenMux(ctrl);
-				await saveApiKeyCredential(apiKey);
-				return;
-			}
+
 			default: {
 				const customProvider = getOAuthProvider(provider);
 				if (!customProvider) {
@@ -2979,12 +2885,6 @@ export class AuthStorage {
 		if (oauthSelection) {
 			const expiresAt = oauthSelection.credential.expires;
 			if (Number.isFinite(expiresAt) && expiresAt > Date.now()) {
-				if (provider === "github-copilot") {
-					return JSON.stringify({
-						token: oauthSelection.credential.access,
-						enterpriseUrl: oauthSelection.credential.enterpriseUrl,
-					});
-				}
 				return oauthSelection.credential.access;
 			}
 		}

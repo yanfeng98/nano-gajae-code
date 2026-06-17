@@ -111,14 +111,14 @@ const resumedCopilotSameProviderContext: Context = {
 		{
 			role: "user",
 			content: "summary that should be preserved",
-			providerPayload: createOpenAIResponsesHistoryPayload("github-copilot", fallbackHistoryItems, false),
+			providerPayload: createOpenAIResponsesHistoryPayload("anthropic", fallbackHistoryItems, false),
 			timestamp: Date.now(),
 		},
 		{
 			...makeAssistantMessage(
 				[{ type: "reasoning", encrypted_content: "enc_123" }, ...snapshotHistoryItems],
 				false,
-				"github-copilot",
+				"anthropic",
 				"gpt-5.4",
 			),
 			content: [{ type: "text", text: "generic assistant that should be rebuilt" }],
@@ -226,8 +226,8 @@ const incrementalItems2 = [
 function makeAssistantMessage(
 	items: Record<string, unknown>[],
 	incremental = false,
-	provider: "openai" | "openai-codex" | "github-copilot" = "openai",
-	model = provider === "openai-codex" ? "gpt-5.2-codex" : provider === "github-copilot" ? "gpt-5.4" : "gpt-5-mini",
+	provider: "openai" | "openai-codex" | "anthropic" = "openai",
+	model = provider === "openai-codex" ? "gpt-5.2-codex" : provider === "anthropic" ? "gpt-5.4" : "gpt-5-mini",
 ) {
 	return {
 		role: "assistant" as const,
@@ -435,7 +435,7 @@ describe("OpenAI responses history payload", () => {
 
 	it("does not warm GitHub Copilot replay when only OpenAI replay state is warmed", async () => {
 		const openAiModel = getOpenAIReasoningModel("openai", "gpt-5-mini");
-		const copilotModel = getBundledModel("github-copilot", "gpt-5.4") as Model<"openai-responses">;
+		const copilotModel = getBundledModel("anthropic", "gpt-5.4") as Model<"openai-responses">;
 		const providerSessionState = new Map<string, ProviderSessionState>();
 		await captureResponsesPayload(openAiModel, resumedSameProviderContext, providerSessionState);
 		markResponsesProviderSessionStateWarmed(providerSessionState);
@@ -460,7 +460,7 @@ describe("OpenAI responses history payload", () => {
 	});
 
 	it("ignores incompatible native history snapshots across providers", async () => {
-		const model = getBundledModel("github-copilot", "gpt-5.4") as Model<"openai-responses">;
+		const model = getBundledModel("anthropic", "gpt-5.4") as Model<"openai-responses">;
 		const payload = (await captureResponsesPayload(model, codexToCopilotContext)) as { input?: unknown[] };
 		expect(containsEncryptedReasoning(payload.input)).toBe(false);
 		expect(containsAssistantOutputText(payload.input, "generic assistant that should be rebuilt")).toBe(true);

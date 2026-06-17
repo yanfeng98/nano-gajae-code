@@ -10,7 +10,6 @@ import {
 	type OpenAICompatibleModelRecord,
 } from "../utils/discovery/openai-compatible";
 import { toFireworksPublicModelId } from "../utils/fireworks-model-id";
-import { getGitHubCopilotBaseUrl, OPENCODE_HEADERS, parseGitHubCopilotApiKey } from "../utils/oauth/github-copilot";
 import { isClaudeForcedToolChoiceIncapableModelId } from "../utils/tool-choice-capability";
 import { createBundledReferenceMap, createReferenceResolver } from "./bundled-references";
 
@@ -1599,11 +1598,6 @@ export function nanoGptModelManagerOptions(
 // 24. GitHub Copilot
 // ---------------------------------------------------------------------------
 
-export interface GithubCopilotModelManagerConfig {
-	apiKey?: string;
-	baseUrl?: string;
-}
-
 function inferCopilotApi(modelId: string): Api {
 	if (/^claude-(haiku|sonnet|opus)-4([.-]|$)/.test(modelId)) {
 		return "anthropic-messages";
@@ -1632,110 +1626,6 @@ function extractCopilotLimits(entry: OpenAICompatibleModelRecord): {
 		maxContextWindowTokens: toNumber(limitsValue.max_context_window_tokens),
 		maxOutputTokens: toNumber(limitsValue.max_output_tokens),
 		maxNonStreamingOutputTokens: toNumber(limitsValue.max_non_streaming_output_tokens),
-	};
-}
-
-export function githubCopilotModelManagerOptions(config?: GithubCopilotModelManagerConfig): ModelManagerOptions<Api> {
-	const rawApiKey = config?.apiKey;
-	const configuredBaseUrl = config?.baseUrl ?? "https://api.githubcopilot.com";
-	const parsedApiKey = rawApiKey ? parseGitHubCopilotApiKey(rawApiKey) : undefined;
-	const apiKey = parsedApiKey?.accessToken;
-	const baseUrl =
-		parsedApiKey?.enterpriseUrl && configuredBaseUrl.includes("githubcopilot.com")
-			? getGitHubCopilotBaseUrl(parsedApiKey.enterpriseUrl)
-			: configuredBaseUrl;
-	const providerRefs = createBundledReferenceMap<Api>("github-copilot");
-	const resolveReference = createReferenceResolver(providerRefs);
-	return {
-		providerId: "github-copilot",
-		...(apiKey && {
-			fetchDynamicModels: () =>
-				fetchOpenAICompatibleModels<Api>({
-					api: "openai-completions",
-					provider: "github-copilot",
-					baseUrl,
-					apiKey,
-					headers: OPENCODE_HEADERS,
-					mapModel: (
-						entry: OpenAICompatibleModelRecord,
-						defaults: Model<Api>,
-						_context: OpenAICompatibleModelMapperContext<Api>,
-					): Model<Api> => {
-						const reference = resolveReference(defaults.id);
-						const copilotLimits = extractCopilotLimits(entry);
-						// Copilot exposes token limits under capabilities.limits.*.
-						// max_prompt_tokens is the prompt capacity (what GJC calls contextWindow).
-						// max_context_window_tokens is the total window (prompt + output budget)
-						// and must NOT be used for contextWindow — it inflates the limit and
-						// breaks compaction thresholds, overflow detection, and promotion.
-						// The OpenAI-compatible root-level `context_length` field mirrors the
-						// total window (e.g. 400k for gpt-5.4), so Copilot's max_prompt_tokens
-						// (the true prompt budget) must take precedence whenever it is present.
-						const contextWindowFallback = toPositiveNumber(
-							entry.context_length,
-							reference?.contextWindow ?? defaults.contextWindow,
-						);
-						const contextWindow = toPositiveNumber(
-							copilotLimits.maxPromptTokens,
-							reference ? Math.min(contextWindowFallback, reference.contextWindow) : contextWindowFallback,
-						);
-						const maxTokens = toPositiveNumber(
-							entry.max_completion_tokens,
-							toPositiveNumber(
-								copilotLimits.maxOutputTokens,
-								toPositiveNumber(
-									copilotLimits.maxNonStreamingOutputTokens,
-									reference?.maxTokens ?? defaults.maxTokens,
-								),
-							),
-						);
-						const name =
-							typeof entry.name === "string" && entry.name.trim().length > 0
-								? entry.name
-								: (reference?.name ?? defaults.name);
-						const api = inferCopilotApi(defaults.id);
-						if (reference) {
-							return {
-								...reference,
-								api,
-								provider: "github-copilot",
-								baseUrl,
-								name,
-								contextWindow,
-								maxTokens,
-								headers: { ...OPENCODE_HEADERS, ...(providerRefs.get(defaults.id)?.headers ?? {}) },
-								...(api === "openai-completions"
-									? {
-											compat: {
-												supportsStore: false,
-												supportsDeveloperRole: false,
-												supportsReasoningEffort: false,
-											},
-										}
-									: {}),
-							};
-						}
-						return {
-							...defaults,
-							api,
-							baseUrl,
-							name,
-							contextWindow,
-							maxTokens,
-							headers: { ...OPENCODE_HEADERS },
-							...(api === "openai-completions"
-								? {
-										compat: {
-											supportsStore: false,
-											supportsDeveloperRole: false,
-											supportsReasoningEffort: false,
-										},
-									}
-								: {}),
-						};
-					},
-				}),
-		}),
 	};
 }
 
@@ -2007,24 +1897,6 @@ const OPENCODE_GO_API_RESOLUTION = createOpenCodeApiResolution("https://opencode
 	"qwen3.6-plus": "openai-completions",
 });
 
-const COPILOT_BASE_URL = "https://api.githubcopilot.com";
-
-const COPILOT_DEFAULT_RESOLUTION = {
-	api: "openai-completions",
-	baseUrl: COPILOT_BASE_URL,
-} as const satisfies { api: Api; baseUrl: string };
-
-const COPILOT_API_RESOLUTION_RULES: readonly ApiResolutionRule[] = [
-	{
-		matches: modelId => /^claude-(haiku|sonnet|opus)-4([.-]|$)/.test(modelId),
-		resolved: { api: "anthropic-messages", baseUrl: COPILOT_BASE_URL },
-	},
-	{
-		matches: modelId => modelId.startsWith("gpt-5") || modelId.startsWith("oswe"),
-		resolved: { api: "openai-responses", baseUrl: COPILOT_BASE_URL },
-	},
-];
-
 function simpleModelsDevDescriptor(
 	modelsDevKey: string,
 	providerId: string,
@@ -2238,28 +2110,6 @@ const MODELS_DEV_PROVIDER_DESCRIPTORS_SPECIALIZED: readonly ModelsDevProviderDes
 			),
 	}),
 	// --- GitHub Copilot ---
-	openAiCompletionsDescriptor("github-copilot", "github-copilot", COPILOT_BASE_URL, {
-		defaultContextWindow: 128000,
-		defaultMaxTokens: 8192,
-		headers: { ...OPENCODE_HEADERS },
-		filterModel: filterActiveToolCallModels,
-		resolveApi: (modelId, raw) =>
-			resolveApiByRules(modelId, raw, COPILOT_API_RESOLUTION_RULES, COPILOT_DEFAULT_RESOLUTION),
-		transformModel: model => {
-			// compat only applies to openai-completions models
-			if (model.api === "openai-completions") {
-				return {
-					...model,
-					compat: {
-						supportsStore: false,
-						supportsDeveloperRole: false,
-						supportsReasoningEffort: false,
-					},
-				};
-			}
-			return model;
-		},
-	}),
 	// --- MiniMax (Anthropic) ---
 	anthropicMessagesDescriptor("minimax", "minimax", "https://api.minimax.io/anthropic"),
 	anthropicMessagesDescriptor("minimax-cn", "minimax-cn", "https://api.minimaxi.com/anthropic"),

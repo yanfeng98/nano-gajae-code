@@ -184,7 +184,7 @@ const canonicalVariantModels: Model<"anthropic-messages">[] = [
 		id: "anthropic/claude-sonnet-4.5",
 		name: "Claude Sonnet 4.5 (Copilot)",
 		api: "anthropic-messages",
-		provider: "github-copilot",
+		provider: "anthropic",
 		baseUrl: "https://api.githubcopilot.com",
 		reasoning: true,
 		thinking: {
@@ -204,7 +204,7 @@ const canonicalRegistry = {
 		if (canonicalId !== "claude-sonnet-4-5") return undefined;
 		const candidates = options?.candidates ?? canonicalVariantModels;
 		return (
-			candidates.find(model => model.provider === "github-copilot") ??
+			candidates.find(model => model.provider === "anthropic") ??
 			candidates.find(model => model.provider === "anthropic")
 		);
 	},
@@ -431,7 +431,7 @@ describe("parseModelPattern", () => {
 			const result = parseModelPattern("claude-sonnet-4-5", canonicalVariantModels, undefined, {
 				modelRegistry: canonicalRegistry,
 			});
-			expect(result.model?.provider).toBe("github-copilot");
+			expect(result.model?.provider).toBe("anthropic");
 			expect(result.model?.id).toBe("anthropic/claude-sonnet-4.5");
 		});
 	});
@@ -570,7 +570,7 @@ describe("resolveCliModel", () => {
 
 		expect(result.error).toBeUndefined();
 		expect(result.selector).toBe("claude-sonnet-4-5");
-		expect(result.model?.provider).toBe("github-copilot");
+		expect(result.model?.provider).toBe("anthropic");
 		expect(result.model?.id).toBe("anthropic/claude-sonnet-4.5");
 	});
 

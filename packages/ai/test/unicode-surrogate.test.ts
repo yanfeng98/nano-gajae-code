@@ -11,7 +11,7 @@ const emptySchema = z.object({});
 // Resolve OAuth tokens at module level (async, runs before tests)
 const oauthTokens = await Promise.all([
 	resolveApiKey("anthropic"),
-	resolveApiKey("github-copilot"),
+	resolveApiKey("anthropic"),
 	resolveApiKey("google-gemini-cli"),
 	resolveApiKey("google-antigravity"),
 	resolveApiKey("openai-codex"),
@@ -421,7 +421,7 @@ describe("AI Providers Unicode Surrogate Pair Tests", () => {
 		it.skipIf(!githubCopilotToken)(
 			"gpt-4o - should handle emoji in tool results",
 			async () => {
-				const llm = getBundledModel("github-copilot", "gpt-4o");
+				const llm = getBundledModel("anthropic", "gpt-4o");
 				await testEmojiInToolResults(llm, { apiKey: githubCopilotToken });
 			},
 			{ retry: 3, timeout: 30000 },
@@ -430,7 +430,7 @@ describe("AI Providers Unicode Surrogate Pair Tests", () => {
 		it.skipIf(!githubCopilotToken)(
 			"gpt-4o - should handle real-world LinkedIn comment data with emoji",
 			async () => {
-				const llm = getBundledModel("github-copilot", "gpt-4o");
+				const llm = getBundledModel("anthropic", "gpt-4o");
 				await testRealWorldLinkedInData(llm, { apiKey: githubCopilotToken });
 			},
 			{ retry: 3, timeout: 30000 },
@@ -439,7 +439,7 @@ describe("AI Providers Unicode Surrogate Pair Tests", () => {
 		it.skipIf(!githubCopilotToken)(
 			"gpt-4o - should handle unpaired high surrogate (0xD83D) in tool results",
 			async () => {
-				const llm = getBundledModel("github-copilot", "gpt-4o");
+				const llm = getBundledModel("anthropic", "gpt-4o");
 				await testUnpairedHighSurrogate(llm, { apiKey: githubCopilotToken });
 			},
 			{ retry: 3, timeout: 30000 },
@@ -448,7 +448,7 @@ describe("AI Providers Unicode Surrogate Pair Tests", () => {
 		it.skipIf(!githubCopilotToken)(
 			"claude-sonnet-4 - should handle emoji in tool results",
 			async () => {
-				const llm = getBundledModel("github-copilot", "claude-sonnet-4");
+				const llm = getBundledModel("anthropic", "claude-sonnet-4");
 				await testEmojiInToolResults(llm, { apiKey: githubCopilotToken });
 			},
 			{ retry: 3, timeout: 30000 },
@@ -457,7 +457,7 @@ describe("AI Providers Unicode Surrogate Pair Tests", () => {
 		it.skipIf(!githubCopilotToken)(
 			"claude-sonnet-4 - should handle real-world LinkedIn comment data with emoji",
 			async () => {
-				const llm = getBundledModel("github-copilot", "claude-sonnet-4");
+				const llm = getBundledModel("anthropic", "claude-sonnet-4");
 				await testRealWorldLinkedInData(llm, { apiKey: githubCopilotToken });
 			},
 			{ retry: 3, timeout: 30000 },
@@ -466,7 +466,7 @@ describe("AI Providers Unicode Surrogate Pair Tests", () => {
 		it.skipIf(!githubCopilotToken)(
 			"claude-sonnet-4 - should handle unpaired high surrogate (0xD83D) in tool results",
 			async () => {
-				const llm = getBundledModel("github-copilot", "claude-sonnet-4");
+				const llm = getBundledModel("anthropic", "claude-sonnet-4");
 				await testUnpairedHighSurrogate(llm, { apiKey: githubCopilotToken });
 			},
 			{ retry: 3, timeout: 30000 },

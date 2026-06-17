@@ -52,7 +52,6 @@ import {
 	iterateWithIdleTimeout,
 } from "../utils/idle-iterator";
 import { parseStreamingJson } from "../utils/json-parse";
-import { parseGitHubCopilotApiKey } from "../utils/oauth/github-copilot";
 import { getKimiCommonHeaders } from "../utils/oauth/kimi";
 import { notifyProviderResponse } from "../utils/provider-response";
 import { callWithCopilotModelRetry } from "../utils/retry";
@@ -67,11 +66,6 @@ import {
 	resolveToolChoice,
 } from "../utils/tool-choice-capability";
 import { COMPOSER_EDIT_DISCIPLINE_PROMPT, isComposerHarnessModel } from "./composer-discipline";
-import {
-	buildCopilotDynamicHeaders,
-	hasCopilotVisionInput,
-	resolveGitHubCopilotBaseUrl,
-} from "./github-copilot-headers";
 import { detectOpenAICompat, type ResolvedOpenAICompat, resolveOpenAICompat } from "./openai-completions-compat";
 import {
 	applyOpenAIRequestTransformBody,
@@ -437,7 +431,6 @@ export const streamOpenAICompletions: StreamFunction<"openai-completions"> = (
 			const idleTimeoutMs = getOpenAIStreamIdleTimeoutMs();
 			const {
 				client,
-				copilotPremiumRequests,
 				baseUrl,
 				requestHeaders,
 				getCapturedErrorResponse: captureErrorResponse,
@@ -454,7 +447,7 @@ export const streamOpenAICompletions: StreamFunction<"openai-completions"> = (
 				options?.authCredentialType,
 				options?.requestMaxRetries,
 			);
-			const premiumRequestsTotal = copilotPremiumRequests;
+			const premiumRequestsTotal = undefined;
 			getCapturedErrorResponse = captureErrorResponse;
 			let appliedToolStrictMode: AppliedToolStrictMode = "mixed";
 			const providerSessionState = getOpenAICompletionsProviderSessionState(
@@ -945,7 +938,7 @@ async function createClient(
 	requestMaxRetries?: number,
 ): Promise<{
 	client: OpenAI;
-	copilotPremiumRequests: number | undefined;
+	// premium requests no longer tracked
 	baseUrl: string | undefined;
 	requestHeaders: Record<string, string>;
 	getCapturedErrorResponse: () => CapturedHttpErrorResponse | undefined;
@@ -985,24 +978,9 @@ async function createClient(
 		headers = { ...getKimiCommonHeaders(), ...headers };
 	}
 	headers = applyOpenAIRequestTransformHeaders(headers, model.requestTransform, `Gajae-Code/${packageJson.version}`);
-	let copilotPremiumRequests: number | undefined;
 
 	let baseUrl =
 		model.provider === "openai" ? resolveOpenAIProviderBaseUrl(model.baseUrl, authCredentialType) : model.baseUrl;
-	if (model.provider === "github-copilot") {
-		apiKey = parseGitHubCopilotApiKey(rawApiKey).accessToken;
-		const hasImages = hasCopilotVisionInput(context.messages);
-		const copilot = buildCopilotDynamicHeaders({
-			messages: context.messages,
-			hasImages,
-			premiumMultiplier: model.premiumMultiplier,
-			headers,
-			initiatorOverride,
-		});
-		Object.assign(headers, copilot.headers);
-		copilotPremiumRequests = copilot.premiumRequests;
-		baseUrl = resolveGitHubCopilotBaseUrl(model.baseUrl, rawApiKey) ?? model.baseUrl;
-	}
 	// Azure OpenAI requires /deployments/{id}/chat/completions?api-version=YYYY-MM-DD.
 	// The generic openai-completions path adds neither, producing silent 404s.
 	let azureDefaultQuery: Record<string, string> | undefined;
@@ -1080,7 +1058,6 @@ async function createClient(
 			fetch: debugFetch,
 			...(sdkTimeoutMs !== undefined ? { timeout: sdkTimeoutMs } : {}),
 		}),
-		copilotPremiumRequests,
 		baseUrl,
 		requestHeaders: headers,
 		getCapturedErrorResponse: () => capturedErrorResponse,

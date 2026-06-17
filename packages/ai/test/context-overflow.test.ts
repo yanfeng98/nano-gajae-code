@@ -23,7 +23,7 @@ import { e2eApiKey, resolveApiKey } from "./oauth";
 
 // Resolve OAuth tokens at module level (async, runs before tests)
 const oauthTokens = await Promise.all([
-	resolveApiKey("github-copilot"),
+	resolveApiKey("anthropic"),
 	resolveApiKey("google-gemini-cli"),
 	resolveApiKey("google-antigravity"),
 	resolveApiKey("openai-codex"),
@@ -132,7 +132,7 @@ describe("Context overflow error handling", () => {
 		it.skipIf(!githubCopilotToken)(
 			"gpt-4o - should detect overflow via isContextOverflow",
 			async () => {
-				const model = getBundledModel("github-copilot", "gpt-4o");
+				const model = getBundledModel("anthropic", "gpt-4o");
 				const result = await testContextOverflow(model, githubCopilotToken!);
 				logResult(result);
 
@@ -147,7 +147,7 @@ describe("Context overflow error handling", () => {
 		it.skipIf(!githubCopilotToken)(
 			"claude-sonnet-4 - should detect overflow via isContextOverflow",
 			async () => {
-				const model = getBundledModel("github-copilot", "claude-sonnet-4");
+				const model = getBundledModel("anthropic", "claude-sonnet-4");
 				const result = await testContextOverflow(model, githubCopilotToken!);
 				logResult(result);
 

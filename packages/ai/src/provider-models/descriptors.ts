@@ -9,20 +9,14 @@ import type { OAuthProvider } from "../utils/oauth/types";
 import { googleModelManagerOptions } from "./google";
 import { ollamaCloudModelManagerOptions } from "./ollama";
 import {
-	alibabaCodingPlanModelManagerOptions,
 	anthropicModelManagerOptions,
 	cerebrasModelManagerOptions,
-	cloudflareAiGatewayModelManagerOptions,
 	deepseekModelManagerOptions,
-	firepassModelManagerOptions,
 	fireworksModelManagerOptions,
-	githubCopilotModelManagerOptions,
 	groqModelManagerOptions,
 	huggingfaceModelManagerOptions,
-	kiloModelManagerOptions,
 	kimiCodeModelManagerOptions,
 	litellmModelManagerOptions,
-	lmStudioModelManagerOptions,
 	mistralModelManagerOptions,
 	moonshotModelManagerOptions,
 	nanoGptModelManagerOptions,
@@ -32,16 +26,10 @@ import {
 	opencodeGoModelManagerOptions,
 	opencodeZenModelManagerOptions,
 	openrouterModelManagerOptions,
-	qianfanModelManagerOptions,
-	qwenPortalModelManagerOptions,
 	syntheticModelManagerOptions,
 	togetherModelManagerOptions,
-	veniceModelManagerOptions,
-	vercelAiGatewayModelManagerOptions,
 	vllmModelManagerOptions,
 	xaiModelManagerOptions,
-	xiaomiModelManagerOptions,
-	zenmuxModelManagerOptions,
 } from "./openai-compat";
 import { zaiModelManagerOptions } from "./special";
 
@@ -130,7 +118,6 @@ export const PROVIDER_DESCRIPTORS: readonly ProviderDescriptor[] = [
 	catalogDescriptor(
 		"alibaba-coding-plan",
 		"qwen3.5-plus",
-		config => alibabaCodingPlanModelManagerOptions(config),
 		catalog("Alibaba Coding Plan", ["ALIBABA_CODING_PLAN_API_KEY"]),
 	),
 	descriptor("openai", "gpt-5.4", config => openaiModelManagerOptions(config)),
@@ -153,7 +140,6 @@ export const PROVIDER_DESCRIPTORS: readonly ProviderDescriptor[] = [
 		config => fireworksModelManagerOptions(config),
 		catalog("Fireworks", ["FIREWORKS_API_KEY"]),
 	),
-	descriptor("firepass", "kimi-k2.6-turbo", config => firepassModelManagerOptions(config)),
 	descriptor("xai", "grok-4-fast-non-reasoning", config => xaiModelManagerOptions(config)),
 	catalogDescriptor(
 		"deepseek",
@@ -168,12 +154,7 @@ export const PROVIDER_DESCRIPTORS: readonly ProviderDescriptor[] = [
 		config => nvidiaModelManagerOptions(config),
 		catalog("NVIDIA", ["NVIDIA_API_KEY"]),
 	),
-	catalogDescriptor(
-		"nanogpt",
-		"openai/gpt-5.4",
-		config => nanoGptModelManagerOptions(config),
-		catalog("NanoGPT", ["NANO_GPT_API_KEY"]),
-	),
+	catalogDescriptor("nanogpt", "openai/gpt-5.4", config => nanoGptModelManagerOptions(config)),
 	descriptor("opencode-zen", "claude-sonnet-4-6", config => opencodeZenModelManagerOptions(config)),
 	descriptor("opencode-go", "kimi-k2.5", config => opencodeGoModelManagerOptions(config)),
 	catalogDescriptor(
@@ -182,16 +163,10 @@ export const PROVIDER_DESCRIPTORS: readonly ProviderDescriptor[] = [
 		config => openrouterModelManagerOptions(config),
 		catalog("OpenRouter", ["OPENROUTER_API_KEY"], { allowUnauthenticated: true }),
 	),
-	catalogDescriptor(
-		"kilo",
-		"anthropic/claude-sonnet-4.5",
-		config => kiloModelManagerOptions(config),
-		catalog("Kilo Gateway", ["KILO_API_KEY"], { allowUnauthenticated: true }),
-	),
+	catalogDescriptor("kilo", "anthropic/claude-sonnet-4.5"),
 	catalogDescriptor(
 		"vercel-ai-gateway",
 		"anthropic/claude-sonnet-4-6",
-		config => vercelAiGatewayModelManagerOptions(config),
 		catalog("Vercel AI Gateway", ["VERCEL_AI_GATEWAY_API_KEY"], { allowUnauthenticated: true }),
 	),
 	catalogDescriptor(
@@ -210,7 +185,6 @@ export const PROVIDER_DESCRIPTORS: readonly ProviderDescriptor[] = [
 	catalogDescriptor(
 		"cloudflare-ai-gateway",
 		"claude-sonnet-4-5",
-		config => cloudflareAiGatewayModelManagerOptions(config),
 		catalog("Cloudflare AI Gateway", ["CLOUDFLARE_AI_GATEWAY_API_KEY"]),
 	),
 	catalogDescriptor(
@@ -219,31 +193,14 @@ export const PROVIDER_DESCRIPTORS: readonly ProviderDescriptor[] = [
 		config => kimiCodeModelManagerOptions(config),
 		catalog("Kimi Code", ["KIMI_API_KEY"]),
 	),
-	catalogDescriptor(
-		"qwen-portal",
-		"coder-model",
-		config => qwenPortalModelManagerOptions(config),
-		catalog("Qwen Portal", ["QWEN_OAUTH_TOKEN", "QWEN_PORTAL_API_KEY"], { oauthProvider: "qwen-portal" }),
-	),
-	catalogDescriptor(
-		"synthetic",
-		"hf:moonshotai/Kimi-K2.5",
-		config => syntheticModelManagerOptions(config),
-		catalog("Synthetic", ["SYNTHETIC_API_KEY"]),
-	),
-	catalogDescriptor(
-		"venice",
-		"llama-3.3-70b",
-		config => veniceModelManagerOptions(config),
-		catalog("Venice", ["VENICE_API_KEY"], { allowUnauthenticated: true }),
-	),
+	catalogDescriptor("qwen-portal", "coder-model"),
+	catalogDescriptor("synthetic", "hf:moonshotai/Kimi-K2.5", config => syntheticModelManagerOptions(config)),
 	catalogDescriptor(
 		"litellm",
 		"claude-opus-4-6",
 		config => litellmModelManagerOptions(config),
 		catalog("LiteLLM", ["LITELLM_API_KEY"], { allowUnauthenticated: true }),
 	),
-	descriptor("lm-studio", "llama-3-8b", config => lmStudioModelManagerOptions(config), { allowUnauthenticated: true }),
 	catalogDescriptor(
 		"vllm",
 		"gpt-oss-20b",
@@ -257,31 +214,12 @@ export const PROVIDER_DESCRIPTORS: readonly ProviderDescriptor[] = [
 		catalog("Moonshot", ["MOONSHOT_API_KEY"]),
 	),
 	catalogDescriptor(
-		"qianfan",
-		"deepseek-v3.2",
-		config => qianfanModelManagerOptions(config),
-		catalog("Qianfan", ["QIANFAN_API_KEY"]),
-	),
-	catalogDescriptor(
 		"together",
 		"moonshotai/Kimi-K2.5",
 		config => togetherModelManagerOptions(config),
 		catalog("Together", ["TOGETHER_API_KEY"]),
 	),
-	catalogDescriptor(
-		"xiaomi",
-		"mimo-v2-flash",
-		config => xiaomiModelManagerOptions(config),
-		catalog("Xiaomi", ["XIAOMI_API_KEY"]),
-	),
-	catalogDescriptor(
-		"zenmux",
-		"anthropic/claude-opus-4.6",
-		config => zenmuxModelManagerOptions(config),
-		catalog("ZenMux", ["ZENMUX_API_KEY"]),
-	),
 	catalogDescriptor("zai", "glm-5.1", config => zaiModelManagerOptions(config), catalog("zAI", ["ZAI_API_KEY"])),
-	descriptor("github-copilot", "gpt-4o", config => githubCopilotModelManagerOptions(config)),
 	descriptor("google", "gemini-2.5-pro", config => googleModelManagerOptions(config)),
 ] as const;
 
@@ -289,9 +227,7 @@ export const PROVIDER_DESCRIPTORS: readonly ProviderDescriptor[] = [
 export const DEFAULT_MODEL_PER_PROVIDER: Record<KnownProvider, string> = {
 	...Object.fromEntries(PROVIDER_DESCRIPTORS.map(d => [d.providerId, d.defaultModel])),
 	// Providers not in PROVIDER_DESCRIPTORS (special auth or no standard discovery)
-	"azure-openai": "gpt-4.1",
 	"alibaba-coding-plan": "qwen3.5-plus",
-	"amazon-bedrock": "us.anthropic.claude-opus-4-6-v1",
 	"google-antigravity": "gemini-3-pro-high",
 	"google-gemini-cli": "gemini-2.5-pro",
 	"google-vertex": "gemini-3-pro-preview",

@@ -10,7 +10,7 @@ import { e2eApiKey, resolveApiKey } from "./oauth";
 // Resolve OAuth tokens at module level (async, runs before tests)
 const oauthTokens = await Promise.all([
 	resolveApiKey("anthropic"),
-	resolveApiKey("github-copilot"),
+	resolveApiKey("anthropic"),
 	resolveApiKey("google-gemini-cli"),
 	resolveApiKey("google-antigravity"),
 	resolveApiKey("openai-codex"),
@@ -348,7 +348,7 @@ describe("Tool Results with Images", () => {
 		it.skipIf(!githubCopilotToken)(
 			"gpt-4o - should handle tool result with only image",
 			async () => {
-				const llm = getBundledModel("github-copilot", "gpt-4o");
+				const llm = getBundledModel("anthropic", "gpt-4o");
 				await handleToolWithImageResult(llm, { apiKey: githubCopilotToken });
 			},
 			{ retry: 3, timeout: 30000 },
@@ -357,7 +357,7 @@ describe("Tool Results with Images", () => {
 		it.skipIf(!githubCopilotToken)(
 			"gpt-4o - should handle tool result with text and image",
 			async () => {
-				const llm = getBundledModel("github-copilot", "gpt-4o");
+				const llm = getBundledModel("anthropic", "gpt-4o");
 				await handleToolWithTextAndImageResult(llm, { apiKey: githubCopilotToken });
 			},
 			{ retry: 3, timeout: 30000 },
@@ -366,7 +366,7 @@ describe("Tool Results with Images", () => {
 		it.skipIf(!githubCopilotToken)(
 			"claude-sonnet-4 - should handle tool result with only image",
 			async () => {
-				const llm = getBundledModel("github-copilot", "claude-sonnet-4");
+				const llm = getBundledModel("anthropic", "claude-sonnet-4");
 				await handleToolWithImageResult(llm, { apiKey: githubCopilotToken });
 			},
 			{ retry: 3, timeout: 30000 },
@@ -375,7 +375,7 @@ describe("Tool Results with Images", () => {
 		it.skipIf(!githubCopilotToken)(
 			"claude-sonnet-4 - should handle tool result with text and image",
 			async () => {
-				const llm = getBundledModel("github-copilot", "claude-sonnet-4");
+				const llm = getBundledModel("anthropic", "claude-sonnet-4");
 				await handleToolWithTextAndImageResult(llm, { apiKey: githubCopilotToken });
 			},
 			{ retry: 3, timeout: 30000 },

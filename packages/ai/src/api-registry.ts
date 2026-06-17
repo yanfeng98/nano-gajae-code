@@ -18,12 +18,9 @@ const BUILTIN_APIS = new Set<KnownApi>([
 	"openai-completions",
 	"openai-responses",
 	"openai-codex-responses",
-	"azure-openai-responses",
 	"anthropic-messages",
-	"bedrock-converse-stream",
 	"google-generative-ai",
 	"google-gemini-cli",
-	"google-vertex",
 	"ollama-chat",
 ]);
 

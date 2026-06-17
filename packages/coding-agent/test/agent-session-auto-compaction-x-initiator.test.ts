@@ -14,7 +14,7 @@ function createAssistantMessage(text: string): AssistantMessage {
 		role: "assistant",
 		content: [{ type: "text", text }],
 		api: "openai-completions",
-		provider: "github-copilot",
+		provider: "anthropic",
 		model: "gpt-4o",
 		usage: {
 			input: 0,
@@ -51,7 +51,7 @@ function captureCompactionCalls(marker: string) {
 	const originalCompleteSimple = ai.completeSimple;
 	vi.spyOn(ai, "completeSimple").mockImplementation(async (...args) => {
 		const [model, context, options] = args;
-		if (model.provider === "github-copilot" && contextContainsMarker(context, marker)) {
+		if (model.provider === "anthropic" && contextContainsMarker(context, marker)) {
 			capturedOptions.push(options);
 			return createAssistantMessage("Compacted summary") as never;
 		}
@@ -81,14 +81,14 @@ describe("AgentSession compaction Copilot initiator attribution", () => {
 	});
 
 	async function createSession(taskDepth: number, marker: string) {
-		const model = ai.getBundledModel("github-copilot", "gpt-4o");
+		const model = ai.getBundledModel("anthropic", "gpt-4o");
 		if (!model) {
 			throw new Error("Expected github-copilot/gpt-4o model to exist");
 		}
 
 		const authStorage = await AuthStorage.create(path.join(tempDir.path(), `testauth-${taskDepth}.db`));
 		authStorages.push(authStorage);
-		authStorage.setRuntimeApiKey("github-copilot", "test-key");
+		authStorage.setRuntimeApiKey("anthropic", "test-key");
 
 		const sessionManager = SessionManager.inMemory();
 		sessionManager.appendMessage({
@@ -200,7 +200,7 @@ describe("AgentSession compaction Copilot initiator attribution", () => {
 
 		await session.compact();
 
-		expect(model.provider).toBe("github-copilot");
+		expect(model.provider).toBe("anthropic");
 		expect(model.id).toBe("gpt-4o");
 		expectNoForcedCopilotHeader(model);
 		expectInitiatorOverride(capturedOptions, undefined);
@@ -213,7 +213,7 @@ describe("AgentSession compaction Copilot initiator attribution", () => {
 
 		await triggerAutoCompaction(session, model);
 
-		expect(model.provider).toBe("github-copilot");
+		expect(model.provider).toBe("anthropic");
 		expect(model.id).toBe("gpt-4o");
 		expectNoForcedCopilotHeader(model);
 		expectInitiatorOverride(capturedOptions, "agent");
@@ -226,7 +226,7 @@ describe("AgentSession compaction Copilot initiator attribution", () => {
 
 		await session.compact();
 
-		expect(model.provider).toBe("github-copilot");
+		expect(model.provider).toBe("anthropic");
 		expect(model.id).toBe("gpt-4o");
 		expectNoForcedCopilotHeader(model);
 		expectInitiatorOverride(capturedOptions, undefined);
@@ -239,7 +239,7 @@ describe("AgentSession compaction Copilot initiator attribution", () => {
 
 		await triggerAutoCompaction(session, model);
 
-		expect(model.provider).toBe("github-copilot");
+		expect(model.provider).toBe("anthropic");
 		expect(model.id).toBe("gpt-4o");
 		expectNoForcedCopilotHeader(model);
 		expectInitiatorOverride(capturedOptions, "agent");

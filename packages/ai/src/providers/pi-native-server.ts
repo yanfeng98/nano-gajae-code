@@ -67,7 +67,6 @@ const ALLOWED_OPTION_KEYS: ReadonlySet<keyof SimpleStreamOptions> = new Set([
 	"toolChoice",
 	"serviceTier",
 	"kimiApiFormat",
-	"syntheticApiFormat",
 	"preferWebsockets",
 ] as const satisfies readonly (keyof SimpleStreamOptions)[]);
 

@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { getBundledModel } from "../src/models";
-import { streamAzureOpenAIResponses } from "../src/providers/azure-openai-responses";
 import { streamOpenAICompletions } from "../src/providers/openai-completions";
 import { streamOpenAIResponses } from "../src/providers/openai-responses";
 import type { Context, Model, TextContent } from "../src/types";

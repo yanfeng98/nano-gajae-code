@@ -5,7 +5,7 @@ import type { Usage } from "../src/types";
 describe("calculateCost", () => {
 	it("keeps token-based calculation for GitHub Copilot models", () => {
 		const model = {
-			...getBundledModel("github-copilot", "gpt-4o"),
+			...getBundledModel("anthropic", "gpt-4o"),
 			cost: {
 				input: 1000,
 				output: 2000,

@@ -8,7 +8,7 @@ import { e2eApiKey, resolveApiKey } from "./oauth";
 // Resolve OAuth tokens at module level (async, runs before tests)
 const oauthTokens = await Promise.all([
 	resolveApiKey("anthropic"),
-	resolveApiKey("github-copilot"),
+	resolveApiKey("anthropic"),
 	resolveApiKey("google-gemini-cli"),
 	resolveApiKey("google-antigravity"),
 	resolveApiKey("openai-codex"),
@@ -222,7 +222,7 @@ describe("Tool Call Without Result Tests", () => {
 		it.skipIf(!githubCopilotToken)(
 			"gpt-4o - should filter out tool calls without corresponding tool results",
 			async () => {
-				const model = getBundledModel("github-copilot", "gpt-4o");
+				const model = getBundledModel("anthropic", "gpt-4o");
 				await testToolCallWithoutResult(model, { apiKey: githubCopilotToken });
 			},
 			{ retry: 3, timeout: 30000 },
@@ -231,7 +231,7 @@ describe("Tool Call Without Result Tests", () => {
 		it.skipIf(!githubCopilotToken)(
 			"claude-sonnet-4 - should filter out tool calls without corresponding tool results",
 			async () => {
-				const model = getBundledModel("github-copilot", "claude-sonnet-4");
+				const model = getBundledModel("anthropic", "claude-sonnet-4");
 				await testToolCallWithoutResult(model, { apiKey: githubCopilotToken });
 			},
 			{ retry: 3, timeout: 30000 },

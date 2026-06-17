@@ -22,12 +22,9 @@ import type {
 import { type AbortSourceTracker, createAbortSourceTracker } from "../utils/abort";
 import { AssistantMessageEventStream as EventStreamImpl } from "../utils/event-stream";
 import { getStreamFirstEventTimeoutMs, getStreamIdleTimeoutMs, iterateWithIdleTimeout } from "../utils/idle-iterator";
-import type { BedrockOptions } from "./amazon-bedrock";
 import type { AnthropicOptions } from "./anthropic";
-import type { AzureOpenAIResponsesOptions } from "./azure-openai-responses";
 import type { GoogleOptions } from "./google";
 import type { GoogleGeminiCliOptions } from "./google-gemini-cli";
-import type { GoogleVertexOptions } from "./google-vertex";
 import type { OllamaChatOptions } from "./ollama";
 import type { OpenAICodexResponsesOptions } from "./openai-codex-responses";
 import type { OpenAICompletionsOptions } from "./openai-completions";
@@ -49,14 +46,6 @@ interface AnthropicProviderModule {
 	) => AssistantMessageEventStream;
 }
 
-interface AzureOpenAIResponsesProviderModule {
-	streamAzureOpenAIResponses: (
-		model: Model<"azure-openai-responses">,
-		context: Context,
-		options: AzureOpenAIResponsesOptions,
-	) => AssistantMessageEventStream;
-}
-
 interface GoogleProviderModule {
 	streamGoogle: (
 		model: Model<"google-generative-ai">,
@@ -70,14 +59,6 @@ interface GoogleGeminiCliProviderModule {
 		model: Model<"google-gemini-cli">,
 		context: Context,
 		options: GoogleGeminiCliOptions,
-	) => AssistantMessageEventStream;
-}
-
-interface GoogleVertexProviderModule {
-	streamGoogleVertex: (
-		model: Model<"google-vertex">,
-		context: Context,
-		options: GoogleVertexOptions,
 	) => AssistantMessageEventStream;
 }
 
@@ -113,35 +94,17 @@ interface OllamaProviderModule {
 	) => AssistantMessageEventStream;
 }
 
-interface BedrockProviderModule {
-	streamBedrock: (
-		model: Model<"bedrock-converse-stream">,
-		context: Context,
-		options: BedrockOptions,
-	) => AssistantMessageEventStream;
-}
-
 // ---------------------------------------------------------------------------
 // Module-level lazy promise caches
 // ---------------------------------------------------------------------------
 
 let anthropicProviderModulePromise: Promise<LazyProviderModule<"anthropic-messages">> | undefined;
-let azureOpenAIResponsesProviderModulePromise: Promise<LazyProviderModule<"azure-openai-responses">> | undefined;
 let googleProviderModulePromise: Promise<LazyProviderModule<"google-generative-ai">> | undefined;
 let googleGeminiCliProviderModulePromise: Promise<LazyProviderModule<"google-gemini-cli">> | undefined;
-let googleVertexProviderModulePromise: Promise<LazyProviderModule<"google-vertex">> | undefined;
 let openAICodexResponsesProviderModulePromise: Promise<LazyProviderModule<"openai-codex-responses">> | undefined;
 let openAICompletionsProviderModulePromise: Promise<LazyProviderModule<"openai-completions">> | undefined;
 let openAIResponsesProviderModulePromise: Promise<LazyProviderModule<"openai-responses">> | undefined;
 let ollamaProviderModulePromise: Promise<LazyProviderModule<"ollama-chat">> | undefined;
-let bedrockProviderModuleOverride: LazyProviderModule<"bedrock-converse-stream"> | undefined;
-let bedrockProviderModulePromise: Promise<LazyProviderModule<"bedrock-converse-stream">> | undefined;
-
-export function setBedrockProviderModule(module: BedrockProviderModule): void {
-	bedrockProviderModuleOverride = {
-		stream: module.streamBedrock,
-	};
-}
 
 // ---------------------------------------------------------------------------
 // Stream forwarding / error helpers
@@ -294,14 +257,6 @@ function loadAnthropicProviderModule(): Promise<LazyProviderModule<"anthropic-me
 	return anthropicProviderModulePromise;
 }
 
-function loadAzureOpenAIResponsesProviderModule(): Promise<LazyProviderModule<"azure-openai-responses">> {
-	azureOpenAIResponsesProviderModulePromise ||= import("./azure-openai-responses").then(module => {
-		const provider = module as AzureOpenAIResponsesProviderModule;
-		return { stream: provider.streamAzureOpenAIResponses };
-	});
-	return azureOpenAIResponsesProviderModulePromise;
-}
-
 function loadGoogleProviderModule(): Promise<LazyProviderModule<"google-generative-ai">> {
 	googleProviderModulePromise ||= import("./google").then(module => {
 		const provider = module as GoogleProviderModule;
@@ -316,14 +271,6 @@ function loadGoogleGeminiCliProviderModule(): Promise<LazyProviderModule<"google
 		return { stream: provider.streamGoogleGeminiCli };
 	});
 	return googleGeminiCliProviderModulePromise;
-}
-
-function loadGoogleVertexProviderModule(): Promise<LazyProviderModule<"google-vertex">> {
-	googleVertexProviderModulePromise ||= import("./google-vertex").then(module => {
-		const provider = module as GoogleVertexProviderModule;
-		return { stream: provider.streamGoogleVertex };
-	});
-	return googleVertexProviderModulePromise;
 }
 
 function loadOpenAICodexResponsesProviderModule(): Promise<LazyProviderModule<"openai-codex-responses">> {
@@ -358,17 +305,6 @@ function loadOllamaProviderModule(): Promise<LazyProviderModule<"ollama-chat">> 
 	return ollamaProviderModulePromise;
 }
 
-function loadBedrockProviderModule(): Promise<LazyProviderModule<"bedrock-converse-stream">> {
-	if (bedrockProviderModuleOverride) {
-		return Promise.resolve(bedrockProviderModuleOverride);
-	}
-	bedrockProviderModulePromise ||= import("./amazon-bedrock").then(module => {
-		const provider = module as BedrockProviderModule;
-		return { stream: provider.streamBedrock };
-	});
-	return bedrockProviderModulePromise;
-}
-
 // ---------------------------------------------------------------------------
 // Lazy stream function exports
 //
@@ -377,16 +313,12 @@ function loadBedrockProviderModule(): Promise<LazyProviderModule<"bedrock-conver
 // ---------------------------------------------------------------------------
 
 export const streamAnthropic = createLazyStream(loadAnthropicProviderModule);
-export const streamAzureOpenAIResponses = createLazyStream(loadAzureOpenAIResponsesProviderModule);
 export const streamGoogle = createLazyStream(loadGoogleProviderModule);
 export const streamGoogleGeminiCli = createLazyStream(
 	loadGoogleGeminiCliProviderModule,
 	GOOGLE_GEMINI_CLI_LAZY_STREAM_LIMITS,
 );
-export const streamGoogleVertex = createLazyStream(loadGoogleVertexProviderModule);
 export const streamOpenAICodexResponses = createLazyStream(loadOpenAICodexResponsesProviderModule);
 export const streamOpenAICompletions = createLazyStream(loadOpenAICompletionsProviderModule);
 export const streamOpenAIResponses = createLazyStream(loadOpenAIResponsesProviderModule);
 export const streamOllama = createLazyStream(loadOllamaProviderModule);
-
-export const streamBedrock = createLazyStream(loadBedrockProviderModule);
