@@ -114,7 +114,6 @@ export interface ForkContextSeedOptions {
 	signal?: AbortSignal;
 }
 
-import { MacOSPowerAssertion } from "@gajae-code/natives";
 import {
 	extractRetryHint,
 	isEnoent,
@@ -859,8 +858,6 @@ export class AgentSession {
 	readonly taskDepth: number;
 	readonly yieldQueue: YieldQueue;
 
-	#powerAssertion: MacOSPowerAssertion | undefined;
-
 	readonly configWarnings: string[] = [];
 
 	#scopedModels: ScopedModelSelection[];
@@ -1067,50 +1064,13 @@ export class AgentSession {
 	#hindsightSessionState: HindsightSessionState | undefined = undefined;
 	readonly rawSseDebugBuffer: RawSseDebugBuffer;
 
-	#acquirePowerAssertion(): void {
-		if (process.platform !== "darwin") return;
-		if (this.#powerAssertion) return;
-		const idle = this.settings.get("power.preventIdleSleep");
-		const system = this.settings.get("power.preventSystemSleep");
-		const user = this.settings.get("power.declareUserActive");
-		const display = this.settings.get("power.preventDisplaySleep");
-		// All four off → user opted out; do nothing.
-		if (!idle && !system && !user && !display) return;
-		try {
-			this.#powerAssertion = MacOSPowerAssertion.start({
-				reason: "Gajae Code agent session",
-				idle,
-				system,
-				user,
-				display,
-			});
-		} catch (error) {
-			logger.warn("Failed to acquire macOS power assertion", { error: String(error) });
-		}
-	}
-
-	#releasePowerAssertion(): void {
-		const assertion = this.#powerAssertion;
-		this.#powerAssertion = undefined;
-		if (!assertion) return;
-		try {
-			assertion.stop();
-		} catch (error) {
-			logger.warn("Failed to release macOS power assertion", { error: String(error) });
-		}
-	}
-
 	#beginInFlight(): void {
 		this.#promptInFlightCount++;
-		if (this.#promptInFlightCount === 1) {
-			this.#acquirePowerAssertion();
-		}
 	}
 
 	#endInFlight(): void {
 		this.#promptInFlightCount = Math.max(0, this.#promptInFlightCount - 1);
 		if (this.#promptInFlightCount === 0) {
-			this.#releasePowerAssertion();
 			this.#flushPendingBackgroundExchanges();
 			this.#flushPendingAgentEnd();
 		}
@@ -1118,7 +1078,6 @@ export class AgentSession {
 
 	#resetInFlight(): void {
 		this.#promptInFlightCount = 0;
-		this.#releasePowerAssertion();
 		this.#flushPendingBackgroundExchanges();
 		this.#flushPendingAgentEnd();
 	}
@@ -1135,7 +1094,6 @@ export class AgentSession {
 		this.sessionManager = config.sessionManager;
 		this.settings = config.settings;
 		this.taskDepth = config.taskDepth ?? 0;
-		// Power assertions are taken per turn (see #beginInFlight); nothing acquired here.
 		this.#evalKernelOwnerId = config.evalKernelOwnerId ?? `agent-session:${Snowflake.next()}`;
 		this.#ownedAsyncJobManager = config.ownedAsyncJobManager;
 		this.#scopedModels = config.scopedModels ?? [];
@@ -3186,7 +3144,6 @@ export class AgentSession {
 			);
 		}
 		await disposeKernelSessionsByOwner(this.#evalKernelOwnerId);
-		this.#releasePowerAssertion();
 		await this.sessionManager.close();
 		this.#closeAllProviderSessions("dispose");
 		const hindsightState = this.setHindsightSessionState(undefined);

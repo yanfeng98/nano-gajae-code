@@ -14,7 +14,6 @@ import {
 	initNativeCrashDiagnostics,
 	invalidateFsScanCache,
 	listWorkspace,
-	MacOSPowerAssertion,
 	PtySession,
 	summarizeCode,
 	truncateToWidth,
@@ -610,11 +609,4 @@ describe("pi-natives", () => {
 		});
 	});
 
-	describe("MacOSPowerAssertion", () => {
-		it("should create a stoppable power assertion handle", () => {
-			const assertion = MacOSPowerAssertion.start({ reason: "pi-natives test" });
-			assertion.stop();
-			assertion.stop();
-		});
-	});
 });
