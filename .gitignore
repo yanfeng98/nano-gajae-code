@@ -18,7 +18,8 @@ target/
 .env
 
 # Editors
-.vscode/
+.vscode/*
+!.vscode/settings.json
 .zed/
 .idea/
 *.swp

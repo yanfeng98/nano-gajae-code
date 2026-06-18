@@ -1,0 +1,6 @@
+{
+  // 在终端里用鼠标选中文字即自动复制到剪贴板（之后 Ctrl+V 粘贴），
+  // 让 VS Code 集成终端的复制体验和 WSL 原生终端（Windows Terminal）一致。
+  // 这是 VS Code 终端自身的特性，与 gjc 无关。
+  "terminal.integrated.copyOnSelection": true
+}
