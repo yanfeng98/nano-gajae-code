@@ -187,19 +187,6 @@ function applyExtensionFlagValues(session: AgentSession, rawArgs: string[]): Map
 	return extensionRunner.getFlagValues();
 }
 
-type AcpSessionFactory = (cwd: string) => Promise<AgentSession>;
-
-export interface AcpSessionFactoryOptions {
-	baseOptions: CreateAgentSessionOptions;
-	settings: Settings;
-	sessionDir?: string;
-	authStorage: AuthStorage;
-	modelRegistry: ModelRegistry;
-	parsedArgs: Pick<Args, "apiKey" | "default" | "model" | "mpreset" | "thinking">;
-	rawArgs: string[];
-	createSession: (options: CreateAgentSessionOptions) => Promise<CreateAgentSessionResult>;
-}
-
 export async function applyStartupModelProfiles(args: {
 	session: AgentSession;
 	settings: Settings;
@@ -246,48 +233,6 @@ export async function applyStartupModelProfilesOrExit(
 		process.stderr.write(`${chalk.red(`Error: ${message}`)}\n`);
 		process.exit(1);
 	}
-}
-
-/**
- * Build the per-`session/new` factory used by ACP mode.
- *
- * MCP servers in ACP sessions are owned exclusively by the ACP client, which
- * supplies them through `session/new.mcpServers` and re-applies them via
- * {@link AcpAgent#configureMcpServers}. We therefore force `enableMCP: false`
- * on every session created here so {@link createAgentSession} skips the on-disk
- * `.mcp.json` discovery path — otherwise host MCP tools land in the session's
- * tool registry and shadow the client-supplied servers (issue #1234).
- */
-export function createAcpSessionFactory(args: AcpSessionFactoryOptions): AcpSessionFactory {
-	return async cwd => {
-		const nextSettings = await args.settings.cloneForCwd(cwd);
-		const nextSessionManager = SessionManager.create(cwd, args.sessionDir);
-		const agentId = `acp:${nextSessionManager.getSessionId()}`;
-		const { session: nextSession } = await args.createSession({
-			...args.baseOptions,
-			cwd,
-			sessionManager: nextSessionManager,
-			settings: nextSettings,
-			authStorage: args.authStorage,
-			modelRegistry: args.modelRegistry,
-			agentId,
-			hasUI: false,
-			enableMCP: false,
-		});
-		await applyStartupModelProfilesOrExit({
-			session: nextSession,
-			settings: nextSettings,
-			modelRegistry: args.modelRegistry,
-			parsedArgs: args.parsedArgs,
-			startupModel: args.baseOptions.model,
-			startupThinkingLevel: args.baseOptions.thinkingLevel,
-		});
-		if (args.parsedArgs.apiKey && !args.baseOptions.model && nextSession.model) {
-			args.authStorage.setRuntimeApiKey(nextSession.model.provider, args.parsedArgs.apiKey);
-		}
-		applyExtensionFlagValues(nextSession, args.rawArgs);
-		return nextSession;
-	};
 }
 
 async function runInteractiveMode(
@@ -707,7 +652,6 @@ async function buildSessionOptions(
 interface RunRootCommandDependencies {
 	createAgentSession?: typeof createAgentSession;
 	discoverAuthStorage?: typeof discoverAuthStorage;
-	runAcpMode?: (createSession: AcpSessionFactory) => Promise<void>;
 	settings?: Settings;
 }
 
@@ -778,7 +722,6 @@ export async function runRootCommand(
 	if (
 		parsedArgs.mode === "rpc" ||
 		parsedArgs.mode === "rpc-ui" ||
-		parsedArgs.mode === "acp" ||
 		parsedArgs.mode === "bridge"
 	) {
 		applyRpcDefaultSettingOverrides(settingsInstance);
@@ -791,7 +734,6 @@ export async function runRootCommand(
 		parsedArgs.noTitle ||
 		parsedArgs.mode === "rpc" ||
 		parsedArgs.mode === "rpc-ui" ||
-		parsedArgs.mode === "acp" ||
 		parsedArgs.mode === "bridge"
 	) {
 		Bun.env.PI_NO_TITLE = "1";
@@ -917,19 +859,7 @@ export async function runRootCommand(
 		return result;
 	};
 
-	if (mode === "acp") {
-		const createAcpSession = createAcpSessionFactory({
-			baseOptions: sessionOptions,
-			settings: settingsInstance,
-			sessionDir: parsedArgs.sessionDir,
-			authStorage,
-			modelRegistry,
-			parsedArgs,
-			rawArgs,
-			createSession,
-		});
-		await (deps.runAcpMode ?? (await import("./modes/acp")).runAcpMode)(createAcpSession);
-	} else {
+	{
 		const { session, setToolUIContext, modelFallbackMessage, lspServers, mcpManager, eventBus } =
 			await createSession(sessionOptions);
 		if (parsedArgs.apiKey && !sessionOptions.model && session.model) {

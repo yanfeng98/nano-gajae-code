@@ -140,7 +140,7 @@ import type { Settings, SkillsSettings } from "../config/settings";
 import { onAppendOnlyModeChanged } from "../config/settings";
 import { RawSseDebugBuffer } from "../debug/raw-sse-buffer";
 import { loadCapability } from "../discovery";
-import { expandApplyPatchToEntries, normalizeDiff, normalizeToLF, ParseError, previewPatch, stripBom } from "../edit";
+import { normalizeDiff, normalizeToLF, ParseError, previewPatch, stripBom } from "../edit";
 import {
 	disposeKernelSessionsByOwner,
 	executePython as executePythonCommand,
@@ -244,7 +244,7 @@ import { resolveFileDisplayMode } from "../utils/file-display-mode";
 import { extractFileMentions, generateFileMentionMessages } from "../utils/file-mentions";
 import { buildNamedToolChoice, buildNamedToolChoiceResult } from "../utils/tool-choice";
 import type { AuthStorage } from "./auth-storage";
-import type { ClientBridge, ClientBridgePermissionOption, ClientBridgePermissionOutcome } from "./client-bridge";
+import type { ClientBridge } from "./client-bridge";
 import {
 	type ContributionPrepOptions,
 	type ContributionPrepResult,
@@ -663,164 +663,6 @@ function createHandoffFileName(date = new Date()): string {
 }
 
 // ============================================================================
-// ACP Permission Gate
-// ============================================================================
-
-/** Tools that require user permission before execution when an ACP client is connected. */
-const PERMISSION_REQUIRED_TOOLS = new Set(["bash", "monitor", "edit", "delete", "move"]);
-
-function isShellExecutionPermissionTool(toolName: string): boolean {
-	return toolName === "bash" || toolName === "monitor";
-}
-
-/** Permission options presented to the client on each gated tool call. */
-const PERMISSION_OPTIONS: ClientBridgePermissionOption[] = [
-	{ optionId: "allow_once", name: "Allow once", kind: "allow_once" },
-	{ optionId: "allow_always", name: "Always allow", kind: "allow_always" },
-	{ optionId: "reject_once", name: "Reject", kind: "reject_once" },
-	{ optionId: "reject_always", name: "Always reject", kind: "reject_always" },
-];
-
-const PERMISSION_OPTIONS_BY_ID = new Map(PERMISSION_OPTIONS.map(option => [option.optionId, option]));
-
-function getStringProperty(value: Record<string, unknown>, key: string): string | undefined {
-	const candidate = value[key];
-	return typeof candidate === "string" ? candidate : undefined;
-}
-
-function collectStringPaths(value: unknown): string[] {
-	return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
-}
-
-function getEditDestructiveIntent(args: unknown): { kind: "delete" | "move"; paths: string[] } | undefined {
-	if (!args || typeof args !== "object" || Array.isArray(args)) return undefined;
-	const a = args as Record<string, unknown>;
-
-	const edits = Array.isArray(a.edits) ? a.edits : undefined;
-	if (edits) {
-		const path = getStringProperty(a, "path");
-		if (path) {
-			for (const edit of edits) {
-				if (!edit || typeof edit !== "object" || Array.isArray(edit)) continue;
-				const op = getStringProperty(edit as Record<string, unknown>, "op");
-				if (op === "delete") return { kind: "delete", paths: [path] };
-			}
-		}
-		for (const edit of edits) {
-			if (!edit || typeof edit !== "object" || Array.isArray(edit)) continue;
-			const entry = edit as Record<string, unknown>;
-			const op = getStringProperty(entry, "op");
-			const rename = getStringProperty(entry, "rename");
-			if (op !== "create" && rename) return { kind: "move", paths: path ? [path, rename] : [rename] };
-		}
-	}
-
-	const input = getStringProperty(a, "input");
-	if (input) {
-		try {
-			const entries = expandApplyPatchToEntries({ input });
-			const deleteEntry = entries.find(entry => entry.op === "delete");
-			if (deleteEntry) return { kind: "delete", paths: [deleteEntry.path] };
-			const moveEntry = entries.find(entry => entry.rename);
-			if (moveEntry?.rename) return { kind: "move", paths: [moveEntry.path, moveEntry.rename] };
-		} catch {
-			// If the edit input is not an apply_patch envelope, it is not a delete/move operation.
-		}
-	}
-
-	return undefined;
-}
-
-function getPermissionIntent(
-	toolName: string,
-	args: unknown,
-): { toolName: string; title: string; paths?: string[]; cacheKey: string } | undefined {
-	const a = args && typeof args === "object" && !Array.isArray(args) ? (args as Record<string, unknown>) : {};
-	if (isShellExecutionPermissionTool(toolName)) {
-		const cmd = getStringProperty(a, "command")?.slice(0, 80);
-		return { toolName, title: cmd || toolName, cacheKey: toolName };
-	}
-	if (toolName === "delete") {
-		const p = getStringProperty(a, "path");
-		return { toolName, title: p ? `Delete ${p}` : toolName, paths: p ? [p] : undefined, cacheKey: toolName };
-	}
-	if (toolName === "move") {
-		const from = getStringProperty(a, "oldPath") ?? getStringProperty(a, "path") ?? getStringProperty(a, "from");
-		const to = getStringProperty(a, "newPath") ?? getStringProperty(a, "to") ?? getStringProperty(a, "destination");
-		if (from && to) return { toolName, title: `Move ${from} to ${to}`, paths: [from, to], cacheKey: toolName };
-		return {
-			toolName,
-			title: from ? `Move ${from}` : toolName,
-			paths: from ? [from] : undefined,
-			cacheKey: toolName,
-		};
-	}
-	if (toolName === "edit") {
-		const intent = getEditDestructiveIntent(args);
-		if (!intent) return undefined;
-		if (intent.kind === "delete") {
-			return {
-				toolName,
-				title: `Delete ${intent.paths[0] ?? "edit target"}`,
-				paths: intent.paths,
-				cacheKey: "edit:delete",
-			};
-		}
-		const from = intent.paths[0];
-		const to = intent.paths[1];
-		return {
-			toolName,
-			title: from && to ? `Move ${from} to ${to}` : `Move ${from ?? to ?? "edit target"}`,
-			paths: intent.paths,
-			cacheKey: "edit:move",
-		};
-	}
-	return undefined;
-}
-
-function extractPermissionLocations(
-	args: unknown,
-	cwd: string,
-	explicitPaths?: string[],
-): { path: string; line?: number }[] {
-	if (!args || typeof args !== "object") return [];
-	const a = args as Record<string, unknown>;
-	const out: { path: string; line?: number }[] = [];
-	const pushPath = (value: unknown) => {
-		if (typeof value !== "string" || value.length === 0) return;
-		// ACP locations carry file paths that the editor host will open or focus;
-		// they must be absolute or the client cannot resolve them. Resolve raw
-		// tool args (often cwd-relative) against the session cwd before sending.
-		let resolved: string;
-		try {
-			resolved = resolveToCwd(value, cwd);
-		} catch {
-			return;
-		}
-		if (out.some(location => location.path === resolved)) return;
-		out.push({ path: resolved });
-	};
-	if (explicitPaths) {
-		for (const p of explicitPaths) {
-			pushPath(p);
-		}
-		return out;
-	}
-	pushPath(a.path);
-	pushPath(a.file);
-	for (const p of collectStringPaths(a.paths)) {
-		pushPath(p);
-	}
-	pushPath(a.oldPath);
-	pushPath(a.newPath);
-	pushPath(a.from);
-	pushPath(a.to);
-	pushPath(a.source);
-	pushPath(a.destination);
-	return out;
-}
-
-// ============================================================================
 // AgentSession Class
 // ============================================================================
 
@@ -892,9 +734,8 @@ export class AgentSession {
 	#planReferenceSent = false;
 	#planReferencePath = "local://PLAN.md";
 	#clientBridge: ClientBridge | undefined;
-	#allowAcpAgentInitiatedTurns = false;
-	/** Per-session memory of allow_always / reject_always decisions for gated tools. */
-	#acpPermissionDecisions: Map<string, "allow_always" | "reject_always"> = new Map();
+
+
 
 	// Compaction state
 	#compactionAbortController: AbortController | undefined = undefined;
@@ -3177,23 +3018,6 @@ export class AgentSession {
 		await this.#waitForPostPromptRecovery();
 	}
 
-	async drainAsyncJobDeliveriesForAcp(options?: { timeoutMs?: number }): Promise<boolean> {
-		const manager = AsyncJobManager.instance();
-		if (!manager) return false;
-		const ownerFilter = this.#agentId ? { ownerId: this.#agentId } : undefined;
-		const before = manager.getDeliveryState(ownerFilter);
-		if (before.queued === 0 && !before.delivering) return false;
-		const previousAllowAcpAgentInitiatedTurns = this.#allowAcpAgentInitiatedTurns;
-		this.#allowAcpAgentInitiatedTurns = true;
-		try {
-			const drained = await manager.drainDeliveries({ timeoutMs: options?.timeoutMs, filter: ownerFilter });
-			const after = manager.getDeliveryState(ownerFilter);
-			return drained && (before.queued !== after.queued || before.delivering !== after.delivering);
-		} finally {
-			this.#allowAcpAgentInitiatedTurns = previousAllowAcpAgentInitiatedTurns;
-		}
-	}
-
 	/** Most recent assistant message in agent state. */
 	getLastAssistantMessage(): AssistantMessage | undefined {
 		return this.#findLastAssistantMessage();
@@ -3485,107 +3309,9 @@ export class AgentSession {
 	}
 
 	/**
-	 * Wrap a tool with a permission-gate proxy when an ACP client is connected.
-	 * Only wraps tools whose name is in PERMISSION_REQUIRED_TOOLS and only when
-	 * the bridge exposes `requestPermission`. No-ops for all other cases.
-	 */
-	#wrapToolForAcpPermission<T extends AgentTool>(tool: T): T {
-		const bridge = this.#clientBridge;
-		// Match the capability+method gating pattern used by read/write/bash.
-		if (!bridge?.capabilities.requestPermission || !bridge.requestPermission) return tool;
-		if (!PERMISSION_REQUIRED_TOOLS.has(tool.name)) return tool;
-		return new Proxy(tool, {
-			get: (target, prop) => {
-				if (prop !== "execute") return Reflect.get(target, prop, target);
-				return async (
-					toolCallId: string,
-					args: unknown,
-					signal: AbortSignal | undefined,
-					onUpdate: never,
-					ctx: never,
-				) => {
-					const permissionIntent = getPermissionIntent(target.name, args);
-					if (!permissionIntent) {
-						return await target.execute(toolCallId, args as never, signal, onUpdate, ctx);
-					}
-					const isShellExecutionTool = isShellExecutionPermissionTool(target.name);
-					const command =
-						isShellExecutionTool && args && typeof args === "object" && !Array.isArray(args)
-							? getStringProperty(args as Record<string, unknown>, "command")
-							: undefined;
-					const commandContent = command
-						? [{ type: "content" as const, content: { type: "text" as const, text: `$ ${command}` } }]
-						: undefined;
-					// Short-circuit on persisted decisions.
-					const persisted = this.#acpPermissionDecisions.get(permissionIntent.cacheKey);
-					if (persisted === "allow_always") {
-						return await target.execute(toolCallId, args as never, signal, onUpdate, ctx);
-					}
-					if (persisted === "reject_always") {
-						throw new ToolError(`Tool call rejected by user (preference)`);
-					}
-					if (signal?.aborted) {
-						throw new ToolAbortError("Permission request cancelled");
-					}
-					type PermissionRaceResult =
-						| { kind: "permission"; outcome: ClientBridgePermissionOutcome }
-						| { kind: "aborted" };
-					const { promise: abortPromise, resolve: resolveAbort } = Promise.withResolvers<PermissionRaceResult>();
-					const onAbort = () => resolveAbort({ kind: "aborted" });
-					signal?.addEventListener("abort", onAbort, { once: true });
-					let raced: PermissionRaceResult;
-					try {
-						const permissionPromise = bridge.requestPermission!(
-							{
-								toolCallId,
-								toolName: target.name,
-								title: permissionIntent.title,
-								...(isShellExecutionTool ? { kind: "execute" } : {}),
-								status: "pending",
-								rawInput: args,
-								...(commandContent ? { content: commandContent } : {}),
-								locations: extractPermissionLocations(
-									args,
-									this.sessionManager.getCwd(),
-									permissionIntent.paths,
-								),
-							},
-							PERMISSION_OPTIONS,
-							signal,
-						).then(outcome => ({ kind: "permission" as const, outcome }));
-						raced = await Promise.race([permissionPromise, abortPromise]);
-					} finally {
-						signal?.removeEventListener("abort", onAbort);
-					}
-					if (raced.kind === "aborted" || signal?.aborted) {
-						throw new ToolAbortError("Permission request cancelled");
-					}
-					const outcome = raced.outcome;
-					if (outcome.outcome === "cancelled") {
-						throw new ToolAbortError("Permission request cancelled");
-					}
-					const selectedOption = PERMISSION_OPTIONS_BY_ID.get(outcome.optionId);
-					if (!selectedOption) {
-						throw new ToolError(`Tool permission response used unknown option ID: ${outcome.optionId}`);
-					}
-					if (selectedOption.kind === "allow_always") {
-						this.#acpPermissionDecisions.set(permissionIntent.cacheKey, "allow_always");
-					} else if (selectedOption.kind === "reject_always") {
-						this.#acpPermissionDecisions.set(permissionIntent.cacheKey, "reject_always");
-					}
-					if (selectedOption.kind === "reject_once" || selectedOption.kind === "reject_always") {
-						throw new ToolError(`Tool call rejected by user (${target.name})`);
-					}
-					return await target.execute(toolCallId, args as never, signal, onUpdate, ctx);
-				};
-			},
-		}) as T;
-	}
-
-	/**
 	 * Wrap a tool with the deep-interview mutation guard. This guard is intentionally
-	 * outermost so active interviews reject product-code mutation before ACP permission
-	 * prompts or tool execution can run.
+	 * outermost so active interviews reject product-code mutation before
+	 * tool execution can run.
 	 */
 	#wrapToolForDeepInterviewMutationGuard<T extends AgentTool>(tool: T): T {
 		if (!["edit", "write", "ast_edit", "bash"].includes(tool.name)) return tool;
@@ -3622,7 +3348,7 @@ export class AgentSession {
 		for (const name of toolNames) {
 			const tool = this.#toolRegistry.get(name);
 			if (tool) {
-				tools.push(this.#wrapToolForDeepInterviewMutationGuard(this.#wrapToolForAcpPermission(tool)));
+				tools.push(this.#wrapToolForDeepInterviewMutationGuard(tool));
 				validToolNames.push(name);
 			}
 		}
@@ -4226,7 +3952,7 @@ export class AgentSession {
 		if (!this.getActiveToolNames().includes(finalTool.name)) {
 			const activeTools = [
 				...this.agent.state.tools,
-				this.#wrapToolForDeepInterviewMutationGuard(this.#wrapToolForAcpPermission(finalTool)),
+				this.#wrapToolForDeepInterviewMutationGuard(finalTool),
 			];
 			this.agent.setTools(activeTools);
 			this.#invalidateDiscoveryCaches();
@@ -4256,13 +3982,6 @@ export class AgentSession {
 
 	setClientBridge(bridge: ClientBridge | undefined): void {
 		this.#clientBridge = bridge;
-		this.#acpPermissionDecisions.clear();
-		const activeToolNames = this.getActiveToolNames();
-		const activeTools = activeToolNames
-			.map(name => this.#toolRegistry.get(name))
-			.filter((tool): tool is AgentTool => tool !== undefined)
-			.map(tool => this.#wrapToolForAcpPermission(tool));
-		this.agent.setTools(activeTools);
 	}
 
 	getCheckpointState(): CheckpointState | undefined {
@@ -5140,7 +4859,7 @@ export class AgentSession {
 
 		if (options?.deliverAs === "nextTurn") {
 			if (options?.triggerTurn) {
-				if (this.#clientBridge?.deferAgentInitiatedTurns && !this.#allowAcpAgentInitiatedTurns) {
+				if (this.#clientBridge?.deferAgentInitiatedTurns) {
 					this.#queueHiddenNextTurnMessage(appMessage, false);
 					return;
 				}
@@ -5164,7 +4883,7 @@ export class AgentSession {
 		}
 
 		if (options?.triggerTurn) {
-			if (this.#clientBridge?.deferAgentInitiatedTurns && !this.#allowAcpAgentInitiatedTurns) {
+			if (this.#clientBridge?.deferAgentInitiatedTurns) {
 				this.#queueHiddenNextTurnMessage(appMessage, false);
 				return;
 			}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { mapAgentWireEventPayloadToAcpSessionUpdates } from "../src/modes/acp/acp-event-mapper";
+
 import { AGENT_WIRE_EVENT_TYPES, AGENT_WIRE_PROTOCOL_VERSION } from "../src/modes/shared/agent-wire/event-contract";
 import {
 	AgentWireFrameSequencer,
@@ -9,7 +9,6 @@ import {
 import {
 	observeAgentSessionEvent,
 	observeRpcOutboundFrame,
-	toAgentWireEventPayload,
 } from "../src/modes/shared/agent-wire/event-observation";
 import { EVENT_FIXTURES, RAW_SECRET } from "./agent-wire/fixtures";
 
@@ -20,26 +19,6 @@ import { EVENT_FIXTURES, RAW_SECRET } from "./agent-wire/fixtures";
  * Per-adapter behavior is exercised in depth by the per-story suites; this is the
  * one place that proves coverage equals AGENT_WIRE_EVENT_TYPES exactly.
  */
-
-/** Event types ACP intentionally does NOT represent as session updates. */
-const ACP_EMPTY_WHITELIST = new Set([
-	"agent_start",
-	"agent_end",
-	"turn_start",
-	"turn_end",
-	"message_start",
-	"auto_compaction_start",
-	"auto_compaction_end",
-	"auto_retry_start",
-	"auto_retry_end",
-	"retry_fallback_applied",
-	"retry_fallback_succeeded",
-	"ttsr_triggered",
-	"irc_message",
-	"notice",
-	"thinking_level_changed",
-	"goal_updated",
-]);
 
 describe("agent-wire conformance matrix", () => {
 	it("fixture coverage equals AGENT_WIRE_EVENT_TYPES exactly", () => {
@@ -70,21 +49,7 @@ describe("agent-wire conformance matrix", () => {
 				const frameObs = observeRpcOutboundFrame(frame as unknown as Record<string, unknown>);
 				expect(frameObs?.eventType).toBe(type);
 
-				// ACP: whitelist -> []; otherwise a defined projection (may be empty for
-				// conditional message events, but must not throw).
-				const acp = mapAgentWireEventPayloadToAcpSessionUpdates(toAgentWireEventPayload(event), "sess");
-				expect(Array.isArray(acp)).toBe(true);
-				if (ACP_EMPTY_WHITELIST.has(type)) {
-					expect(acp).toEqual([]);
-				}
 			});
-		}
-	});
-
-	it("ACP produces session updates for the non-whitelisted event types", () => {
-		for (const type of ["tool_execution_start", "tool_execution_end", "todo_reminder"] as const) {
-			const acp = mapAgentWireEventPayloadToAcpSessionUpdates(toAgentWireEventPayload(EVENT_FIXTURES[type]), "sess");
-			expect(acp.length).toBeGreaterThan(0);
 		}
 	});
 

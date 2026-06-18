@@ -5,7 +5,7 @@ import { STATUS_LINE_PRESETS } from "../src/modes/components/status-line/presets
 import blueCrabTheme from "../src/modes/theme/defaults/blue-crab.json" with { type: "json" };
 import redClawTheme from "../src/modes/theme/defaults/red-claw.json" with { type: "json" };
 import * as themeModule from "../src/modes/theme/theme";
-import { ACP_BUILTIN_SLASH_COMMANDS } from "../src/slash-commands/acp-builtins";
+
 import { lookupBuiltinSlashCommand } from "../src/slash-commands/builtin-registry";
 
 describe("GJC red-claw redesign defaults", () => {
@@ -80,7 +80,7 @@ describe("GJC red-claw redesign defaults", () => {
 
 		expect(command?.handleTui).toBeDefined();
 		expect(command?.handle).toBeUndefined();
-		expect(ACP_BUILTIN_SLASH_COMMANDS.map(item => item.name)).not.toContain("theme");
+	
 	});
 
 	it("keeps public status presets on the GJC identity", () => {

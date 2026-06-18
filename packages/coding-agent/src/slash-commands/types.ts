@@ -83,22 +83,8 @@ export interface SlashCommandSpec extends BuiltinSlashCommand {
 	/** When false, the dispatcher refuses to handle invocations that include arguments. */
 	allowArgs?: boolean;
 	/**
-	 * ACP-specific override for `description`. Used by `ACP_BUILTIN_SLASH_COMMANDS`
-	 * when building `available_commands_update` payloads so the client receives
-	 * mode-appropriate copy (e.g. `/dump` advertises "Return full transcript as
-	 * plain text" in ACP rather than the TUI's clipboard-centric copy).
-	 */
-	acpDescription?: string;
-	/**
-	 * ACP-specific override for the advertised input hint. `subcommands`-only
-	 * specs that historically advertised `<subcommand>` / `[on|off|status]` /
-	 * `info|delete` to ACP clients carry the hint here so the unification does
-	 * not silently drop it from `available_commands_update`.
-	 */
-	acpInputHint?: string;
-	/**
-	 * Text/ACP-mode handler. The same body is invoked from the ACP dispatcher
-	 * and, via the TUI adapter, when no `handleTui` override is provided.
+	 * Text-mode handler. The same body is invoked from the TUI adapter
+	 * when no `handleTui` override is provided.
 	 */
 	handle?: (
 		command: ParsedSlashCommand,
@@ -114,12 +100,3 @@ export interface SlashCommandSpec extends BuiltinSlashCommand {
 		runtime: TuiSlashCommandRuntime,
 	) => Promise<SlashCommandResult> | SlashCommandResult;
 }
-
-/**
- * @deprecated Use `SlashCommandRuntime` directly. Retained as an alias so
- * downstream code that imported the ACP-specific name keeps compiling.
- */
-export type AcpBuiltinCommandRuntime = SlashCommandRuntime;
-
-/** Result returned by `executeAcpBuiltinSlashCommand`. */
-export type AcpBuiltinSlashCommandResult = false | { consumed: true } | { prompt: string };

@@ -9,7 +9,7 @@ import { parseArgs } from "../cli/args";
 import { launchDefaultTmuxIfNeeded } from "../gjc-runtime/launch-tmux";
 import { prepareLaunchWorktree } from "../gjc-runtime/launch-worktree";
 import { runRootCommand } from "../main";
-import { prepareAcpTerminalAuthArgs } from "../modes/acp/terminal-auth";
+
 
 export default class Index extends Command {
 	static description = "Red-claw AI coding assistant";
@@ -58,8 +58,8 @@ export default class Index extends Command {
 			description: "Allow starting in ~ without auto-switching to a temp dir",
 		}),
 		mode: Flags.string({
-			description: "Output mode: text (default), json, rpc, acp, rpc-ui, or bridge",
-			options: ["text", "json", "rpc", "acp", "rpc-ui", "bridge"],
+			description: "Output mode: text (default), json, rpc, rpc-ui, or bridge",
+			options: ["text", "json", "rpc", "rpc-ui", "bridge"],
 		}),
 		print: Flags.boolean({
 			char: "p",
@@ -150,14 +150,13 @@ export default class Index extends Command {
 	static strict = false;
 
 	async run(): Promise<void> {
-		const { args } = prepareAcpTerminalAuthArgs(this.argv);
-		const parsed = parseArgs([...args]);
+		const parsed = parseArgs([...this.argv]);
 		if (parsed.help || parsed.version) {
-			await runRootCommand(parsed, args);
+			await runRootCommand(parsed, this.argv);
 			return;
 		}
 
-		const launch = prepareLaunchWorktree(process.cwd(), args);
+		const launch = prepareLaunchWorktree(process.cwd(), this.argv);
 		if (launch.worktree.enabled) {
 			process.chdir(launch.cwd);
 			setProjectDir(launch.cwd);

@@ -18,7 +18,6 @@ const REMOVED_FRAME_MAPPER = join(HARNESS_CONTROL_PLANE_DIR, "frame-mapper.ts");
 const ADAPTER_ROOTS = [
 	"modes/rpc",
 	"modes/bridge",
-	"modes/acp",
 	"harness-control-plane",
 	"modes/shared/agent-wire",
 ] as const;
@@ -26,7 +25,6 @@ const ADAPTER_ROOTS = [
 const ALLOWED_EVENT_TYPE_SWITCH_FILES = new Set([
 	"src/modes/shared/agent-wire/event-envelope.ts",
 	"src/modes/shared/agent-wire/event-observation.ts",
-	"src/modes/acp/acp-event-mapper.ts",
 ]);
 
 function repoRelative(path: string): string {

@@ -251,9 +251,9 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<SlashCommandSpec> = [
 		name: "model",
 		aliases: ["models"],
 		description: "Select model (opens selector UI)",
-		acpDescription: "Show current model selection",
+		// acpDescription:"Show current model selection",
 		inlineHint: "[target] <model>",
-		acpInputHint: "[target] <model>",
+		// acpInputHint:"[target] <model>",
 		handle: async (command, runtime) => {
 			if (command.args) {
 				const parsedArgs = parseModelCommandArgs(command.args);
@@ -330,8 +330,8 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<SlashCommandSpec> = [
 	{
 		name: "fast",
 		description: "Toggle priority service tier (OpenAI service_tier=priority, Anthropic speed=fast)",
-		acpDescription: "Toggle fast mode",
-		acpInputHint: "[on|off|status]",
+		// acpDescription:"Toggle fast mode",
+		// acpInputHint:"[on|off|status]",
 		subcommands: [
 			{ name: "on", description: "Enable fast mode" },
 			{ name: "off", description: "Disable fast mode" },
@@ -424,7 +424,7 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<SlashCommandSpec> = [
 	{
 		name: "dump",
 		description: "Copy session transcript to clipboard",
-		acpDescription: "Return full transcript as plain text",
+		// acpDescription:"Return full transcript as plain text",
 		handle: async (_command, runtime) => {
 			const text = runtime.session.formatSessionAsText();
 			await runtime.output(text || "No messages to dump yet.");
@@ -438,8 +438,8 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<SlashCommandSpec> = [
 	{
 		name: "session",
 		description: "Session management commands",
-		acpDescription: "Show session information",
-		acpInputHint: "info|delete",
+		// acpDescription:"Show session information",
+		// acpInputHint:"info|delete",
 		subcommands: [
 			{ name: "info", description: "Show session info and stats" },
 			{ name: "delete", description: "Delete current session and return to selector" },
@@ -492,7 +492,7 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<SlashCommandSpec> = [
 	{
 		name: "jobs",
 		description: "Show async background jobs status",
-		acpDescription: "Show background jobs",
+		// acpDescription:"Show background jobs",
 		handle: async (_command, runtime) => {
 			const snapshot = runtime.session.getAsyncJobSnapshot({ recentLimit: 5 });
 			if (!snapshot || (snapshot.running.length === 0 && snapshot.recent.length === 0)) {
@@ -528,7 +528,7 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<SlashCommandSpec> = [
 	{
 		name: "context",
 		description: "Show active context token usage breakdown",
-		acpDescription: "Show active context token usage breakdown",
+		// acpDescription:"Show active context token usage breakdown",
 		handle: async (_command, runtime) => {
 			await runtime.output(buildContextReportText(runtime));
 			return commandConsumed();
@@ -541,7 +541,7 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<SlashCommandSpec> = [
 	{
 		name: "usage",
 		description: "Show provider usage and limits",
-		acpDescription: "Show token usage",
+		// acpDescription:"Show token usage",
 		handle: async (_command, runtime) => {
 			await runtime.output(await buildUsageReportText(runtime));
 			return commandConsumed();
@@ -562,7 +562,7 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<SlashCommandSpec> = [
 	{
 		name: "tools",
 		description: "Show tools currently visible to the agent",
-		acpDescription: "Show available tools",
+		// acpDescription:"Show available tools",
 		handle: async (_command, runtime) => {
 			const active = runtime.session.getActiveToolNames();
 			const all = runtime.session.getAllToolNames();
@@ -766,7 +766,7 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<SlashCommandSpec> = [
 	{
 		name: "ssh",
 		description: "Manage SSH hosts (add, list, remove)",
-		acpDescription: "Manage SSH connections",
+		// acpDescription:"Manage SSH connections",
 		inlineHint: "<subcommand>",
 		subcommands: [
 			{
@@ -805,7 +805,7 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<SlashCommandSpec> = [
 	{
 		name: "compact",
 		description: "Manually compact the session context",
-		acpDescription: "Compact the conversation",
+		// acpDescription:"Compact the conversation",
 		inlineHint: "[focus instructions]",
 		allowArgs: true,
 		handle: async (command, runtime) => {
@@ -909,8 +909,8 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<SlashCommandSpec> = [
 	{
 		name: "memory",
 		description: "Inspect and operate memory maintenance",
-		acpDescription: "Manage memory",
-		acpInputHint: "<subcommand>",
+		// acpDescription:"Manage memory",
+		// acpInputHint:"<subcommand>",
 		subcommands: [
 			{ name: "view", description: "Show current memory injection payload" },
 			{ name: "clear", description: "Clear persisted memory data and artifacts" },
@@ -996,7 +996,7 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<SlashCommandSpec> = [
 	{
 		name: "move",
 		description: "Move session to a different working directory",
-		acpDescription: "Move the current session file",
+		// acpDescription:"Move the current session file",
 		inlineHint: "<path>",
 		allowArgs: true,
 		handle: async (command, runtime) => {

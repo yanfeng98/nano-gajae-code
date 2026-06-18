@@ -4,8 +4,8 @@ import type { Model } from "@gajae-code/ai";
 import { parseArgs } from "../src/cli/args";
 import type { ModelProfileDefinition } from "../src/config/model-profiles";
 import { Settings } from "../src/config/settings";
-import { applyStartupModelProfiles, createAcpSessionFactory } from "../src/main";
-import type { CreateAgentSessionOptions, CreateAgentSessionResult } from "../src/sdk";
+import { applyStartupModelProfiles } from "../src/main";
+
 import type { AgentSession } from "../src/session/agent-session";
 
 const model = (provider: string, id: string): Model =>
@@ -114,44 +114,4 @@ test("deferred explicit CLI --model is reapplied after --mpreset activation", as
 	expect(session.model).toBe(explicitModel);
 });
 
-test("ACP session factory applies default profile and --mpreset before returning session", async () => {
-	const settings = Settings.isolated({ "modelProfile.default": "default-profile" });
-	const session = fakeSession();
-	const registry = fakeRegistry([
-		{
-			name: "default-profile",
-			requiredProviders: ["profile-provider"],
-			modelMapping: { default: "profile-provider/default:medium" },
-			source: "user",
-		},
-		{
-			name: "session-profile",
-			requiredProviders: ["cli-provider"],
-			modelMapping: { default: "cli-provider/explicit:high" },
-			source: "user",
-		},
-	]) as never;
-	const createSession = async (): Promise<CreateAgentSessionResult> =>
-		({
-			session,
-			setToolUIContext: () => {},
-			extensionsResult: {},
-			eventBus: {},
-		}) as unknown as CreateAgentSessionResult;
-	const factory = createAcpSessionFactory({
-		baseOptions: {} as CreateAgentSessionOptions,
-		settings,
-		authStorage: { setRuntimeApiKey: () => {} } as never,
-		modelRegistry: registry,
-		parsedArgs: { mpreset: "session-profile" },
-		rawArgs: [],
-		createSession,
-	});
 
-	const result = await factory(process.cwd());
-
-	expect(result).toBe(session);
-	expect(
-		session.setModelTemporaryCalls.map(call => `${call.model.provider}/${call.model.id}:${call.thinkingLevel}`),
-	).toEqual(["profile-provider/default:medium", "cli-provider/explicit:high"]);
-});

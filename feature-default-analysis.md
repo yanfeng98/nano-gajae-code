@@ -6,7 +6,8 @@
 > - 第一轮: macOS 电源管理 (~350 行)
 > - 第二轮: 全平台死代码清理 (~1,120 行)
 > - 第三轮: Hindsight 远程记忆系统 (~2,600 行)
-> - 总计减少 ~4,070 行，仅 Linux/WSL2 + 本地记忆运行。
+> - 第四轮: ACP IDE 集成协议 (~3,300 行 + 13 测试文件)
+> - 总计减少 ~7,370+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式运行。
 
 本文档对 Gajae-Code 项目中所有功能的默认启用/关闭状态、代码体量、可选性和移除影响进行全面分析，为魔改裁剪提供决策依据。
 
@@ -16,17 +17,17 @@
 
 | 维度 | 数据 |
 |------|------|
-| TypeScript 源文件数 | ~848 个 (仅 coding-agent) |
-| TypeScript 总行数 | ~258,892 行 |
+| TypeScript 源文件数 | ~838 个 (仅 coding-agent) |
+| TypeScript 总行数 | ~255,500 行 |
 | Rust crate 数 | 5 个 (含 2 个 vendored) |
 | `models.json` 大小 | 454 KB, ~21,666 行, 1030 个模型 |
 | AI Provider 数 | 14 个 (含 models.json 定义的) |
 | 已知 Provider 类型 | 19 个 |
 | 内置 Tool 数 | 31 个 (BUILTIN_TOOLS) + 3 个 (HIDDEN_TOOLS) |
 | Settings 配置项 | ~104 个 (已移除 4 power + 32 hindsight) |
-| 已移除代码行数 | ~4,070 行 (三轮) |
-| 运行模式 | 5 种 (interactive, print, acp, bridge, rpc) |
-| CLI 子命令 | 16 个 |
+| 已移除代码行数 | ~7,370+ 行 (四轮) |
+| 运行模式 | 4 种 (interactive, print, bridge, rpc) |
+| CLI 子命令 | 15 个 |
 
 ---
 
@@ -216,9 +217,45 @@ Hindsight 是 Vectorize.io 提供的远程向量化记忆服务。需要外部 A
 | `config/settings.ts` | 移除 Hindsight 配置迁移代码 |
 | `settings-defs.ts` | 移除 `hindsightActive` 条件函数 + `Settings` import |
 | `settings-selector.ts` | 残留注释 (无害) |
-| `slash-commands/builtin-registry.ts` | 移除 ACP 模式 `case "mm"` |
+| `slash-commands/builtin-registry.ts` | 移除 `case "mm"` (Hindsight 记忆路由) |
 
 验证: `cargo check` ✅ | `bun check` 新增错误 0 ✅
+
+### 1.12 ~~ACP IDE 集成协议~~（✅ 已移除 — 仅保留交互模式）
+
+> **状态**: 已删除。ACP (Agent Client Protocol) 是基于 `@agentclientprotocol/sdk` 的 stdio 协议，让 VS Code/JetBrains 等 IDE 通过 `--mode acp` 驱动 agent。仅交互模式使用不需要此能力。
+
+删除清单：
+| 文件 | 操作 |
+|------|------|
+| `packages/coding-agent/src/modes/acp/` | 删除整个目录 (6 文件: index, acp-agent, acp-mode, acp-client-bridge, acp-event-mapper, terminal-auth) |
+| `packages/coding-agent/src/slash-commands/acp-builtins.ts` | 删除 |
+| `packages/coding-agent/src/commands/acp.ts` | 删除 |
+| `packages/coding-agent/src/modes/index.ts` | 移除 `export { runAcpMode } from "./acp"` |
+| `packages/coding-agent/src/cli/args.ts` | 移除 `"acp"` from `Mode` 类型和验证分支 |
+| `packages/coding-agent/src/cli.ts` | 移除 `"acp"` from `--mode` flag options |
+| `packages/coding-agent/src/commands/launch.ts` | 移除 `prepareAcpTerminalAuthArgs` import 和 `"acp"` mode option，简化 `run()` |
+| `packages/coding-agent/src/main.ts` | 移除 `AcpSessionFactory` 类型、`AcpSessionFactoryOptions` 接口、`createAcpSessionFactory` 函数、`runAcpMode` deps 字段、ACP dispatch 分支、2 处 condition 中的 `"acp"` |
+| `packages/coding-agent/src/session/agent-session.ts` | 移除 ACP 权限门控 (~160 行: `PERMISSION_REQUIRED_TOOLS`、`PERMISSION_OPTIONS`、`getPermissionIntent`、`extractPermissionLocations` 等辅助函数、`#wrapToolForAcpPermission` 方法、`#allowAcpAgentInitiatedTurns`/`#acpPermissionDecisions` 字段、`drainAsyncJobDeliveriesForAcp` 方法)、简化 `setClientBridge`、清理 imports |
+| `packages/coding-agent/src/slash-commands/types.ts` | 移除 `acpDescription`/`acpInputHint` 字段和 `AcpBuiltinCommandRuntime`/`AcpBuiltinSlashCommandResult` 类型 |
+| `packages/coding-agent/src/slash-commands/builtin-registry.ts` | 注释化 14 处 `acpDescription`/`acpInputHint` 赋值 |
+| `packages/coding-agent/package.json` | 移除 `@agentclientprotocol/sdk` 依赖、`./modes/acp` exports |
+| 根 `package.json` | 移除 `@agentclientprotocol/sdk` catalog 条目 |
+| `scripts/verify-g002-gates.ts` | 移除 ACP builtins 断言 |
+| `test/acp-*.test.ts` (7 文件) | 删除 |
+| `test/agent-session-acp-permission.test.ts` | 删除 |
+| `test/bash-acp-terminal.test.ts` | 删除 |
+| `test/read-acp-fs.test.ts` | 删除 |
+| `test/write-acp-fs.test.ts` | 删除 |
+| `test/acp/` 目录 | 删除 |
+| `test/helpers/acp-schema.ts` | 删除 |
+| `test/agent-wire-conformance.test.ts` | 移除 ACP 测试用例和 imports |
+| `test/cli-args-mpreset.test.ts` | 移除 ACP session factory 测试用例 |
+| `test/gjc-ui-redesign.test.ts` | 移除 ACP_BUILTIN_SLASH_COMMANDS 引用 |
+| `test/agent-session-concurrent.test.ts` | 移除 `drainAsyncJobDeliveriesForAcp` 测试用例 |
+| `test/agent-wire/command-contract.redteam.test.ts` | 移除 ACP 目录/文件路径引用 |
+
+验证: `tsc --noEmit` 零新增错误 ✅ | `bun check` 无新增 issue ✅
 
 ---
 
@@ -283,13 +320,13 @@ Hindsight 是 Vectorize.io 提供的远程向量化记忆服务。需要外部 A
 
 ## 三、运行模式分析
 
-### 3.1 五种模式对比
+### 3.1 四种模式对比
 
 | 模式 | CLI 触发 | 代码量 | 启动 TUI | 用途 |
 |------|---------|--------|---------|------|
 | **interactive** | 默认 (无 `-p`, 无 `--mode`) | ~20,000+ 行 (~70 文件) | 是 | 日常开发使用 |
 | **print** | `-p` 或管道输入 | ~121 行 | 否 | CI/脚本集成 |
-| **acp** | `--mode acp` | ~3,328 行 (6 文件) | 否 | IDE 集成 (Agent Client Protocol) |
+| ~~**acp**~~ | ~~`--mode acp`~~ | ~~~3,328 行~~ | — | ✅ 已移除 (第四轮) |
 | **bridge** | `--mode bridge` | ~1,000 行 (6 文件) | 否 | HTTP 远程控制 |
 | **rpc** | `--mode rpc` | ~2,102 行 (5 文件) | 否 | JSON-RPC 无头协议 |
 | **rpc-ui** | `--mode rpc-ui` | 同上 (共享) | 可通过 rpc 暴露 UI | RPC + UI 能力 |
@@ -304,7 +341,7 @@ Hindsight 是 Vectorize.io 提供的远程向量化记忆服务。需要外部 A
 
 | 目录 | 行数 | 说明 |
 |------|------|------|
-| `modes/acp/` | ~3,328 行 | ACP 协议支持 |
+| ~~`modes/acp/`~~ | ~~~3,328 行~~ | ✅ 已移除 |
 | `modes/bridge/` | ~1,000 行 | HTTP 桥接服务器 |
 | `modes/rpc/` | ~2,102 行 | JSON-RPC 协议 |
 | `modes/shared/` | ~4,376 行 | Bridge+RPC 共享基础设施 |
@@ -314,7 +351,7 @@ Hindsight 是 Vectorize.io 提供的远程向量化记忆服务。需要外部 A
 
 ### 3.3 CLI 子命令
 
-16 个子命令中，核心只有 `launch` (默认)。以下子命令服务于特定工作流：
+15 个子命令中，核心只有 `launch` (默认)。以下子命令服务于特定工作流：
 
 | 子命令 | 用途 | 如果不用工作流可移除 |
 |--------|------|---------------------|
@@ -444,7 +481,7 @@ svelte, swift, tlaplus, verilog, vue, xml, zig
 | 优先级 | 目录 | 功能 | 默认状态 | 估算行数 |
 |--------|------|------|---------|---------|
 | ✅ 已移除 | theme.ts macOS observer | 外观检测回退 (CoreFoundation) | 仅 macOS | ~80 行 TS |
-| 🔴 高 | `modes/acp/` | ACP IDE 协议 | 仅 `--mode acp` | ~3,300 |
+| ✅ 已移除 | `modes/acp/` | ACP IDE 协议 | 已删除 (~3,300 行 TS + 13 测试文件) | |
 | 🔴 高 | `modes/shared/` | Bridge+RPC 共享基础设施 | 仅 `--mode bridge/rpc` | ~4,400 |
 | 🔴 高 | `modes/rpc/` | JSON-RPC 协议 | 仅 `--mode rpc` | ~2,100 |
 | 🔴 高 | `modes/bridge/` | HTTP 桥接服务器 | 仅 `--mode bridge` | ~1,000 |
@@ -507,13 +544,15 @@ svelte, swift, tlaplus, verilog, vue, xml, zig
 适合「只保留核心对话 + 编辑功能」：
 
 **TypeScript 移除**:
-- `modes/acp/`, `modes/bridge/`, `modes/rpc/`, `modes/shared/`, `modes/print-mode.ts`
-- `stt/`, `memories/`, `memory-backend/`, `hindsight/`
+- `modes/bridge/`, `modes/rpc/`, `modes/shared/`, `modes/print-mode.ts`
+- `stt/`, `memories/`, `memory-backend/`
 - `exa/`, `ssh/`
 - `dap/`, `debug/`, `autoresearch/`
 - `tools/puppeteer/`, `tools/browser/`
 - 两个 benchmark package
 - `python/`
+
+> 注: `modes/acp/` 和 `hindsight/` 已在第三、第四轮移除，不再列入。
 
 **Settings 清理**:
 - 删除所有 `default: false` 且对应代码已移除的配置项
@@ -522,7 +561,7 @@ svelte, swift, tlaplus, verilog, vue, xml, zig
 - 保持 `full-langs` 关闭
 - 裁剪 tokio features
 
-**预计减少**: ~15,000 行 TS + ~3 个 package
+**预计减少**: ~11,000 行 TS + ~3 个 package
 
 ### 方案 B: 中度裁剪（推荐）
 

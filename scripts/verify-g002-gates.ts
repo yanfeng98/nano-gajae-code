@@ -398,11 +398,8 @@ async function verifyMcpQuarantine(): Promise<GateResult> {
 	const blockedMcpKeys = REQUIRED_PRIVATE_EXPORT_BLOCKS.filter(key => exportsRecord[key] === null);
 	const missingPrivateBlocks = REQUIRED_PRIVATE_EXPORT_BLOCKS.filter(key => exportsRecord[key] !== null);
 	const builtinRegistry = await readText("packages/coding-agent/src/slash-commands/builtin-registry.ts");
-	const acpBuiltins = await readText("packages/coding-agent/src/slash-commands/acp-builtins.ts");
 	const exposesMcpBuiltin = /name:\s*["']mcp["']/.test(builtinRegistry);
 	const importsMcpBuiltinHandler = builtinRegistry.includes("handleMcpAcp");
-	const acpReferencesMcpHandler = acpBuiltins.includes("handleMcpAcp");
-	const acpAdvertisesMcpCommand = /name:\s*["']mcp["']/.test(acpBuiltins);
 	const exaProvider = await readText("packages/coding-agent/src/web/search/providers/exa.ts");
 	const exaRequiresApiKey = exaProvider.includes("return !!getEnvApiKey(\"exa\")");
 	const exaUsesPublicMcpFallback =
@@ -431,8 +428,6 @@ async function verifyMcpQuarantine(): Promise<GateResult> {
 		`missing private export blocks: ${missingPrivateBlocks.join(", ") || "<none>"}`,
 		`default /mcp builtin registered: ${exposesMcpBuiltin}`,
 		`default /mcp handler imported: ${importsMcpBuiltinHandler}`,
-		`ACP /mcp command advertised: ${acpAdvertisesMcpCommand}`,
-		`ACP MCP handler referenced: ${acpReferencesMcpHandler}`,
 		`Exa search requires EXA_API_KEY: ${exaRequiresApiKey}`,
 		`Exa public MCP fallback present: ${exaUsesPublicMcpFallback}`,
 		`private MCP implementation paths retained: ${presentInternalMcpPaths.join(", ") || "<none>"}`,
@@ -455,8 +450,6 @@ async function verifyMcpQuarantine(): Promise<GateResult> {
 			removedPublicDocsStillPresent.length === 0 &&
 			!exposesMcpBuiltin &&
 			!importsMcpBuiltinHandler &&
-			!acpAdvertisesMcpCommand &&
-			!acpReferencesMcpHandler &&
 			exaRequiresApiKey &&
 			!exaUsesPublicMcpFallback,
 		details,
