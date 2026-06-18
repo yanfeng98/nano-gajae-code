@@ -169,16 +169,7 @@ pub fn resolve_search_path(path: &str) -> Result<PathBuf> {
 /// Normalize a filesystem path to a forward-slash relative string.
 pub fn normalize_relative_path<'a>(root: &Path, path: &'a Path) -> Cow<'a, str> {
 	let relative = path.strip_prefix(root).unwrap_or(path);
-	if cfg!(windows) {
-		let relative = relative.to_string_lossy();
-		if relative.contains('\\') {
-			Cow::Owned(relative.replace('\\', "/"))
-		} else {
-			relative
-		}
-	} else {
-		relative.to_string_lossy()
-	}
+	relative.to_string_lossy()
 }
 
 pub fn contains_component(path: &Path, target: &str) -> bool {

@@ -2,7 +2,10 @@
 
 > 分析日期: 2026-06-18 | 分支: 260613-v0.5.0-dev | 代码基线: 0.5.0
 >
-> **已执行移除**: macOS 电源管理 (`power.rs` + 4 settings + agent-session 集成) — 仅 WSL2/Linux 运行，不需要此功能。
+> **已执行移除**:
+> - 第一轮: macOS 电源管理 (`power.rs` + 4 settings + agent-session 集成)
+> - 第二轮: 全平台死代码清理 (`appearance.rs`, `windows.rs`, pty/fs_cache/shell Windows 分支, winreg crate, theme.ts macOS observer, 测试文件)
+> - 总计减少 ~1,470 行，仅 Linux/WSL2 运行。
 
 本文档对 Gajae-Code 项目中所有功能的默认启用/关闭状态、代码体量、可选性和移除影响进行全面分析，为魔改裁剪提供决策依据。
 
@@ -20,6 +23,7 @@
 | 已知 Provider 类型 | 19 个 |
 | 内置 Tool 数 | 31 个 (BUILTIN_TOOLS) + 3 个 (HIDDEN_TOOLS) |
 | Settings 配置项 | ~136 个 (已移除 4 个 macOS 电源管理项) |
+| 已移除代码行数 | ~1,470 行 (两轮) |
 | 运行模式 | 5 种 (interactive, print, acp, bridge, rpc) |
 | CLI 子命令 | 16 个 |
 
@@ -141,7 +145,37 @@
 
 验证: `cargo check -p pi-natives` ✅ | `bun check` 无新增错误 ✅
 
-### 1.9 其他默认关闭项
+### 1.9 ~~平台专属死代码~~（✅ 已移除 — 仅 WSL2/Linux 运行）
+
+> **状态**: 已删除。macOS 外观检测 + Windows 路径/PATH/ConPTY 相关代码在 Linux 上永远是空操作或不编译。
+
+#### macOS 外观检测
+
+删除清单：
+| 文件 | 操作 |
+|------|------|
+| `crates/pi-natives/src/appearance.rs` | 删除 (452 行) |
+| `crates/pi-natives/src/lib.rs` | 移除 `pub mod appearance;` |
+| `packages/natives/native/index.d.ts` | 移除 `MacAppearanceObserver` 类、`detectMacOSAppearance()` 函数、`MacOSAppearance` 枚举 |
+| `packages/coding-agent/src/modes/theme/theme.ts` | 移除 observer 函数 (start/stop)、`macOSReportedAppearance` 变量、`shouldUseMacOSAppearanceFallback`、Tier 3 回退逻辑 |
+| `packages/coding-agent/test/theme-auto-detection.test.ts` | 移除 4 个 macOS 相关测试用例 + import |
+
+#### Windows 死代码
+
+删除清单：
+| 文件 | 操作 |
+|------|------|
+| `crates/pi-shell/src/windows.rs` | 删除 (309 行) |
+| `crates/pi-shell/src/lib.rs` | 移除 `pub mod windows;` |
+| `crates/pi-shell/Cargo.toml` | 移除整个 `[target.'cfg(windows)'.dependencies]` 块 |
+| `crates/pi-natives/src/pty.rs` | 移除 ~70 行 ConPTY/`#[cfg(windows)]` 分支，保留 Unix 路径 |
+| `crates/pi-natives/src/fs_cache.rs` | 移除 `cfg!(windows)` 路径分隔符转换 |
+| `crates/pi-shell/src/shell.rs` | 移除 `#[cfg(windows)]` normalize_env_key, merge_path_values, push_unique_paths, normalize_path_segment, PATH fallback, pipe 创建 |
+| 根 `Cargo.toml` | 移除 `winreg = "0.56"` |
+
+验证: `cargo check -p pi-natives -p pi-shell` ✅ | `bun check` 无新增错误 ✅
+
+### 1.10 其他默认关闭项
 
 | 配置项 | 默认值 | 说明 |
 |--------|--------|------|
@@ -374,7 +408,7 @@ svelte, swift, tlaplus, verilog, vue, xml, zig
 3. 从 `Cargo.toml` 中移除对应的依赖（如果没有其他模块使用）
 4. 从 `packages/natives/` 中移除对应的 JS 包装
 
-**已移除的模块**: `power.rs` (macOS IOKit 电源断言 — 仅 WSL2/Linux 需要)
+**已移除的模块**: `power.rs` (macOS IOKit 电源断言), `appearance.rs` (macOS 外观检测), `pi-shell/src/windows.rs` (Windows PATH), `winreg` crate
 
 ---
 
@@ -386,6 +420,7 @@ svelte, swift, tlaplus, verilog, vue, xml, zig
 
 | 优先级 | 目录 | 功能 | 默认状态 | 估算行数 |
 |--------|------|------|---------|---------|
+| ✅ 已移除 | theme.ts macOS observer | 外观检测回退 (CoreFoundation) | 仅 macOS | ~80 行 TS |
 | 🔴 高 | `modes/acp/` | ACP IDE 协议 | 仅 `--mode acp` | ~3,300 |
 | 🔴 高 | `modes/shared/` | Bridge+RPC 共享基础设施 | 仅 `--mode bridge/rpc` | ~4,400 |
 | 🔴 高 | `modes/rpc/` | JSON-RPC 协议 | 仅 `--mode rpc` | ~2,100 |
@@ -422,7 +457,11 @@ svelte, swift, tlaplus, verilog, vue, xml, zig
 
 | 优先级 | 模块 | 功能 | 可移除? |
 |--------|------|------|---------|
-| ✅ 已移除 | `power.rs` | macOS 电源断言 (IOKit) | ✅ 已删除 (WSL2/Linux 无意义) |
+| ✅ 已移除 | `power.rs` | macOS 电源断言 (IOKit) | ✅ 已删除 |
+| ✅ 已移除 | `appearance.rs` | macOS 外观检测 (CoreFoundation) | ✅ 已删除 |
+| ✅ 已移除 | `windows.rs` (pi-shell) | Windows PATH 配置 | ✅ 已删除 |
+| ✅ 已移除 | `winreg` crate | Windows 注册表访问 | ✅ 已从 workspace 移除 |
+| ✅ 已移除 | pty/fs_cache/shell Windows `#[cfg]` 分支 | ConPTY/路径/PATH 合并 | ✅ 已简化 |
 | 🔴 高 | `pi-shell` (整个 crate) | Brush shell + 输出最小化器 | ✅ 如果用外部 shell |
 | 🔴 高 | `full-langs` feature | 37 种额外 tree-sitter 语言 | ✅ 已默认关闭 |
 | 🟡 中 | syntect 嵌入数据 | 语法高亮数据 | ✅ 如果不需要高亮 |

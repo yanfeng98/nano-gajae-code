@@ -28,8 +28,6 @@ use tokio::{
 };
 use tokio_util::sync::CancellationToken;
 
-#[cfg(windows)]
-use crate::windows::configure_windows_path;
 use crate::{
 	cancel::{AbortReason, AbortToken, CancelToken},
 	minimizer, process,
@@ -413,61 +411,10 @@ const fn exit_code(result: &ExecutionResult) -> i32 {
 	}
 }
 
-#[cfg(windows)]
-const fn normalize_env_key(key: &str) -> &str {
-	if key.eq_ignore_ascii_case("PATH") {
-		"PATH"
-	} else {
-		key
-	}
-}
-
-#[cfg(not(windows))]
 const fn normalize_env_key(key: &str) -> &str {
 	key
 }
 
-#[cfg(windows)]
-fn merge_path_values(existing: &str, incoming: &str) -> String {
-	let mut merged = Vec::new();
-	let mut seen = HashSet::new();
-	push_unique_paths(&mut merged, &mut seen, existing);
-	push_unique_paths(&mut merged, &mut seen, incoming);
-
-	std::env::join_paths(merged.iter())
-		.map_or_else(|_| merged.join(";"), |paths| paths.to_string_lossy().into_owned())
-}
-
-#[cfg(windows)]
-fn push_unique_paths(merged: &mut Vec<String>, seen: &mut HashSet<String>, value: &str) {
-	for segment in std::env::split_paths(value) {
-		let segment_str = segment.to_string_lossy().into_owned();
-		let normalized = normalize_path_segment(&segment_str);
-		if normalized.is_empty() {
-			continue;
-		}
-		if seen.insert(normalized) {
-			merged.push(segment_str);
-		}
-	}
-}
-
-#[cfg(windows)]
-fn normalize_path_segment(segment: &str) -> String {
-	let trimmed = segment.trim().trim_matches('"');
-	if trimmed.is_empty() {
-		return String::new();
-	}
-
-	let mut normalized = std::path::PathBuf::new();
-	for component in std::path::Path::new(trimmed).components() {
-		normalized.push(component.as_os_str());
-	}
-
-	normalized.to_string_lossy().to_ascii_lowercase()
-}
-
-#[cfg(not(windows))]
 fn merge_path_values(_existing: &str, incoming: &str) -> String {
 	incoming.to_string()
 }
@@ -512,13 +459,6 @@ async fn create_session(config: &ShellConfig) -> Result<ShellSessionCore> {
 			.map_err(|err| Error::msg(format!("Failed to set env: {err}")))?;
 	}
 
-	#[cfg(windows)]
-	if merged_path.is_none()
-		&& let Some(value) = std::env::var_os("Path").or_else(|| std::env::var_os("PATH"))
-	{
-		merged_path = Some(value.to_string_lossy().into_owned());
-	}
-
 	if let Some(path_value) = merged_path {
 		let mut var = ShellVariable::new(ShellValue::String(path_value));
 		var.export();
@@ -543,9 +483,6 @@ async fn create_session(config: &ShellConfig) -> Result<ShellSessionCore> {
 		}
 	}
 	apply_env_fallback(&mut shell)?;
-
-	#[cfg(windows)]
-	configure_windows_path(&mut shell)?;
 
 	if let Some(snapshot_path) = config.snapshot_path.as_ref() {
 		source_snapshot(&mut shell, snapshot_path).await?;
@@ -1439,15 +1376,6 @@ fn pipe_to_files(label: &str) -> Result<(fs::File, fs::File)> {
 		let w = w.into_raw_fd();
 		// SAFETY: We just obtained these fds from os_pipe and own them exclusively.
 		unsafe { (FromRawFd::from_raw_fd(r), FromRawFd::from_raw_fd(w)) }
-	};
-
-	#[cfg(windows)]
-	let (r, w): (fs::File, fs::File) = {
-		use std::os::windows::io::{FromRawHandle, IntoRawHandle};
-		let r = r.into_raw_handle();
-		let w = w.into_raw_handle();
-		// SAFETY: We just obtained these handles from os_pipe and own them exclusively.
-		unsafe { (FromRawHandle::from_raw_handle(r), FromRawHandle::from_raw_handle(w)) }
 	};
 
 	Ok((r, w))
