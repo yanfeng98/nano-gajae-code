@@ -9,10 +9,9 @@
 import type { AgentMessage } from "@gajae-code/agent-core";
 import type { ModelRegistry } from "../config/model-registry";
 import type { Settings } from "../config/settings";
-import type { HindsightSessionState } from "../hindsight/state";
 import type { AgentSession } from "../session/agent-session";
 
-export type MemoryBackendId = "off" | "local" | "hindsight";
+export type MemoryBackendId = "off" | "local";
 
 export interface MemoryBackendStartOptions {
 	session: AgentSession;
@@ -20,7 +19,6 @@ export interface MemoryBackendStartOptions {
 	modelRegistry: ModelRegistry;
 	agentDir: string;
 	taskDepth: number;
-	parentHindsightSessionState?: HindsightSessionState;
 }
 
 export interface MemoryBackend {

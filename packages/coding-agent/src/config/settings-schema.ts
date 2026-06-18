@@ -200,7 +200,6 @@ const EMPTY_STRING_ARRAY: string[] = [];
 const EMPTY_STRING_RECORD: Record<string, string> = {};
 const DEFAULT_CYCLE_ORDER: string[] = ["default"];
 const EMPTY_MODEL_TAGS_RECORD: ModelTagsSettings = {};
-const HINDSIGHT_RECALL_TYPES_DEFAULT: string[] = ["world", "experience"];
 export const DEFAULT_BASH_INTERCEPTOR_RULES: BashInterceptorRule[] = [
 	{
 		pattern: "^\\s*(cat|head|tail|less|more)\\s+",
@@ -1288,164 +1287,22 @@ export const SETTINGS_SCHEMA = {
 
 	"memories.summaryInjectionTokenLimit": { type: "number", default: 5000 },
 
-	// Memory backend selector — picks between local memories pipeline,
-	// Hindsight remote memory, or off. Legacy `memories.enabled` keeps gating
+	// Memory backend selector. Legacy `memories.enabled` keeps gating
 	// the local backend; see config/settings.ts migration for details.
 	"memory.backend": {
 		type: "enum",
-		values: ["off", "local", "hindsight"] as const,
+		values: ["off", "local"] as const,
 		default: "off",
 		ui: {
 			tab: "memory",
 			label: "Memory Backend",
-			description: "Off, local memory pipeline, or Hindsight remote memory",
+			description: "Off, or local memory pipeline",
 			options: [
 				{ value: "off", label: "Off", description: "No memory subsystem runs" },
 				{ value: "local", label: "Local", description: "Local rollout summarisation pipeline (memory_summary.md)" },
-				{ value: "hindsight", label: "Hindsight", description: "Vectorize Hindsight remote memory service" },
-			],
+				],
 		},
 	},
-
-	// Hindsight (https://hindsight.vectorize.io)
-	"hindsight.apiUrl": {
-		type: "string",
-		default: "http://localhost:8888",
-		ui: {
-			tab: "memory",
-			label: "Hindsight API URL",
-			description: "Hindsight server URL (Cloud or self-hosted)",
-			condition: "hindsightActive",
-		},
-	},
-
-	"hindsight.apiToken": { type: "string", default: undefined },
-
-	"hindsight.bankId": {
-		type: "string",
-		default: undefined,
-		ui: {
-			tab: "memory",
-			label: "Hindsight Bank ID",
-			description: "Memory bank identifier (default: project name)",
-			condition: "hindsightActive",
-		},
-	},
-
-	"hindsight.bankIdPrefix": { type: "string", default: undefined },
-	"hindsight.scoping": {
-		type: "enum",
-		values: ["global", "per-project", "per-project-tagged"] as const,
-		default: "per-project-tagged",
-		ui: {
-			tab: "memory",
-			label: "Hindsight Scoping",
-			description:
-				"global = one shared bank; per-project = isolated bank per cwd; per-project-tagged = shared bank with project tags so global + project memories merge on recall",
-			options: [
-				{
-					value: "global",
-					label: "Global",
-					description: "One shared bank — every project sees the same memories",
-				},
-				{
-					value: "per-project",
-					label: "Per project",
-					description: "Isolated bank per cwd basename — projects cannot see each other's memories",
-				},
-				{
-					value: "per-project-tagged",
-					label: "Per project (tagged)",
-					description:
-						"Shared bank, retains tagged with project:<cwd>. Recall surfaces project + untagged global memories together",
-				},
-			],
-			condition: "hindsightActive",
-		},
-	},
-	"hindsight.bankMission": { type: "string", default: undefined },
-	"hindsight.retainMission": { type: "string", default: undefined },
-
-	"hindsight.autoRecall": {
-		type: "boolean",
-		default: true,
-		ui: {
-			tab: "memory",
-			label: "Hindsight Auto Recall",
-			description: "Recall memories on the first turn of each session",
-			condition: "hindsightActive",
-		},
-	},
-	"hindsight.autoRetain": {
-		type: "boolean",
-		default: true,
-		ui: {
-			tab: "memory",
-			label: "Hindsight Auto Retain",
-			description: "Retain transcript every N turns and at session boundaries",
-			condition: "hindsightActive",
-		},
-	},
-
-	"hindsight.retainMode": {
-		type: "enum",
-		values: ["full-session", "last-turn"] as const,
-		default: "full-session",
-		ui: {
-			tab: "memory",
-			label: "Hindsight Retain Mode",
-			description: "full-session = upsert one document per session, last-turn = chunked",
-			options: [
-				{
-					value: "full-session",
-					label: "Full session",
-					description: "Upsert one document per session (recommended)",
-				},
-				{ value: "last-turn", label: "Last turn", description: "Chunked retention sliced by turn boundaries" },
-			],
-			condition: "hindsightActive",
-		},
-	},
-	"hindsight.retainEveryNTurns": { type: "number", default: 3 },
-	"hindsight.retainOverlapTurns": { type: "number", default: 2 },
-	"hindsight.retainContext": { type: "string", default: "gjc" },
-
-	"hindsight.recallBudget": {
-		type: "enum",
-		values: ["low", "mid", "high"] as const,
-		default: "mid",
-	},
-	"hindsight.recallMaxTokens": { type: "number", default: 1024 },
-	"hindsight.recallContextTurns": { type: "number", default: 1 },
-	"hindsight.recallMaxQueryChars": { type: "number", default: 800 },
-	"hindsight.recallTypes": { type: "array", default: HINDSIGHT_RECALL_TYPES_DEFAULT },
-
-	"hindsight.debug": { type: "boolean", default: false },
-
-	"hindsight.mentalModelsEnabled": {
-		type: "boolean",
-		default: true,
-		ui: {
-			tab: "memory",
-			label: "Hindsight Mental Models",
-			description:
-				"Read curated reflect summaries (mental models) into developer instructions at boot. Loads existing models on the bank — does not write. Pair with hindsight.mentalModelAutoSeed to also auto-create the built-in seed set.",
-			condition: "hindsightActive",
-		},
-	},
-	"hindsight.mentalModelAutoSeed": {
-		type: "boolean",
-		default: true,
-		ui: {
-			tab: "memory",
-			label: "Hindsight Mental Model Auto-Seed",
-			description:
-				"At session start, create any built-in mental models (project-conventions, project-decisions, user-preferences) that do not yet exist on the bank.",
-			condition: "hindsightActive",
-		},
-	},
-	"hindsight.mentalModelRefreshIntervalMs": { type: "number", default: 5 * 60 * 1000 },
-	"hindsight.mentalModelMaxRenderChars": { type: "number", default: 16_000 },
 
 	// TTSR
 	"ttsr.enabled": {

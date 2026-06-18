@@ -21,7 +21,6 @@ import { runExtensionCompact, runExtensionSetModel } from "../extensibility/exte
 import { getSessionSlashCommands } from "../extensibility/extensions/get-commands-handler";
 import { buildAgentSubskillInjection } from "../extensibility/gjc-plugins";
 import { buildSkillPromptMessage, type Skill } from "../extensibility/skills";
-import type { HindsightSessionState } from "../hindsight/state";
 import type { LocalProtocolOptions } from "../internal-urls";
 import subagentSystemPromptTemplate from "../prompts/system/subagent-system-prompt.md" with { type: "text" };
 import submitReminderTemplate from "../prompts/system/subagent-yield-reminder.md" with { type: "text" };
@@ -154,7 +153,6 @@ export interface ExecutorOptions {
 	 * artifacts directory (no per-subagent subdir).
 	 */
 	parentArtifactManager?: ArtifactManager;
-	parentHindsightSessionState?: HindsightSessionState;
 	/**
 	 * Parent agent's OpenTelemetry configuration. When defined, the subagent's
 	 * loop is started with the same tracer/hooks but its own agent identity
@@ -1260,7 +1258,6 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 						parent: agent.name,
 						phase: "prompt",
 					},
-					parentHindsightSessionState: options.parentHindsightSessionState,
 					parentTaskPrefix: id,
 					agentId: id,
 					agentDisplayName: agent.name,

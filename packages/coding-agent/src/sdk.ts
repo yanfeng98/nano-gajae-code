@@ -66,7 +66,6 @@ import { resolveCurrentPhaseForParent } from "./extensibility/gjc-plugins/inject
 import { loadActiveSubskillTools } from "./extensibility/gjc-plugins/tools";
 import { loadSkills, type Skill, type SkillWarning, setActiveSkills } from "./extensibility/skills";
 import type { FileSlashCommand } from "./extensibility/slash-commands";
-import type { HindsightSessionState } from "./hindsight/state";
 import { LocalProtocolHandler, type LocalProtocolOptions } from "./internal-urls";
 import { LSP_STARTUP_EVENT_CHANNEL, type LspStartupEvent } from "./lsp/startup-events";
 import { resolveMemoryBackend } from "./memory-backend";
@@ -291,8 +290,6 @@ export interface CreateAgentSessionOptions {
 	taskDepth?: number;
 	/** Current role-agent type/name for nested task sessions. */
 	currentAgentType?: string;
-	/** Parent Hindsight state to alias for subagent private memory backend compatibility. */
-	parentHindsightSessionState?: HindsightSessionState;
 	/** Pre-allocated agent identity for IRC routing. Default: "0-Main" for top-level, parentTaskPrefix-derived for sub. */
 	agentId?: string;
 	/** Display name for the agent in IRC. Default: "main" or "sub". */
@@ -1170,7 +1167,6 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			getSessionId: () => sessionManager.getSessionId?.() ?? null,
 			getActiveSkillState: () => session?.getActiveSkillState(),
 			getActiveSkillPhase: () => session?.getActiveSkillPhase(),
-			getHindsightSessionState: () => session?.getHindsightSessionState(),
 			get model() {
 				return agent?.state.model ?? model;
 			},
@@ -2061,8 +2057,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 					modelRegistry,
 					agentDir,
 					taskDepth,
-					parentHindsightSessionState: options.parentHindsightSessionState,
-				}),
+					}),
 			),
 		);
 

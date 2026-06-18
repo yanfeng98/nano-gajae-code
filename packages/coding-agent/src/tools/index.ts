@@ -8,7 +8,6 @@ import { checkPythonKernelAvailability } from "../eval/py/kernel";
 import type { Skill } from "../extensibility/skills";
 import type { GoalModeState, GoalRuntime } from "../goals";
 import { GoalTool } from "../goals/tools/goal-tool";
-import type { HindsightSessionState } from "../hindsight/state";
 import { LspTool } from "../lsp";
 import type { WorkflowGateEmitter } from "../modes/shared/agent-wire/unattended-session";
 import type { PlanModeState } from "../plan-mode/state";
@@ -161,8 +160,6 @@ export interface ToolSession {
 	trackEvalExecution?<T>(execution: Promise<T>, abortController: AbortController): Promise<T>;
 	/** Get session ID */
 	getSessionId?: () => string | null;
-	/** Get Hindsight runtime state for this agent session. */
-	getHindsightSessionState?: () => HindsightSessionState | undefined;
 	/** Agent identity used for IRC routing. Returns the registry id (e.g. "0-Main", "0-AuthLoader"). */
 	getAgentId?: () => string | null;
 	/** Look up a registered tool by name (used by the eval js backend's tool bridge). */

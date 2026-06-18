@@ -957,12 +957,7 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<SlashCommandSpec> = [
 					await runtime.output("Memory consolidation enqueued.");
 					return commandConsumed();
 				}
-				case "mm":
-					return usage(
-						"Mental-model maintenance via /memory mm is unsupported in ACP mode; use the hindsight HTTP API directly.",
-						runtime,
-					);
-				default:
+			default:
 					return usage("Usage: /memory <view|clear|reset|enqueue|rebuild>", runtime);
 			}
 		},

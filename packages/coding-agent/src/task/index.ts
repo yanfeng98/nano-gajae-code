@@ -1358,8 +1358,7 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 						promptTemplates,
 						localProtocolOptions,
 						parentArtifactManager,
-						parentHindsightSessionState: this.session.getHindsightSessionState?.(),
-						parentTelemetry: this.session.getTelemetry?.(),
+							parentTelemetry: this.session.getTelemetry?.(),
 						forkContextSeed,
 					});
 					return { ...result, ...(forkContext ? { forkContext } : {}), forkContextAdvisory };
@@ -1419,8 +1418,7 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 						promptTemplates,
 						localProtocolOptions,
 						parentArtifactManager,
-						parentHindsightSessionState: this.session.getHindsightSessionState?.(),
-						parentTelemetry: this.session.getTelemetry?.(),
+							parentTelemetry: this.session.getTelemetry?.(),
 						forkContextSeed,
 					});
 					const resultWithForkContext = {

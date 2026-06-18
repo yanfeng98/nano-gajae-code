@@ -3,9 +3,10 @@
 > 分析日期: 2026-06-18 | 分支: 260613-v0.5.0-dev | 代码基线: 0.5.0
 >
 > **已执行移除**:
-> - 第一轮: macOS 电源管理 (`power.rs` + 4 settings + agent-session 集成)
-> - 第二轮: 全平台死代码清理 (`appearance.rs`, `windows.rs`, pty/fs_cache/shell Windows 分支, winreg crate, theme.ts macOS observer, 测试文件)
-> - 总计减少 ~1,470 行，仅 Linux/WSL2 运行。
+> - 第一轮: macOS 电源管理 (~350 行)
+> - 第二轮: 全平台死代码清理 (~1,120 行)
+> - 第三轮: Hindsight 远程记忆系统 (~2,600 行)
+> - 总计减少 ~4,070 行，仅 Linux/WSL2 + 本地记忆运行。
 
 本文档对 Gajae-Code 项目中所有功能的默认启用/关闭状态、代码体量、可选性和移除影响进行全面分析，为魔改裁剪提供决策依据。
 
@@ -22,8 +23,8 @@
 | AI Provider 数 | 14 个 (含 models.json 定义的) |
 | 已知 Provider 类型 | 19 个 |
 | 内置 Tool 数 | 31 个 (BUILTIN_TOOLS) + 3 个 (HIDDEN_TOOLS) |
-| Settings 配置项 | ~136 个 (已移除 4 个 macOS 电源管理项) |
-| 已移除代码行数 | ~1,470 行 (两轮) |
+| Settings 配置项 | ~104 个 (已移除 4 power + 32 hindsight) |
+| 已移除代码行数 | ~4,070 行 (三轮) |
 | 运行模式 | 5 种 (interactive, print, acp, bridge, rpc) |
 | CLI 子命令 | 16 个 |
 
@@ -44,28 +45,23 @@
 **依赖**: whisper.cpp 本地模型下载（首次使用时）、Python `transcribe.py`
 **移除影响**: 无，默认关闭。删除 `stt/` 目录即可。
 
-### 1.2 记忆系统 (`memory.*` / `memories.*` / `hindsight.*`)
+### 1.2 记忆系统 (`memory.*` / `memories.*`)
 
 | 配置项 | 默认值 | 说明 |
 |--------|--------|------|
-| `memory.backend` | `"off"` | 记忆后端选择器：off/local/hindsight |
+| `memory.backend` | `"off"` | 记忆后端选择器：off/local |
 | `memories.enabled` | `false` | 旧版本地记忆流水线（已隐藏，仅用于迁移兼容） |
-| `hindsight.debug` | `false` | Hindsight 调试模式 |
+
+> **Hindsight 远程记忆已于第三轮移除。** 详见 Section 1.11。
 
 `memory.backend` 是整个记忆系统的总开关，默认 `"off"` 意味着：
 - **本地记忆流水线** (`memory.backend: "local"`) — 不启动
-- **Hindsight 远程记忆** (`memory.backend: "hindsight"`) — 不启动
 
-相关代码目录：
+相关代码目录（均保留）：
 | 目录 | 功能 | 行数（估算） |
 |------|------|-------------|
-| `packages/coding-agent/src/memories/` | 旧版本地记忆 | ~8 文件 |
-| `packages/coding-agent/src/memory-backend/` | 新版记忆后端抽象 | ~5 文件 |
-| `packages/coding-agent/src/hindsight/` | Hindsight 远程记忆集成 | ~5 文件 |
-
-`hindsight.*` 有 ~18 个配置项（apiUrl, apiToken, bankId, scoping, autoRecall, autoRetain, retainMode, recallBudget, mentalModelsEnabled 等），全部依赖外部服务 (https://hindsight.vectorize.io)，默认不会启动。
-
-**移除影响**: 无运行时影响。删除三个目录 + 相关配置项即可。
+| `packages/coding-agent/src/memories/` | 本地记忆流水线 (Phase 1+2) | ~1,700 行 |
+| `packages/coding-agent/src/memory-backend/` | 记忆后端抽象 (off/local) | ~200 行 |
 
 ### 1.3 可选工具（默认关闭）
 
@@ -196,6 +192,33 @@
 | `compaction.handoffSaveToDisk` | `false` | Handoff 文档存盘 |
 | `statusLine.showHookStatus` | `false` | 状态栏显示 hook 状态 |
 | `statusLine.sessionAccent` | `true` | (这个是 true，仅对比) |
+
+### 1.11 ~~Hindsight 远程记忆系统~~（✅ 已移除 — 保留本地记忆）
+
+> **状态**: 已删除 Hindsight 远程记忆后端。本地记忆流水线 (`memories/` + `memory-backend/`) 完整保留。
+
+Hindsight 是 Vectorize.io 提供的远程向量化记忆服务。需要外部 API token，提供 retain/recall/reflect 操作和 Mental Models 功能。
+
+删除清单：
+| 文件 | 操作 |
+|------|------|
+| `packages/coding-agent/src/hindsight/` | 删除整个目录 (10 文件: backend, bank, client, config, content, index, mental-models, seeds.json, state, transcript) |
+| `packages/coding-agent/src/tools/hindsight-recall.ts` | 删除 |
+| `packages/coding-agent/src/tools/hindsight-reflect.ts` | 删除 |
+| `packages/coding-agent/src/tools/hindsight-retain.ts` | 删除 |
+| `memory-backend/types.ts` | 移除 `"hindsight"` 类型值 + `parentHindsightSessionState` 字段 |
+| `memory-backend/resolve.ts` | 移除 `hindsightBackend` import 和分支 |
+| `agent-session.ts` | 移除 `#hindsightSessionState` 字段、getter/setter、`#rekeyHindsight`/`#resetHindsightConversation` 方法、所有调用点 (9 处)、dispose 清理 |
+| `sdk.ts` | 移除 `parentHindsightSessionState` option、`getHindsightSessionState` tool session 字段 |
+| `task/executor.ts` + `task/index.ts` | 移除 `parentHindsightSessionState` 传递 |
+| `command-controller.ts` | 移除 import 块、`/memory mm` 路由、7 个 `#mm*` 方法 |
+| `config/settings-schema.ts` | 移除 32 个 `hindsight.*` 配置项 + `hindsightActive` 条件常量 + `HINDSIGHT_RECALL_TYPES_DEFAULT` |
+| `config/settings.ts` | 移除 Hindsight 配置迁移代码 |
+| `settings-defs.ts` | 移除 `hindsightActive` 条件函数 + `Settings` import |
+| `settings-selector.ts` | 残留注释 (无害) |
+| `slash-commands/builtin-registry.ts` | 移除 ACP 模式 `case "mm"` |
+
+验证: `cargo check` ✅ | `bun check` 新增错误 0 ✅
 
 ---
 
@@ -428,7 +451,9 @@ svelte, swift, tlaplus, verilog, vue, xml, zig
 | 🔴 高 | `modes/print-mode.ts` | 非交互单次模式 | `-p` 标志 | ~120 |
 | 🟡 中 | `stt/` | 语音转文字 | `stt.enabled: false` | ~300 |
 | 🟡 中 | `memories/` + `memory-backend/` | 本地记忆流水线 | `memory.backend: "off"` | ~500 |
-| 🟡 中 | `hindsight/` | 远程记忆服务 | `memory.backend: "off"` | ~400 |
+| ✅ 已移除 | `hindsight/` | Hindsight 远程记忆 | 已删除 (~1,800 行 TS) | |
+
+
 | 🟡 中 | `exa/` | Exa 搜索集成 | 需 API key | ~600 |
 | 🟡 中 | `ssh/` | SSH 远程执行 | 需 SSH 配置 | ~300 |
 | 🟡 中 | `tools/puppeteer/` | 浏览器反指纹脚本 (13个) | `browser.enabled: true` | ~200 |
