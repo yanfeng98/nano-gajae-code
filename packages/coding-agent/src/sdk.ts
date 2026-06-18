@@ -1,7 +1,6 @@
 import {
 	Agent,
 	type AgentMessage,
-	type AgentTelemetryConfig,
 	type AgentTool,
 	AppendOnlyContextManager,
 	INTENT_FIELD,
@@ -313,16 +312,6 @@ export interface CreateAgentSessionOptions {
 	/** Whether UI is available (enables interactive tools like ask). Default: false */
 	hasUI?: boolean;
 
-	/**
-	 * Opt-in OpenTelemetry instrumentation forwarded to the underlying Agent.
-	 * Passing `{}` enables the loop's GenAI-semantic-convention spans. See
-	 * {@link AgentTelemetryConfig} for the full surface (hooks, content capture,
-	 * cost estimator, agent identity).
-	 *
-	 * Safe to enable without an OTEL SDK registered in the host: the
-	 * `@opentelemetry/api` package returns a no-op tracer in that case.
-	 */
-	telemetry?: AgentTelemetryConfig;
 	/** Optional fork-context seed used to initialize a child session before its first prompt. */
 	forkContextSeed?: ForkContextSeed;
 	/** Optional provider state override. Fork-context children should omit this by default. */
@@ -1230,7 +1219,6 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			settings,
 			authStorage,
 			modelRegistry,
-			getTelemetry: () => agent?.telemetry,
 			buildForkContextSeed: forkOptions => session.buildForkContextSeed(forkOptions),
 		};
 
@@ -1892,7 +1880,6 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			},
 			intentTracing: !!intentField,
 			getToolChoice: () => session?.nextToolChoice(),
-			telemetry: options.telemetry,
 			appendOnlyContext,
 		});
 

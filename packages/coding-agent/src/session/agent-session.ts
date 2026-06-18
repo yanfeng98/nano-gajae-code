@@ -27,7 +27,6 @@ import {
 	type AgentState,
 	type AgentTool,
 	AppendOnlyContextManager,
-	resolveTelemetry,
 	type StablePrefixSnapshot,
 	ThinkingLevel,
 } from "@gajae-code/agent-core";
@@ -6018,7 +6017,6 @@ export class AgentSession {
 					convertToLlm,
 					initiatorOverride: "agent",
 					metadata: this.agent.metadataForProvider(model.provider),
-					telemetry: resolveTelemetry(this.agent.telemetry, this.sessionId),
 				},
 				handoffSignal,
 			);
@@ -6876,8 +6874,7 @@ export class AgentSession {
 		options?: SummaryOptions,
 	): Promise<CompactionResult> {
 		const candidates = this.#getCompactionModelCandidates(this.#modelRegistry.getAvailable());
-		const telemetry = resolveTelemetry(this.agent.telemetry, this.sessionId);
-
+		
 		for (const candidate of candidates) {
 			const apiKey = await this.#modelRegistry.getApiKey(candidate, this.sessionId);
 			if (!apiKey) continue;
@@ -6887,8 +6884,7 @@ export class AgentSession {
 					...options,
 					metadata: this.agent.metadataForProvider(candidate.provider),
 					convertToLlm,
-					telemetry,
-					authCredentialType: this.#modelRegistry.getSessionCredentialType(candidate.provider, this.sessionId),
+						authCredentialType: this.#modelRegistry.getSessionCredentialType(candidate.provider, this.sessionId),
 				});
 			} catch (error) {
 				if (!this.#isCompactionAuthFailure(error)) {
@@ -7160,8 +7156,7 @@ export class AgentSession {
 			} else {
 				const candidates = this.#getCompactionModelCandidates(availableModels);
 				const retrySettings = this.settings.getGroup("retry");
-				const telemetry = resolveTelemetry(this.agent.telemetry, this.sessionId);
-				let compactResult: CompactionResult | undefined;
+								let compactResult: CompactionResult | undefined;
 				let lastError: unknown;
 
 				for (const candidate of candidates) {
@@ -7178,8 +7173,7 @@ export class AgentSession {
 								metadata: this.agent.metadataForProvider(candidate.provider),
 								initiatorOverride: "agent",
 								convertToLlm,
-								telemetry,
-								authCredentialType: this.#modelRegistry.getSessionCredentialType(
+												authCredentialType: this.#modelRegistry.getSessionCredentialType(
 									candidate.provider,
 									this.sessionId,
 								),
@@ -8981,8 +8975,7 @@ export class AgentSession {
 				reserveTokens: branchSummarySettings.reserveTokens,
 				metadata: this.agent.metadataForProvider(model.provider),
 				convertToLlm,
-				telemetry: resolveTelemetry(this.agent.telemetry, this.sessionId),
-			});
+							});
 			this.#branchSummaryAbortController = undefined;
 			if (result.aborted) {
 				return { cancelled: true, aborted: true };

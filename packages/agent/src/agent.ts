@@ -99,7 +99,6 @@ export interface AgentOptions {
 	getToolChoice?: () => ToolChoice | undefined;
 	beforeToolCall?: AgentLoopConfig["beforeToolCall"];
 	afterToolCall?: AgentLoopConfig["afterToolCall"];
-	telemetry?: AgentLoopConfig["telemetry"];
 	appendOnlyContext?: AppendOnlyContextManager;
 }
 
@@ -164,7 +163,6 @@ export class Agent {
 	#onHarmonyLeak?: (event: HarmonyAuditEvent) => void | Promise<void>;
 	#onBeforeYield?: () => Promise<void> | void;
 	#shouldPause?: AgentLoopConfig["shouldPause"];
-	#telemetry?: AgentLoopConfig["telemetry"];
 	#appendOnlyContext?: AppendOnlyContextManager;
 
 	get intentTracing(): boolean {
@@ -217,7 +215,6 @@ export class Agent {
 		this.#shouldPause = opts.shouldPause;
 		this.beforeToolCall = opts.beforeToolCall;
 		this.afterToolCall = opts.afterToolCall;
-		this.#telemetry = opts.telemetry;
 		this.#appendOnlyContext = opts.appendOnlyContext;
 	}
 
@@ -253,14 +250,6 @@ export class Agent {
 
 	setMetadataResolver(resolver: ((provider: string) => Record<string, unknown> | undefined) | undefined): void {
 		this.#metadataResolver = resolver;
-	}
-
-	get telemetry(): AgentLoopConfig["telemetry"] | undefined {
-		return this.#telemetry;
-	}
-
-	setTelemetry(telemetry: AgentLoopConfig["telemetry"] | undefined): void {
-		this.#telemetry = telemetry;
 	}
 
 	get providerSessionState(): Map<string, ProviderSessionState> | undefined {
@@ -876,7 +865,6 @@ export class Agent {
 				if (this.#activeRunId !== runId) return false;
 				return this.#shouldPause?.() === true;
 			},
-			telemetry: this.#telemetry,
 		};
 
 		let partial: AgentMessage | null = null;

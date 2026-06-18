@@ -18,23 +18,12 @@ import {
 	isHarmonyLeakMitigationTarget,
 	signalListLabel,
 } from "./harmony-leak";
-import { type AgentRunCoverage, type AgentRunSummary, ToolCallBlockedError } from "./run-collector";
-import {
-	type AgentTelemetry,
-	failChatSpan,
-	finishChatSpan,
-	finishExecuteToolSpan,
-	finishInvokeAgentSpan,
-	fireOnRunEnd,
-	PiGenAIAttr,
-	recordSkippedTool,
-	resolveTelemetry,
-	runInActiveSpan,
-	type Span,
-	startChatSpan,
-	startExecuteToolSpan,
-	startInvokeAgentSpan,
-} from "./telemetry";
+class ToolCallBlockedError extends Error {
+	constructor(readonly reason?: string) {
+		super(reason ?? "Tool call was blocked");
+		this.name = "ToolCallBlockedError";
+	}
+}
 import type {
 	AgentContext,
 	AgentEvent,
@@ -166,23 +155,13 @@ function createAgentStream(): EventStream<AgentEvent, AgentMessage[]> {
 
 function buildAgentEndEvent(
 	messages: AgentMessage[],
-	telemetry: AgentTelemetry | undefined,
-	stepCount: number,
 	stopReason: "completed" | "paused" = "completed",
 ): Extract<AgentEvent, { type: "agent_end" }> {
-	const base = { type: "agent_end" as const, messages, stopReason };
-	if (!telemetry) return base;
-	const snapshot = telemetry.collector.snapshot({ stepCount });
-	if (telemetry.collector.markRunEnded()) {
-		fireOnRunEnd(telemetry, snapshot.summary, snapshot.coverage);
-	}
-	return { ...base, telemetry: snapshot.summary, coverage: snapshot.coverage };
+	return { type: "agent_end" as const, messages, stopReason };
 }
 
 export interface AgentLoopDetailedResult {
 	readonly messages: AgentMessage[];
-	readonly telemetry: AgentRunSummary | undefined;
-	readonly coverage: AgentRunCoverage | undefined;
 }
 
 export function agentLoopDetailed(
@@ -195,9 +174,8 @@ export function agentLoopDetailed(
 	readonly stream: EventStream<AgentEvent, AgentMessage[]>;
 	readonly detailed: () => Promise<AgentLoopDetailedResult>;
 } {
-	const capture = createDetailedCapture(config);
-	const stream = agentLoop(prompts, context, capture.config, signal, streamFn);
-	return { stream, detailed: () => capture.detailed(stream) };
+	const stream = agentLoop(prompts, context, config, signal, streamFn);
+	return { stream, detailed: async () => ({ messages: await stream.result() }) };
 }
 
 export function agentLoopContinueDetailed(
@@ -209,38 +187,8 @@ export function agentLoopContinueDetailed(
 	readonly stream: EventStream<AgentEvent, AgentMessage[]>;
 	readonly detailed: () => Promise<AgentLoopDetailedResult>;
 } {
-	const capture = createDetailedCapture(config);
-	const stream = agentLoopContinue(context, capture.config, signal, streamFn);
-	return { stream, detailed: () => capture.detailed(stream) };
-}
-
-function createDetailedCapture(config: AgentLoopConfig): {
-	readonly config: AgentLoopConfig;
-	readonly detailed: (stream: EventStream<AgentEvent, AgentMessage[]>) => Promise<AgentLoopDetailedResult>;
-} {
-	let captured: { summary: AgentRunSummary; coverage: AgentRunCoverage } | undefined;
-	const userHook = config.telemetry?.onRunEnd;
-	const wired: AgentLoopConfig = {
-		...config,
-		telemetry: {
-			...(config.telemetry ?? {}),
-			onRunEnd: (summary, coverage) => {
-				captured = { summary, coverage };
-				userHook?.(summary, coverage);
-			},
-		},
-	};
-	return {
-		config: wired,
-		detailed: async stream => {
-			const messages = await stream.result();
-			return {
-				messages,
-				telemetry: captured?.summary,
-				coverage: captured?.coverage,
-			};
-		},
-	};
+	const stream = agentLoopContinue(context, config, signal, streamFn);
+	return { stream, detailed: async () => ({ messages: await stream.result() }) };
 }
 
 export function normalizeMessagesForProvider(
@@ -347,33 +295,16 @@ async function runLoop(
 	stream: EventStream<AgentEvent, AgentMessage[]>,
 	streamFn?: StreamFn,
 ): Promise<void> {
-	const telemetry = resolveTelemetry(config.telemetry, config.sessionId);
-	const invokeAgentSpan = startInvokeAgentSpan(telemetry, config.model);
 	const stepCounter = { count: 0 };
-	let caughtError: unknown;
-	try {
-		await runInActiveSpan(invokeAgentSpan, () =>
-			runLoopBody(
-				currentContext,
-				newMessages,
-				config,
-				signal,
-				stream,
-				telemetry,
-				invokeAgentSpan,
-				stepCounter,
-				streamFn,
-			),
-		);
-	} catch (err) {
-		caughtError = err;
-		throw err;
-	} finally {
-		finishInvokeAgentSpan(telemetry, invokeAgentSpan, {
-			stepCount: stepCounter.count,
-			errorObject: caughtError,
-		});
-	}
+	await runLoopBody(
+		currentContext,
+		newMessages,
+		config,
+		signal,
+		stream,
+		stepCounter,
+		streamFn,
+	);
 }
 
 interface StepCounter {
@@ -386,8 +317,6 @@ async function runLoopBody(
 	config: AgentLoopConfig,
 	signal: AbortSignal | undefined,
 	stream: EventStream<AgentEvent, AgentMessage[]>,
-	telemetry: AgentTelemetry | undefined,
-	invokeAgentSpan: Span | undefined,
 	stepCounter: StepCounter,
 	streamFn?: StreamFn,
 ): Promise<void> {
@@ -428,8 +357,6 @@ async function runLoopBody(
 					config,
 					signal,
 					stream,
-					telemetry,
-					invokeAgentSpan,
 					stepCounter,
 					streamFn,
 					harmonyRetryAttempt,
@@ -473,14 +400,9 @@ async function runLoopBody(
 					currentContext.messages.push(result);
 					newMessages.push(result);
 					toolResults.push(result);
-					recordSkippedTool(telemetry, {
-						toolCallId: toolCall.id,
-						toolName: toolCall.name,
-						status: message.stopReason === "aborted" ? "aborted" : "error",
-					});
 				}
 				stream.push({ type: "turn_end", message, toolResults });
-				stream.push(buildAgentEndEvent(newMessages, telemetry, stepCounter.count));
+				stream.push(buildAgentEndEvent(newMessages));
 				stream.end(newMessages);
 				return;
 			}
@@ -496,8 +418,6 @@ async function runLoopBody(
 					signal,
 					stream,
 					config,
-					telemetry,
-					invokeAgentSpan,
 				);
 
 				toolResults.push(...executionResult.toolResults);
@@ -518,7 +438,7 @@ async function runLoopBody(
 			pendingMessages = (await config.getSteeringMessages?.()) || [];
 			if (pendingMessages.length > 0) continue;
 			if (config.shouldPause?.()) {
-				stream.push(buildAgentEndEvent(newMessages, telemetry, stepCounter.count, "paused"));
+				stream.push(buildAgentEndEvent(newMessages, "paused"));
 				stream.end(newMessages);
 				return;
 			}
@@ -526,7 +446,7 @@ async function runLoopBody(
 
 		await config.onBeforeYield?.();
 		if (config.shouldPause?.()) {
-			stream.push(buildAgentEndEvent(newMessages, telemetry, stepCounter.count, "paused"));
+			stream.push(buildAgentEndEvent(newMessages, "paused"));
 			stream.end(newMessages);
 			return;
 		}
@@ -539,7 +459,7 @@ async function runLoopBody(
 		break;
 	}
 
-	stream.push(buildAgentEndEvent(newMessages, telemetry, stepCounter.count));
+	stream.push(buildAgentEndEvent(newMessages));
 	stream.end(newMessages);
 }
 
@@ -565,8 +485,6 @@ async function streamAssistantResponse(
 	config: AgentLoopConfig,
 	signal: AbortSignal | undefined,
 	stream: EventStream<AgentEvent, AgentMessage[]>,
-	telemetry: AgentTelemetry | undefined,
-	invokeAgentSpan: Span | undefined,
 	stepCounter: StepCounter,
 	streamFn?: StreamFn,
 	harmonyRetryAttempt = 0,
@@ -611,44 +529,9 @@ async function streamAssistantResponse(
 	const effectiveToolChoice = dynamicToolChoice ?? config.toolChoice;
 	const effectiveReasoning = dynamicReasoning ?? config.reasoning;
 
-	const chatStepNumber = stepCounter.count;
 	stepCounter.count += 1;
-	const chatSpan = startChatSpan(telemetry, config.model, {
-		parent: invokeAgentSpan,
-		stepNumber: chatStepNumber,
-		request: {
-			maxTokens: config.maxTokens,
-			temperature: effectiveTemperature,
-			topP: config.topP,
-			topK: config.topK,
-			presencePenalty: config.presencePenalty,
-			serviceTier: config.serviceTier,
-			reasoningEffort: typeof effectiveReasoning === "string" ? effectiveReasoning : undefined,
-			toolChoice: effectiveToolChoice,
-			tools: llmContext.tools,
-			systemPrompt: llmContext.systemPrompt,
-			messages: llmContext.messages,
-		},
-	});
 
-	let capturedHeaders: Readonly<Record<string, string>> | undefined;
-	const userOnResponse = config.onResponse;
-	const captureOnResponse: AgentLoopConfig["onResponse"] = (response, modelInfo) => {
-		capturedHeaders = response.headers;
-		return userOnResponse?.(response, modelInfo);
-	};
-
-	const finishChat = async (message: AssistantMessage): Promise<void> => {
-		await finishChatSpan(telemetry, chatSpan, message, {
-			stepNumber: chatStepNumber,
-			serviceTier: config.serviceTier,
-			responseHeaders: capturedHeaders,
-			baseUrl: config.model.baseUrl,
-		});
-	};
-
-	try {
-		return await runInActiveSpan(chatSpan, async () => {
+	return await (async () => {
 			const response = await streamFunction(config.model, llmContext, {
 				...config,
 				apiKey: resolvedApiKey,
@@ -659,7 +542,7 @@ async function streamAssistantResponse(
 				reasoning: effectiveReasoning,
 				temperature: effectiveTemperature,
 				signal: requestSignal,
-				onResponse: captureOnResponse,
+				onResponse: config.onResponse,
 			});
 
 			let partialMessage: AssistantMessage | null = null;
@@ -672,8 +555,7 @@ async function streamAssistantResponse(
 			if (requestSignal) {
 				if (requestSignal.aborted) {
 					const aborted = emitAbortedAssistantMessage(partialMessage, addedPartial, context, config, stream);
-					await finishChat(aborted);
-					return aborted;
+							return aborted;
 				}
 				const { promise, resolve } = Promise.withResolvers<typeof ABORTED>();
 				const onAbort = () => resolve(ABORTED);
@@ -690,8 +572,7 @@ async function streamAssistantResponse(
 						if (result === ABORTED) {
 							responseIterator.return?.()?.catch(() => {});
 							const aborted = emitAbortedAssistantMessage(partialMessage, addedPartial, context, config, stream);
-							await finishChat(aborted);
-							return aborted;
+								return aborted;
 						}
 						next = result;
 					} else {
@@ -699,7 +580,6 @@ async function streamAssistantResponse(
 					}
 					if (requestSignal?.aborted) {
 						const aborted = emitAbortedAssistantMessage(partialMessage, addedPartial, context, config, stream);
-						await finishChat(aborted);
 						return aborted;
 					}
 					if (next.done) break;
@@ -754,8 +634,7 @@ async function streamAssistantResponse(
 								stream.push({ type: "message_start", message: { ...finalMessage } });
 							}
 							stream.push({ type: "message_end", message: finalMessage });
-							await finishChat(finalMessage);
-							return finalMessage;
+								return finalMessage;
 						}
 					}
 				}
@@ -764,17 +643,8 @@ async function streamAssistantResponse(
 			}
 
 			const trailing = await response.result();
-			await finishChat(trailing);
 			return trailing;
-		});
-	} catch (err) {
-		failChatSpan(telemetry, chatSpan, {
-			errorObject: err,
-			responseHeaders: capturedHeaders,
-			baseUrl: config.model.baseUrl,
-		});
-		throw err;
-	}
+	})();
 }
 
 function emitAbortedAssistantMessage(
@@ -819,8 +689,6 @@ async function executeToolCalls(
 	signal: AbortSignal | undefined,
 	stream: EventStream<AgentEvent, AgentMessage[]>,
 	config: AgentLoopConfig,
-	telemetry: AgentTelemetry | undefined,
-	invokeAgentSpan: Span | undefined,
 ): Promise<{ toolResults: ToolResultMessage[]; steeringMessages?: AgentMessage[] }> {
 	const tools = currentContext.tools;
 	const {
@@ -954,22 +822,12 @@ async function executeToolCalls(
 			intent: toolCall.intent,
 		});
 
-		const toolSpan = startExecuteToolSpan(telemetry, {
-			tool,
-			toolName: toolCall.name,
-			toolCallId: toolCall.id,
-			args: argsForExecution,
-			parent: invokeAgentSpan,
-		});
-		if (toolSpan && toolCall.intent) {
-			toolSpan.setAttribute(PiGenAIAttr.ToolCallIntent, toolCall.intent);
-		}
 
 		let result: AgentToolResult<any> = { content: [], details: {} };
 		let isError = false;
 		let caughtError: unknown;
 
-		await runInActiveSpan(toolSpan, async () => {
+		{
 			try {
 				if (!tool) throw new Error(`Tool ${toolCall.name} not found`);
 
@@ -1065,7 +923,7 @@ async function executeToolCalls(
 					isError = true;
 				}
 			}
-		});
+		}
 
 		const interrupted = interruptState.triggered;
 		if (interrupted) {
@@ -1074,26 +932,6 @@ async function executeToolCalls(
 		} else {
 			emitToolResult(record, result, isError);
 		}
-
-		const firstTextBlock = result.content?.[0];
-		const errorMessageForSpan =
-			caughtError === undefined && isError && firstTextBlock?.type === "text" ? firstTextBlock.text : undefined;
-		const status = interrupted
-			? "aborted"
-			: caughtError instanceof ToolCallBlockedError
-				? "blocked"
-				: isError
-					? "error"
-					: "ok";
-		finishExecuteToolSpan(telemetry, toolSpan, {
-			result,
-			isError,
-			status,
-			errorMessage: errorMessageForSpan,
-			errorObject: caughtError,
-			toolCallId: toolCall.id,
-			toolName: toolCall.name,
-		});
 
 		await checkSteering();
 	};
@@ -1121,11 +959,6 @@ async function executeToolCalls(
 	for (const record of records) {
 		if (!record.toolResultMessage) {
 			record.skipped = true;
-			recordSkippedTool(telemetry, {
-				toolCallId: record.toolCall.id,
-				toolName: record.toolCall.name,
-				status: "skipped",
-			});
 			emitToolResult(record, createSkippedToolResult(), true);
 		}
 	}

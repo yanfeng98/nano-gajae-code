@@ -17,8 +17,6 @@ import type {
 } from "@gajae-code/ai";
 import type { AppendOnlyContextManager } from "./append-only-context";
 import type { HarmonyAuditEvent } from "./harmony-leak";
-import type { AgentRunCoverage, AgentRunSummary } from "./run-collector";
-import type { AgentTelemetryConfig } from "./telemetry";
 
 /** Stream function - can return sync or Promise for async config lookup */
 export type StreamFn = (
@@ -99,16 +97,6 @@ export interface AgentLoopConfig extends SimpleStreamOptions {
 		context: AfterToolCallContext,
 		signal?: AbortSignal,
 	) => Promise<AfterToolCallResult | undefined> | AfterToolCallResult | undefined;
-	/**
-	 * Opt-in OpenTelemetry instrumentation. Passing `{}` enables the loop's
-	 * GenAI-semantic-convention spans (`invoke_agent`, `chat`, `execute_tool`)
-	 * using the global tracer provider. Leaving this field undefined disables
-	 * the instrumentation entirely — the loop performs zero tracer lookups.
-	 *
-	 * See {@link AgentTelemetryConfig} for the full surface (hooks, content
-	 * capture, cost estimator, agent identity).
-	 */
-	telemetry?: AgentTelemetryConfig;
 }
 
 /**
@@ -298,8 +286,6 @@ export type AgentEvent =
 			type: "agent_end";
 			messages: AgentMessage[];
 			stopReason?: "completed" | "paused";
-			telemetry?: AgentRunSummary;
-			coverage?: AgentRunCoverage;
 	  }
 	| { type: "turn_start" }
 	| { type: "turn_end"; message: AgentMessage; toolResults: ToolResultMessage[] }

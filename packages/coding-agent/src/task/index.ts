@@ -1358,7 +1358,6 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 						promptTemplates,
 						localProtocolOptions,
 						parentArtifactManager,
-							parentTelemetry: this.session.getTelemetry?.(),
 						forkContextSeed,
 					});
 					return { ...result, ...(forkContext ? { forkContext } : {}), forkContextAdvisory };
@@ -1418,7 +1417,6 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 						promptTemplates,
 						localProtocolOptions,
 						parentArtifactManager,
-							parentTelemetry: this.session.getTelemetry?.(),
 						forkContextSeed,
 					});
 					const resultWithForkContext = {

@@ -7,7 +7,8 @@
 > - 第二轮: 全平台死代码清理 (~1,120 行)
 > - 第三轮: Hindsight 远程记忆系统 (~2,600 行)
 > - 第四轮: ACP IDE 集成协议 (~3,300 行 + 13 测试文件)
-> - 总计减少 ~7,370+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式运行。
+> - 第五轮: OpenTelemetry 可观测性系统 (~2,660 行 + 4 测试文件 + 3 个 npm 包)
+> - 总计减少 ~10,030+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式运行。
 
 本文档对 Gajae-Code 项目中所有功能的默认启用/关闭状态、代码体量、可选性和移除影响进行全面分析，为魔改裁剪提供决策依据。
 
@@ -17,15 +18,15 @@
 
 | 维度 | 数据 |
 |------|------|
-| TypeScript 源文件数 | ~838 个 (仅 coding-agent) |
-| TypeScript 总行数 | ~255,500 行 |
+| TypeScript 源文件数 | ~834 个 (仅 coding-agent) |
+| TypeScript 总行数 | ~252,800 行 |
 | Rust crate 数 | 5 个 (含 2 个 vendored) |
 | `models.json` 大小 | 454 KB, ~21,666 行, 1030 个模型 |
 | AI Provider 数 | 14 个 (含 models.json 定义的) |
 | 已知 Provider 类型 | 19 个 |
 | 内置 Tool 数 | 31 个 (BUILTIN_TOOLS) + 3 个 (HIDDEN_TOOLS) |
 | Settings 配置项 | ~104 个 (已移除 4 power + 32 hindsight) |
-| 已移除代码行数 | ~7,370+ 行 (四轮) |
+| 已移除代码行数 | ~10,030+ 行 (五轮) |
 | 运行模式 | 4 种 (interactive, print, bridge, rpc) |
 | CLI 子命令 | 15 个 |
 
@@ -256,6 +257,35 @@ Hindsight 是 Vectorize.io 提供的远程向量化记忆服务。需要外部 A
 | `test/agent-wire/command-contract.redteam.test.ts` | 移除 ACP 目录/文件路径引用 |
 
 验证: `tsc --noEmit` 零新增错误 ✅ | `bun check` 无新增 issue ✅
+
+### 1.13 ~~OpenTelemetry 可观测性系统~~（✅ 已移除 — 无运行时效果）
+
+> **状态**: 已删除。Telemetry 系统（`telemetry.ts` 2036 行 + `run-collector.ts` 626 行）实现 OpenTelemetry GenAI 语义约定，追踪 token 用量、cost 估算、tool 执行状态和 LLM gateway 元数据。由于 TracerProvider 从未注册、`setTelemetry()` 从未调用、`telemetry` config 全线为 `undefined`，运行时全程短路，属于纯粹的死代码。
+
+删除清单：
+| 文件 | 操作 |
+|------|------|
+| `packages/agent/src/telemetry.ts` | 删除 (2,036 行) |
+| `packages/agent/src/run-collector.ts` | 删除 (626 行) |
+| `packages/agent/src/agent-loop.ts` | 移除所有 telemetry/run-collector 导入、移除 span 树包裹 (`runInActiveSpan`/`startChatSpan`/`finishChatSpan` 等 10+ 个函数调用)、简化 `buildAgentEndEvent`/`AgentLoopDetailedResult`/`agentLoopDetailed`/`createDetailedCapture`/`runLoop`/`streamAssistantResponse`/`executeToolCalls`、本地化 `ToolCallBlockedError` |
+| `packages/agent/src/agent.ts` | 移除 `#telemetry` 字段、`telemetry` getter、`setTelemetry()` 方法、构造函数赋值、config 传递 |
+| `packages/agent/src/types.ts` | 移除 `AgentTelemetryConfig`/`AgentRunSummary`/`AgentRunCoverage` 导入、`telemetry?` from `AgentLoopConfig`、`telemetry?`/`coverage?` from `agent_end` 事件 |
+| `packages/agent/src/index.ts` | 移除 `run-collector`/`telemetry` 的 `export *` |
+| `packages/agent/src/compaction/compaction.ts` | 4 处 `instrumentedCompleteSimple` → `completeSimple`、移除 `AgentTelemetry` 导入和 `telemetry?` 选项字段 |
+| `packages/agent/src/compaction/branch-summarization.ts` | `instrumentedCompleteSimple` → `completeSimple`、移除 `telemetry?` 选项字段 |
+| `packages/agent/package.json` | 移除 `@opentelemetry/api` (deps)、`@opentelemetry/context-async-hooks`/`@opentelemetry/sdk-trace-base` (devDeps) |
+| `packages/coding-agent/src/sdk.ts` | 移除 `AgentTelemetryConfig` 导入、`telemetry?` from `CreateAgentSessionOptions`、`getTelemetry` from `ToolSession`、`telemetry:` from Agent config |
+| `packages/coding-agent/src/session/agent-session.ts` | 移除 `resolveTelemetry` 导入和 6 处 telemetry 变量/参数 |
+| `packages/coding-agent/src/task/executor.ts` | 移除 `parentTelemetry`/`subagentTelemetry`/`recordHandoff`/`resolveTelemetry` 整块 |
+| `packages/coding-agent/src/task/index.ts` | 移除 2 处 `parentTelemetry:` 传递 |
+| `packages/coding-agent/src/tools/inspect-image.ts` | `instrumentedCompleteSimple` → `completeSimple`、移除 `resolveTelemetry` |
+| 根 `package.json` | 移除 `@opentelemetry/api`/`@opentelemetry/context-async-hooks`/`@opentelemetry/sdk-trace-base` catalog 条目 |
+| `packages/agent/test/otel.test.ts` | 删除 |
+| `packages/agent/test/compaction-telemetry.test.ts` | 删除 |
+| `packages/agent/test/run-summary.test.ts` | 删除 |
+| `packages/coding-agent/test/telemetry-full-capture-warning.test.ts` | 删除 |
+
+验证: `tsc --noEmit -p packages/agent` 零新增错误 ✅ | `tsc --noEmit -p packages/coding-agent` 零错误 ✅
 
 ---
 
