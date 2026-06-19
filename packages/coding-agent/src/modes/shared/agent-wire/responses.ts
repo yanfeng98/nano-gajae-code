@@ -1,5 +1,5 @@
 /** Shared RPC-compatible response helpers for agent-wire consumers. */
-import type { RpcCommand, RpcResponse } from "../../rpc/rpc-types";
+import type { RpcCommand, RpcResponse } from "./rpc-types";
 
 export function rpcSuccess<T extends RpcCommand["type"]>(
 	id: string | undefined,

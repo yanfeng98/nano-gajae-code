@@ -22,7 +22,7 @@ import type {
 	RpcUnattendedBudget,
 	RpcUnattendedDeclaration,
 	RpcUnattendedRefusalCode,
-} from "../../rpc/rpc-types";
+} from "./rpc-types";
 import type { BridgeCommandScope } from "./scopes";
 import { actionClassForScope, classifyBashAction } from "./unattended-action-policy";
 

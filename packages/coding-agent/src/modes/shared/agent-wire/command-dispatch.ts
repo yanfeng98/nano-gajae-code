@@ -14,7 +14,7 @@ import type {
 	RpcUnattendedDeclaration,
 	RpcWorkflowGateResolution,
 	RpcWorkflowGateResponse,
-} from "../../rpc/rpc-types";
+} from "./rpc-types";
 import { rpcError, rpcSuccess } from "./responses";
 import {
 	ActionDeniedError,

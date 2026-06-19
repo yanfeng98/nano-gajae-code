@@ -21,7 +21,7 @@ import type {
 	RpcWorkflowGate,
 	RpcWorkflowGateResolution,
 	RpcWorkflowGateResponse,
-} from "../../rpc/rpc-types";
+} from "./rpc-types";
 import type { RpcUnattendedControlPlane } from "./command-dispatch";
 import { scopeForRpcCommand } from "./scopes";
 import {

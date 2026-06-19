@@ -74,7 +74,7 @@ async function checkForNewVersion(currentVersion: string): Promise<string | unde
 	}
 }
 
-const RPC_DEFAULTED_SETTING_PATHS: SettingPath[] = [
+const BRIDGE_DEFAULTED_SETTING_PATHS: SettingPath[] = [
 	"todo.enabled",
 	"todo.reminders",
 	"todo.reminders.max",
@@ -92,14 +92,12 @@ const RPC_DEFAULTED_SETTING_PATHS: SettingPath[] = [
 	"task.maxRecursionDepth",
 	"task.disabledAgents",
 	"task.agentModelOverrides",
-	// Memory subsystems are off-by-default for RPC hosts; embedders that want
-	// memory should opt in explicitly through their own settings layer.
 	"memory.backend",
 	"memories.enabled",
 ];
 
-function applyRpcDefaultSettingOverrides(targetSettings: Settings = settings): void {
-	for (const settingPath of RPC_DEFAULTED_SETTING_PATHS) {
+function applyBridgeDefaultSettingOverrides(targetSettings: Settings = settings): void {
+	for (const settingPath of BRIDGE_DEFAULTED_SETTING_PATHS) {
 		targetSettings.override(settingPath, getDefault(settingPath));
 	}
 }
@@ -710,32 +708,26 @@ export async function runRootCommand(
 	}
 
 	if (
-		(parsedArgs.mode === "rpc" || parsedArgs.mode === "rpc-ui" || parsedArgs.mode === "bridge") &&
+		parsedArgs.mode === "bridge" &&
 		parsedArgs.fileArgs.length > 0
 	) {
-		process.stderr.write(`${chalk.red("Error: @file arguments are not supported in RPC or bridge mode")}\n`);
+		process.stderr.write(`${chalk.red("Error: @file arguments are not supported in bridge mode")}\n`);
 		process.exit(1);
 	}
 
 	const cwd = getProjectDir();
 	const settingsInstance = deps.settings ?? (await logger.time("settings:init", Settings.init, { cwd }));
 	if (
-		parsedArgs.mode === "rpc" ||
-		parsedArgs.mode === "rpc-ui" ||
-		parsedArgs.mode === "bridge"
-	) {
-		applyRpcDefaultSettingOverrides(settingsInstance);
+		parsedArgs.mode === "bridge") {
+		applyBridgeDefaultSettingOverrides(settingsInstance);
 	}
 	modelRegistry.applyConfiguredModelBindings(settingsInstance);
-	if (parsedArgs.noPty || parsedArgs.mode === "rpc-ui") {
+	if (parsedArgs.noPty) {
 		Bun.env.PI_NO_PTY = "1";
 	}
 	if (
 		parsedArgs.noTitle ||
-		parsedArgs.mode === "rpc" ||
-		parsedArgs.mode === "rpc-ui" ||
-		parsedArgs.mode === "bridge"
-	) {
+		parsedArgs.mode === "bridge") {
 		Bun.env.PI_NO_TITLE = "1";
 	}
 	const { pipedInput, fileText, fileImages } = await logger.time("prepareInitialMessage", async () => {
@@ -833,7 +825,7 @@ export async function runRootCommand(
 	);
 	sessionOptions.authStorage = authStorage;
 	sessionOptions.modelRegistry = modelRegistry;
-	sessionOptions.hasUI = isInteractive || mode === "rpc-ui";
+	sessionOptions.hasUI = isInteractive;
 	sessionOptions.settings = settingsInstance;
 
 	// Handle CLI --api-key as runtime override (not persisted)
@@ -903,10 +895,7 @@ export async function runRootCommand(
 			process.exit(1);
 		}
 
-		if (mode === "rpc" || mode === "rpc-ui") {
-			const { runRpcMode } = await import("./modes/rpc/rpc-mode");
-			await runRpcMode(session, mode === "rpc-ui" ? setToolUIContext : undefined);
-		} else if (mode === "bridge") {
+		if (mode === "bridge") {
 			const { runBridgeMode } = await import("./modes/bridge/bridge-mode");
 			await runBridgeMode(session, setToolUIContext);
 		} else if (isInteractive) {

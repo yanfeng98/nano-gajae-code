@@ -7,7 +7,7 @@
  * BridgeCommandScope>` so adding a new RPC command without a scope is a compile
  * failure.
  */
-import type { RpcCommand } from "../../rpc/rpc-types";
+import type { RpcCommand } from "./rpc-types";
 
 export type RpcCommandType = RpcCommand["type"];
 

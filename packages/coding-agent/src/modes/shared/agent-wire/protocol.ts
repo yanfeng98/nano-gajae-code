@@ -42,5 +42,5 @@ export type BridgeEventFrame = AgentWireEventFrame;
 /** A `workflow_gate` event serialized into a versioned wire frame (#321). */
 export type BridgeWorkflowGateFrame = BridgeFrameEnvelope<
 	"workflow_gate",
-	import("../../rpc/rpc-types").RpcWorkflowGate
+	import("./rpc-types").RpcWorkflowGate
 >;

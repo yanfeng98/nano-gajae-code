@@ -12,7 +12,7 @@
  */
 import { closeSync, fsyncSync, mkdirSync, openSync, readFileSync, writeSync } from "node:fs";
 import * as path from "node:path";
-import type { RpcBudgetExceeded, RpcWorkflowGateKind, RpcWorkflowStage } from "../../rpc/rpc-types";
+import type { RpcBudgetExceeded, RpcWorkflowGateKind, RpcWorkflowStage } from "./rpc-types";
 import { answerHashOf } from "./workflow-gate-schema";
 
 export const AUDIT_SCHEMA_VERSION = 1;

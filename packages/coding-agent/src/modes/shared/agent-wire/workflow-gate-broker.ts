@@ -21,8 +21,8 @@ import type {
 	RpcWorkflowGateResolution,
 	RpcWorkflowGateResponse,
 	RpcWorkflowStage,
-} from "../../rpc/rpc-types";
-import { RESERVED_WORKFLOW_STAGES } from "../../rpc/rpc-types";
+} from "./rpc-types";
+import { RESERVED_WORKFLOW_STAGES } from "./rpc-types";
 import { answerHashOf, canonicalJson, compileGateSchema, schemaHash, validateGateAnswer } from "./workflow-gate-schema";
 
 const V1_STAGES: readonly RpcWorkflowStage[] = ["deep-interview", "ralplan", "ultragoal"];

@@ -2,7 +2,7 @@ import * as path from "node:path";
 import type { ExtensionUIContext } from "../../extensibility/extensions";
 import type { AgentSession } from "../../session/agent-session";
 import type { ClientBridgePermissionOutcome } from "../../session/client-bridge";
-import type { RpcCommand, RpcResponse, RpcWorkflowGateResponse } from "../rpc/rpc-types";
+import type { RpcCommand, RpcResponse, RpcWorkflowGateResponse } from "../shared/agent-wire/rpc-types";
 import { dispatchRpcCommand } from "../shared/agent-wire/command-dispatch";
 import { isRpcCommand } from "../shared/agent-wire/command-validation";
 import {

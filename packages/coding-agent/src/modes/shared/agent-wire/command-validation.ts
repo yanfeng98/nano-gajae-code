@@ -1,4 +1,4 @@
-import type { RpcCommand } from "../../rpc/rpc-types";
+import type { RpcCommand } from "./rpc-types";
 import { isRpcCommandType } from "./scopes";
 
 function isRecord(value: unknown): value is Record<string, unknown> {

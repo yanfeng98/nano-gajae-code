@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import type { RpcCommand } from "../../src/modes/rpc/rpc-types";
+import type { RpcCommand } from "../../src/modes/shared/agent-wire/rpc-types";
 import {
 	type BridgeCommandScope,
 	isRpcCommandAllowed,

@@ -2,7 +2,7 @@
 
 > 分析日期: 2026-06-19 | 分支: 260613-v0.5.0-dev | 代码基线: 0.5.0
 >
-> **已执行移除（12 轮）**:
+> **已执行移除（13 轮）**:
 > - 第一轮: macOS 电源管理 (~350 行)
 > - 第二轮: 全平台死代码清理 (~1,120 行)
 > - 第三轮: Hindsight 远程记忆系统 (~2,600 行)
@@ -14,8 +14,9 @@
 > - 第九轮: typescript-edit-benchmark 基准测试包 (~6,932 行 TS)
 > - 第十轮: 清理由前九轮移除产生的残留（~4,300 行：6 个 hindsight 测试 + bench + 3 个 prompt + 配置/注释/文档）
 > - 第十一轮: 过时 provider 测试文件清理（5 个文件删除 + 30 个测试文件清洗）
-> - 第十二轮: Provider 残留学深度清理（ai/stats/agent 包：~200 行源码 + 14 个测试文件）
-> - 总计减少 ~33,000+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
+> - 第十二轮: Provider 残留深度清理（ai/stats/agent 包：~200 行源码 + 14 个测试文件）
+> - 第十三轮: RPC 模式移除（~2,100 行源码 + 18 个测试文件，rpc-types.ts 迁至 shared/agent-wire）
+> - 总计减少 ~35,000+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
 
 本文档对 Gajae-Code 项目中所有功能的默认启用/关闭状态、代码体量、可选性和移除影响进行全面分析，为魔改裁剪提供决策依据。
 
@@ -33,8 +34,8 @@
 | 已知 Provider 类型 | 19 个 |
 | 内置 Tool 数 | 31 个 (BUILTIN_TOOLS) + 3 个 (HIDDEN_TOOLS) |
 | Settings 配置项 | ~104 个 (已移除 4 power + 32 hindsight) |
-| 已移除代码行数 | ~33,000+ 行 (十二轮) |
-| 运行模式 | 4 种 (interactive, print, bridge, rpc) |
+| 已移除代码行数 | ~35,000+ 行 (十三轮) |
+| 运行模式 | 3 种 (interactive, print, bridge) |
 | CLI 子命令 | 15 个 |
 
 ---
@@ -162,6 +163,29 @@
 
 验证: 四个包 (`ai`, `agent`, `stats`, `coding-agent`) 均零新增错误 ✅ | 全代码库零过时 provider 引用 ✅
 
+### 1.18 ~~RPC 模式~~（✅ 第十三轮 — JSON stdin/stdout 协议）
+
+> **状态**: 已删除。RPC 模式 (`--mode rpc` / `--mode rpc-ui`) 是 JSON stdin/stdout 协议，供外部程序（IDE/CI/服务端）远程驱动 agent。交互模式完全不依赖此能力。`rpc-types.ts`（协议类型定义，603 行）迁至 `modes/shared/agent-wire/`，因为 bridge 模式共享同一套 agent-wire 协议类型。
+
+删除清单：
+| 文件 | 操作 |
+|------|------|
+| `modes/rpc/rpc-mode.ts` (583 行) | 删除 — `runRpcMode()` 入口 |
+| `modes/rpc/rpc-types.ts` (603 行) | 迁至 `modes/shared/agent-wire/rpc-types.ts` |
+| `modes/rpc/rpc-client.ts` (915 行) | 删除 — 编程式 RPC 客户端 |
+| `modes/rpc/host-tools.ts` + `host-uris.ts` | 删除 — re-exports |
+| 18 个 RPC 测试文件 + `test/rpc/` 目录 | 删除 |
+| `modes/index.ts` | 移除 19 行 RPC 导出 |
+| `main.ts` | 删除 RPC dispatch 分支；`RPC_DEFAULTED_*` → `BRIDGE_DEFAULTED_*`；简化 mode 条件 |
+| `cli/args.ts` | `Mode` 类型去掉 `"rpc" \| "rpc-ui"` |
+| `cli.ts` + `commands/launch.ts` | `--mode` options 去掉 rpc/rpc-ui |
+
+保留（bridge 仍需要）：
+- `agent-session.ts` 中 `#rpcHostToolNames` / `refreshRpcHostTools()` — 被 bridge 经由 command-dispatch 使用
+- `modes/shared/agent-wire/` 全部文件 — bridge 共享
+
+验证: `tsgo --noEmit -p packages/coding-agent` 仅 2 个 pre-existing 错误，零新增 ✅
+
 ---
 
 ## 二、内置默认 Tool 完整清单
@@ -225,19 +249,19 @@
 
 ## 三、运行模式分析
 
-### 3.1 四种模式对比
+### 3.1 三种模式对比
 
 | 模式 | CLI 触发 | 代码量 | 启动 TUI | 用途 |
 |------|---------|--------|---------|------|
 | **interactive** | 默认 (无 `-p`, 无 `--mode`) | ~20,000+ 行 (~70 文件) | 是 | 日常开发使用 |
 | **print** | `-p` 或管道输入 | ~121 行 | 否 | CI/脚本集成 |
 | **bridge** | `--mode bridge` | ~1,000 行 (6 文件) | 否 | HTTP 远程控制 |
-| **rpc** | `--mode rpc` | ~2,102 行 (5 文件) | 否 | JSON-RPC 无头协议 |
-| **rpc-ui** | `--mode rpc-ui` | 同上 (共享) | 可通过 rpc 暴露 UI | RPC + UI 能力 |
+
+> **RPC 模式已于第十三轮移除。** `--mode rpc` / `--mode rpc-ui` 不再可用。
 
 **共享基础设施**:
-- Bridge + RPC 共享 `modes/shared/`: ~4,376 行 (21 文件) — 命令分发、事件封装、无人值守控制、工作流门控
-- Print + RPC 共享 `modes/runtime-init.ts`: ~117 行 — 无 TUI 的扩展初始化
+- Bridge 使用 `modes/shared/`: ~4,376 行 (21 文件) — 命令分发、事件封装、无人值守控制、工作流门控
+- Print 使用 `modes/runtime-init.ts`: ~117 行 — 无 TUI 的扩展初始化
 
 ### 3.2 如果你只用交互模式
 
@@ -246,8 +270,7 @@
 | 目录 | 行数 | 说明 |
 |------|------|------|
 | `modes/bridge/` | ~1,000 行 | HTTP 桥接服务器 |
-| `modes/rpc/` | ~2,102 行 | JSON-RPC 协议 |
-| `modes/shared/` | ~4,376 行 | Bridge+RPC 共享基础设施 |
+| `modes/shared/` | ~4,376 行 | Bridge 共享基础设施 |
 | `modes/print-mode.ts` | ~121 行 | 非交互单次模式 |
 
 注意：`modes/shared/` 中有无人值守控制平面 (`unattended-*`)、工作流门控 (`workflow-gate-*`) 等，如果只用交互模式且不需要无人值守执行，这些都可以移除。
@@ -383,8 +406,8 @@ svelte, swift, tlaplus, verilog, vue, xml, zig
 
 | 优先级 | 目录 | 功能 | 默认状态 | 估算行数 |
 |--------|------|------|---------|---------|
-| 🔴 高 | `modes/shared/` | Bridge+RPC 共享基础设施 | 仅 `--mode bridge/rpc` | ~4,400 |
-| 🔴 高 | `modes/rpc/` | JSON-RPC 协议 | 仅 `--mode rpc` | ~2,100 |
+| ✅ 已移除 | `modes/rpc/` | JSON-RPC 协议 | 已删除 (~2,100 行) | |
+| 🔴 高 | `modes/shared/` | Bridge 共享基础设施 | 仅 `--mode bridge` | ~4,400 |
 | 🔴 高 | `modes/bridge/` | HTTP 桥接服务器 | 仅 `--mode bridge` | ~1,000 |
 | 🔴 高 | `modes/print-mode.ts` | 非交互单次模式 | `-p` 标志 | ~120 |
 | 🟡 中 | `stt/` | 语音转文字 | `stt.enabled: false` | ~300 |

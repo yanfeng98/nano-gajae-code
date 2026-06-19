@@ -7,10 +7,10 @@
 import type { AgentMessage, AgentToolResult, ThinkingLevel } from "@gajae-code/agent-core";
 import type { CompactionResult } from "@gajae-code/agent-core/compaction";
 import type { Effort, ImageContent, Model } from "@gajae-code/ai";
-import type { BashResult } from "../../exec/bash-executor";
-import type { ContextUsage } from "../../extensibility/extensions/types";
-import type { SessionStats } from "../../session/agent-session";
-import type { TodoPhase } from "../../tools/todo-write";
+import type { BashResult } from "../../../exec/bash-executor";
+import type { ContextUsage } from "../../../extensibility/extensions/types";
+import type { SessionStats } from "../../../session/agent-session";
+import type { TodoPhase } from "../../../tools/todo-write";
 
 export type RpcGetStateInclude = "tools" | "dumpTools" | "systemPrompt";
 

@@ -8,7 +8,7 @@ import type {
 	RpcHostToolDefinition,
 	RpcHostToolResult,
 	RpcHostToolUpdate,
-} from "../../rpc/rpc-types";
+} from "./rpc-types";
 import type { Theme } from "../../theme/theme";
 
 type RpcHostToolOutput = (frame: RpcHostToolCallRequest | RpcHostToolCancelRequest) => void;

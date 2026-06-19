@@ -13,6 +13,6 @@
  * Event semantics are intentionally elsewhere: `event-contract.ts` owns the event
  * types + registry and `event-observation.ts` owns the single semantic mapping.
  */
-export type { RpcCommand, RpcResponse } from "../../rpc/rpc-types";
+export type { RpcCommand, RpcResponse } from "./rpc-types";
 export { dispatchRpcCommand, type RpcCommandDispatchContext } from "./command-dispatch";
 export { isRpcCommandType, RPC_COMMAND_TYPES, type RpcCommandType } from "./scopes";

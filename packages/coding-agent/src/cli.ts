@@ -93,8 +93,8 @@ class RootHelpCommand extends Command {
 		"append-system-prompt": Flags.string({ description: "Append text or file contents to the system prompt" }),
 		"allow-home": Flags.boolean({ description: "Allow starting in ~ without auto-switching to a temp dir" }),
 		mode: Flags.string({
-			description: "Output mode: text (default), json, rpc, rpc-ui, or bridge",
-			options: ["text", "json", "rpc", "rpc-ui", "bridge"],
+			description: "Output mode: text (default), json, or bridge",
+			options: ["text", "json", "bridge"],
 		}),
 		print: Flags.boolean({ char: "p", description: "Non-interactive mode: process prompt and exit" }),
 		continue: Flags.boolean({ char: "c", description: "Continue previous session" }),
