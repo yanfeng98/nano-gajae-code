@@ -9,7 +9,8 @@
 > - 第四轮: ACP IDE 集成协议 (~3,300 行 + 13 测试文件)
 > - 第五轮: OpenTelemetry 可观测性系统 (~2,660 行 + 4 测试文件 + 3 个 npm 包)
 > - 第六轮: DAP 调试器配置精简 (14 个调试器 → 1 个，~190 行 JSON + 文档)
-> - 总计减少 ~10,220+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
+> - 第七轮: Autoresearch 死代码模块 (~4,039 行 TS + 1,547 行测试)
+> - 总计减少 ~15,800+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
 
 本文档对 Gajae-Code 项目中所有功能的默认启用/关闭状态、代码体量、可选性和移除影响进行全面分析，为魔改裁剪提供决策依据。
 
@@ -27,7 +28,7 @@
 | 已知 Provider 类型 | 19 个 |
 | 内置 Tool 数 | 31 个 (BUILTIN_TOOLS) + 3 个 (HIDDEN_TOOLS) |
 | Settings 配置项 | ~104 个 (已移除 4 power + 32 hindsight) |
-| 已移除代码行数 | ~10,030+ 行 (五轮) |
+| 已移除代码行数 | ~15,800+ 行 (七轮) |
 | 运行模式 | 4 种 (interactive, print, bridge, rpc) |
 | CLI 子命令 | 15 个 |
 
@@ -307,6 +308,25 @@ Hindsight 是 Vectorize.io 提供的远程向量化记忆服务。需要外部 A
 
 验证: `tsc --noEmit -p packages/coding-agent` 零错误 ✅
 
+### 1.15 ~~Autoresearch 自主实验循环~~（✅ 已移除 — 死代码，从未接线）
+
+> **状态**: 已删除。Autoresearch 是一个 AI 自主实验循环系统，让 AI 自动进行性能优化迭代（改代码 → 跑 `bash autoresearch.sh` benchmark → 记录结果 → 循环）。注册 4 个工具：`init_experiment`、`run_experiment`、`log_experiment`、`update_notes`，并配有 SQLite 存储、TUI 仪表板、git 分支管理。
+
+`createAutoresearchExtension` 工厂函数从未被任何生产代码调用，扩展加载器 (`extensibility/`) 也不包含它。仅被 3 个单测文件引用。
+
+删除清单：
+| 文件 | 操作 |
+|------|------|
+| `packages/coding-agent/src/autoresearch/` | 删除整个目录 (19 文件: index, storage, dashboard, git, state, helpers, types, 4 tools, 4 .md 模板) |
+| `packages/coding-agent/test/autoresearch-state.test.ts` | 删除 |
+| `packages/coding-agent/test/autoresearch-tools.test.ts` | 删除 |
+| `packages/coding-agent/test/autoresearch-discovery.test.ts` | 删除 |
+| `packages/utils/src/dirs.ts` | 移除 4 个 `getAutoresearch*` 函数 |
+| `scripts/verify-g002-gates.ts` | 移除 `FORBIDDEN_SKILL_PATTERNS`、`FORBIDDEN_PUBLIC_WORKFLOW_EXPORT_BLOCKS`、`FORBIDDEN_WORKFLOW_SURFACE_TOKENS` 中的 8 个 autoresearch 引用 |
+| `test/agent-session-concurrent.test.ts` | `customType: "autoresearch-resume"` → `"test-resume"` |
+
+验证: `tsgo --noEmit -p packages/coding-agent` 零新增错误 ✅ | `tsgo --noEmit -p packages/utils` 零错误 ✅
+
 ---
 
 ## 二、内置默认 Tool 完整清单
@@ -547,7 +567,7 @@ svelte, swift, tlaplus, verilog, vue, xml, zig
 | 🟡 中 | `tools/browser/` | 浏览器自动化 | `browser.enabled: true` | ~800 |
 | 🟡 中 | `dap/` | Debug Adapter Protocol | `debug.enabled: true` | ~500 |
 | 🟡 中 | `debug/` | 调试诊断工具集 | 开发诊断 | ~1,500 |
-| 🟡 中 | `autoresearch/` | 自动研究报告 | 特定命令 | ~500 |
+| ✅ 已移除 | `autoresearch/` | 自主实验循环 (死代码) | 已删除 (~4,039 行 TS) |
 | 🟡 中 | `vim/` | Vim 编辑模式 | 取决于 edit.mode | ~1,500 |
 | 🟢 低 | `tools/irc.ts` | Agent 间 IRC | `irc.enabled: true` | ~200 |
 | 🟢 低 | `tools/recipe/` | Recipe runner | `recipe.enabled: true` | ~400 |
@@ -597,7 +617,7 @@ svelte, swift, tlaplus, verilog, vue, xml, zig
 - `modes/bridge/`, `modes/rpc/`, `modes/shared/`, `modes/print-mode.ts`
 - `stt/`, `memories/`, `memory-backend/`
 - `exa/`, `ssh/`
-- `dap/`, `debug/`, `autoresearch/`
+- `dap/`, `debug/`
 - `tools/puppeteer/`, `tools/browser/`
 - 两个 benchmark package
 - `python/`

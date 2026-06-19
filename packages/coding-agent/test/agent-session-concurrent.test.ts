@@ -203,7 +203,7 @@ describe("AgentSession concurrent prompt guard", () => {
 
 		await session.sendCustomMessage(
 			{
-				customType: "autoresearch-resume",
+				customType: "test-resume",
 				content: "Hidden stop reaction",
 				display: false,
 				attribution: "agent",

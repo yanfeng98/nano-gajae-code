@@ -57,8 +57,6 @@ const FORBIDDEN_SKILL_PATTERNS: readonly RegExp[] = [
 	new RegExp(String.raw`\b` + "om" + "x" + String.raw`\s+(team|state|question|ultragoal|ralplan|deep-interview)`, "u"),
 	/\$ralph/u,
 	/\$autopilot/u,
-	/\$autoresearch/u,
-	/\$autoresearch-goal/u,
 	/\$performance-goal/u,
 	/\$ultraqa/u,
 	/\$ultrawork/u,
@@ -66,10 +64,6 @@ const FORBIDDEN_SKILL_PATTERNS: readonly RegExp[] = [
 	/\/mcp/u,
 ];
 const FORBIDDEN_PUBLIC_WORKFLOW_EXPORT_BLOCKS = [
-	"./autoresearch",
-	"./autoresearch/*",
-	"./autoresearch/tools/*",
-	"./commands/autoresearch",
 	"./commands/ralph",
 	"./commands/ultraqa",
 	"./commands/ultrawork",
@@ -77,8 +71,6 @@ const FORBIDDEN_PUBLIC_WORKFLOW_EXPORT_BLOCKS = [
 ] as const;
 const FORBIDDEN_WORKFLOW_SURFACE_TOKENS = [
 	"autopilot",
-	"autoresearch",
-	"autoresearch-goal",
 	"performance-goal",
 	"ralph",
 	"ultraqa",
