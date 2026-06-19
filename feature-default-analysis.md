@@ -1,8 +1,8 @@
 # Gajae-Code 功能默认状态完整分析
 
-> 分析日期: 2026-06-18 | 分支: 260613-v0.5.0-dev | 代码基线: 0.5.0
+> 分析日期: 2026-06-19 | 分支: 260613-v0.5.0-dev | 代码基线: 0.5.0
 >
-> **已执行移除**:
+> **已执行移除（12 轮）**:
 > - 第一轮: macOS 电源管理 (~350 行)
 > - 第二轮: 全平台死代码清理 (~1,120 行)
 > - 第三轮: Hindsight 远程记忆系统 (~2,600 行)
@@ -13,7 +13,9 @@
 > - 第八轮: orchestration-token-benchmark 基准测试包 (~2,313 行 TS)
 > - 第九轮: typescript-edit-benchmark 基准测试包 (~6,932 行 TS)
 > - 第十轮: 清理由前九轮移除产生的残留（~4,300 行：6 个 hindsight 测试 + bench + 3 个 prompt + 配置/注释/文档）
-> - 总计减少 ~29,300+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
+> - 第十一轮: 过时 provider 测试文件清理（5 个文件删除 + 30 个测试文件清洗）
+> - 第十二轮: Provider 残留学深度清理（ai/stats/agent 包：~200 行源码 + 14 个测试文件）
+> - 总计减少 ~33,000+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
 
 本文档对 Gajae-Code 项目中所有功能的默认启用/关闭状态、代码体量、可选性和移除影响进行全面分析，为魔改裁剪提供决策依据。
 
@@ -31,7 +33,7 @@
 | 已知 Provider 类型 | 19 个 |
 | 内置 Tool 数 | 31 个 (BUILTIN_TOOLS) + 3 个 (HIDDEN_TOOLS) |
 | Settings 配置项 | ~104 个 (已移除 4 power + 32 hindsight) |
-| 已移除代码行数 | ~29,300+ 行 (十轮) |
+| 已移除代码行数 | ~33,000+ 行 (十二轮) |
 | 运行模式 | 4 种 (interactive, print, bridge, rpc) |
 | CLI 子命令 | 15 个 |
 
@@ -59,7 +61,7 @@
 | `memory.backend` | `"off"` | 记忆后端选择器：off/local |
 | `memories.enabled` | `false` | 旧版本地记忆流水线（已隐藏，仅用于迁移兼容） |
 
-> **Hindsight 远程记忆已于第三轮移除。** 详见 Section 1.11。
+> **Hindsight 远程记忆已于第三轮移除。**
 
 `memory.backend` 是整个记忆系统的总开关，默认 `"off"` 意味着：
 - **本地记忆流水线** (`memory.backend: "local"`) — 不启动
@@ -132,52 +134,6 @@
 
 **关键结论**: `skills.enabled: false` 意味着开箱即用时，外部技能发现完全不会运行。只有内置的 4 个默认工作流技能（`deep-interview`, `ralplan`, `ultragoal`, `team`）通过 `install:defaults` 安装后可用。
 
-### 1.8 ~~macOS 电源管理~~（✅ 已移除 — 仅 WSL2/Linux 运行）
-
-> **状态**: 已删除。此功能通过 macOS `IOKit` API (`caffeinate` 等效) 阻止 Mac 在 agent 会话期间休眠。在 Linux/WSL2 上是空操作。
-
-删除清单：
-| 文件 | 操作 |
-|------|------|
-| `crates/pi-natives/src/power.rs` | 删除 (~270 行 Rust) |
-| `crates/pi-natives/src/lib.rs` | 移除 `pub mod power;` |
-| `packages/coding-agent/src/config/settings-schema.ts` | 移除 4 个 `power.*` 配置项 |
-| `packages/coding-agent/src/session/agent-session.ts` | 移除 `MacOSPowerAssertion` import、`#powerAssertion` 字段、`#acquirePowerAssertion()`/`#releasePowerAssertion()` 方法、4 个调用点 |
-| `packages/natives/native/index.d.ts` | 移除 `MacOSPowerAssertion` 类和 `MacOSPowerAssertionOptions` 接口 |
-| `packages/natives/test/native.test.ts` | 移除 import 和测试用例 |
-
-验证: `cargo check -p pi-natives` ✅ | `bun check` 无新增错误 ✅
-
-### 1.9 ~~平台专属死代码~~（✅ 已移除 — 仅 WSL2/Linux 运行）
-
-> **状态**: 已删除。macOS 外观检测 + Windows 路径/PATH/ConPTY 相关代码在 Linux 上永远是空操作或不编译。
-
-#### macOS 外观检测
-
-删除清单：
-| 文件 | 操作 |
-|------|------|
-| `crates/pi-natives/src/appearance.rs` | 删除 (452 行) |
-| `crates/pi-natives/src/lib.rs` | 移除 `pub mod appearance;` |
-| `packages/natives/native/index.d.ts` | 移除 `MacAppearanceObserver` 类、`detectMacOSAppearance()` 函数、`MacOSAppearance` 枚举 |
-| `packages/coding-agent/src/modes/theme/theme.ts` | 移除 observer 函数 (start/stop)、`macOSReportedAppearance` 变量、`shouldUseMacOSAppearanceFallback`、Tier 3 回退逻辑 |
-| `packages/coding-agent/test/theme-auto-detection.test.ts` | 移除 4 个 macOS 相关测试用例 + import |
-
-#### Windows 死代码
-
-删除清单：
-| 文件 | 操作 |
-|------|------|
-| `crates/pi-shell/src/windows.rs` | 删除 (309 行) |
-| `crates/pi-shell/src/lib.rs` | 移除 `pub mod windows;` |
-| `crates/pi-shell/Cargo.toml` | 移除整个 `[target.'cfg(windows)'.dependencies]` 块 |
-| `crates/pi-natives/src/pty.rs` | 移除 ~70 行 ConPTY/`#[cfg(windows)]` 分支，保留 Unix 路径 |
-| `crates/pi-natives/src/fs_cache.rs` | 移除 `cfg!(windows)` 路径分隔符转换 |
-| `crates/pi-shell/src/shell.rs` | 移除 `#[cfg(windows)]` normalize_env_key, merge_path_values, push_unique_paths, normalize_path_segment, PATH fallback, pipe 创建 |
-| 根 `Cargo.toml` | 移除 `winreg = "0.56"` |
-
-验证: `cargo check -p pi-natives -p pi-shell` ✅ | `bun check` 无新增错误 ✅
-
 ### 1.10 其他默认关闭项
 
 | 配置项 | 默认值 | 说明 |
@@ -200,195 +156,11 @@
 | `statusLine.showHookStatus` | `false` | 状态栏显示 hook 状态 |
 | `statusLine.sessionAccent` | `true` | (这个是 true，仅对比) |
 
-### 1.11 ~~Hindsight 远程记忆系统~~（✅ 已移除 — 保留本地记忆）
+### 1.17 ~~Provider 残留深度清理~~（✅ 第十一、十二轮）
 
-> **状态**: 已删除 Hindsight 远程记忆后端。本地记忆流水线 (`memories/` + `memory-backend/`) 完整保留。
+> **状态**: 已完成。第十一轮清理 coding-agent 中残留的过时 provider 测试文件和引用（删除 5 个测试/fixture 文件、清理 30 个测试文件中的 `openai-codex`/`google-antigravity`/`xai` 引用）。第十二轮深度清理 `packages/ai/`、`packages/stats/`、`packages/agent/` 中的过时 provider 源码引用（删除 `auth-storage.ts` 中 3 个 stub 函数及 6 个调用点、清理 `auth-gateway/server.ts` 死代码分支、删除 `cli.ts` help text、删除 `package.json` 死 exports）。共清理 14 个测试文件，消除 ~38 个类型错误。
 
-Hindsight 是 Vectorize.io 提供的远程向量化记忆服务。需要外部 API token，提供 retain/recall/reflect 操作和 Mental Models 功能。
-
-删除清单：
-| 文件 | 操作 |
-|------|------|
-| `packages/coding-agent/src/hindsight/` | 删除整个目录 (10 文件: backend, bank, client, config, content, index, mental-models, seeds.json, state, transcript) |
-| `packages/coding-agent/src/tools/hindsight-recall.ts` | 删除 |
-| `packages/coding-agent/src/tools/hindsight-reflect.ts` | 删除 |
-| `packages/coding-agent/src/tools/hindsight-retain.ts` | 删除 |
-| `memory-backend/types.ts` | 移除 `"hindsight"` 类型值 + `parentHindsightSessionState` 字段 |
-| `memory-backend/resolve.ts` | 移除 `hindsightBackend` import 和分支 |
-| `agent-session.ts` | 移除 `#hindsightSessionState` 字段、getter/setter、`#rekeyHindsight`/`#resetHindsightConversation` 方法、所有调用点 (9 处)、dispose 清理 |
-| `sdk.ts` | 移除 `parentHindsightSessionState` option、`getHindsightSessionState` tool session 字段 |
-| `task/executor.ts` + `task/index.ts` | 移除 `parentHindsightSessionState` 传递 |
-| `command-controller.ts` | 移除 import 块、`/memory mm` 路由、7 个 `#mm*` 方法 |
-| `config/settings-schema.ts` | 移除 32 个 `hindsight.*` 配置项 + `hindsightActive` 条件常量 + `HINDSIGHT_RECALL_TYPES_DEFAULT` |
-| `config/settings.ts` | 移除 Hindsight 配置迁移代码 |
-| `settings-defs.ts` | 移除 `hindsightActive` 条件函数 + `Settings` import |
-| `settings-selector.ts` | 残留注释 (无害) |
-| `slash-commands/builtin-registry.ts` | 移除 `case "mm"` (Hindsight 记忆路由) |
-
-验证: `cargo check` ✅ | `bun check` 新增错误 0 ✅
-
-### 1.12 ~~ACP IDE 集成协议~~（✅ 已移除 — 仅保留交互模式）
-
-> **状态**: 已删除。ACP (Agent Client Protocol) 是基于 `@agentclientprotocol/sdk` 的 stdio 协议，让 VS Code/JetBrains 等 IDE 通过 `--mode acp` 驱动 agent。仅交互模式使用不需要此能力。
-
-删除清单：
-| 文件 | 操作 |
-|------|------|
-| `packages/coding-agent/src/modes/acp/` | 删除整个目录 (6 文件: index, acp-agent, acp-mode, acp-client-bridge, acp-event-mapper, terminal-auth) |
-| `packages/coding-agent/src/slash-commands/acp-builtins.ts` | 删除 |
-| `packages/coding-agent/src/commands/acp.ts` | 删除 |
-| `packages/coding-agent/src/modes/index.ts` | 移除 `export { runAcpMode } from "./acp"` |
-| `packages/coding-agent/src/cli/args.ts` | 移除 `"acp"` from `Mode` 类型和验证分支 |
-| `packages/coding-agent/src/cli.ts` | 移除 `"acp"` from `--mode` flag options |
-| `packages/coding-agent/src/commands/launch.ts` | 移除 `prepareAcpTerminalAuthArgs` import 和 `"acp"` mode option，简化 `run()` |
-| `packages/coding-agent/src/main.ts` | 移除 `AcpSessionFactory` 类型、`AcpSessionFactoryOptions` 接口、`createAcpSessionFactory` 函数、`runAcpMode` deps 字段、ACP dispatch 分支、2 处 condition 中的 `"acp"` |
-| `packages/coding-agent/src/session/agent-session.ts` | 移除 ACP 权限门控 (~160 行: `PERMISSION_REQUIRED_TOOLS`、`PERMISSION_OPTIONS`、`getPermissionIntent`、`extractPermissionLocations` 等辅助函数、`#wrapToolForAcpPermission` 方法、`#allowAcpAgentInitiatedTurns`/`#acpPermissionDecisions` 字段、`drainAsyncJobDeliveriesForAcp` 方法)、简化 `setClientBridge`、清理 imports |
-| `packages/coding-agent/src/slash-commands/types.ts` | 移除 `acpDescription`/`acpInputHint` 字段和 `AcpBuiltinCommandRuntime`/`AcpBuiltinSlashCommandResult` 类型 |
-| `packages/coding-agent/src/slash-commands/builtin-registry.ts` | 注释化 14 处 `acpDescription`/`acpInputHint` 赋值 |
-| `packages/coding-agent/package.json` | 移除 `@agentclientprotocol/sdk` 依赖、`./modes/acp` exports |
-| 根 `package.json` | 移除 `@agentclientprotocol/sdk` catalog 条目 |
-| `scripts/verify-g002-gates.ts` | 移除 ACP builtins 断言 |
-| `test/acp-*.test.ts` (7 文件) | 删除 |
-| `test/agent-session-acp-permission.test.ts` | 删除 |
-| `test/bash-acp-terminal.test.ts` | 删除 |
-| `test/read-acp-fs.test.ts` | 删除 |
-| `test/write-acp-fs.test.ts` | 删除 |
-| `test/acp/` 目录 | 删除 |
-| `test/helpers/acp-schema.ts` | 删除 |
-| `test/agent-wire-conformance.test.ts` | 移除 ACP 测试用例和 imports |
-| `test/cli-args-mpreset.test.ts` | 移除 ACP session factory 测试用例 |
-| `test/gjc-ui-redesign.test.ts` | 移除 ACP_BUILTIN_SLASH_COMMANDS 引用 |
-| `test/agent-session-concurrent.test.ts` | 移除 `drainAsyncJobDeliveriesForAcp` 测试用例 |
-| `test/agent-wire/command-contract.redteam.test.ts` | 移除 ACP 目录/文件路径引用 |
-
-验证: `tsc --noEmit` 零新增错误 ✅ | `bun check` 无新增 issue ✅
-
-### 1.13 ~~OpenTelemetry 可观测性系统~~（✅ 已移除 — 无运行时效果）
-
-> **状态**: 已删除。Telemetry 系统（`telemetry.ts` 2036 行 + `run-collector.ts` 626 行）实现 OpenTelemetry GenAI 语义约定，追踪 token 用量、cost 估算、tool 执行状态和 LLM gateway 元数据。由于 TracerProvider 从未注册、`setTelemetry()` 从未调用、`telemetry` config 全线为 `undefined`，运行时全程短路，属于纯粹的死代码。
-
-删除清单：
-| 文件 | 操作 |
-|------|------|
-| `packages/agent/src/telemetry.ts` | 删除 (2,036 行) |
-| `packages/agent/src/run-collector.ts` | 删除 (626 行) |
-| `packages/agent/src/agent-loop.ts` | 移除所有 telemetry/run-collector 导入、移除 span 树包裹 (`runInActiveSpan`/`startChatSpan`/`finishChatSpan` 等 10+ 个函数调用)、简化 `buildAgentEndEvent`/`AgentLoopDetailedResult`/`agentLoopDetailed`/`createDetailedCapture`/`runLoop`/`streamAssistantResponse`/`executeToolCalls`、本地化 `ToolCallBlockedError` |
-| `packages/agent/src/agent.ts` | 移除 `#telemetry` 字段、`telemetry` getter、`setTelemetry()` 方法、构造函数赋值、config 传递 |
-| `packages/agent/src/types.ts` | 移除 `AgentTelemetryConfig`/`AgentRunSummary`/`AgentRunCoverage` 导入、`telemetry?` from `AgentLoopConfig`、`telemetry?`/`coverage?` from `agent_end` 事件 |
-| `packages/agent/src/index.ts` | 移除 `run-collector`/`telemetry` 的 `export *` |
-| `packages/agent/src/compaction/compaction.ts` | 4 处 `instrumentedCompleteSimple` → `completeSimple`、移除 `AgentTelemetry` 导入和 `telemetry?` 选项字段 |
-| `packages/agent/src/compaction/branch-summarization.ts` | `instrumentedCompleteSimple` → `completeSimple`、移除 `telemetry?` 选项字段 |
-| `packages/agent/package.json` | 移除 `@opentelemetry/api` (deps)、`@opentelemetry/context-async-hooks`/`@opentelemetry/sdk-trace-base` (devDeps) |
-| `packages/coding-agent/src/sdk.ts` | 移除 `AgentTelemetryConfig` 导入、`telemetry?` from `CreateAgentSessionOptions`、`getTelemetry` from `ToolSession`、`telemetry:` from Agent config |
-| `packages/coding-agent/src/session/agent-session.ts` | 移除 `resolveTelemetry` 导入和 6 处 telemetry 变量/参数 |
-| `packages/coding-agent/src/task/executor.ts` | 移除 `parentTelemetry`/`subagentTelemetry`/`recordHandoff`/`resolveTelemetry` 整块 |
-| `packages/coding-agent/src/task/index.ts` | 移除 2 处 `parentTelemetry:` 传递 |
-| `packages/coding-agent/src/tools/inspect-image.ts` | `instrumentedCompleteSimple` → `completeSimple`、移除 `resolveTelemetry` |
-| 根 `package.json` | 移除 `@opentelemetry/api`/`@opentelemetry/context-async-hooks`/`@opentelemetry/sdk-trace-base` catalog 条目 |
-| `packages/agent/test/otel.test.ts` | 删除 |
-| `packages/agent/test/compaction-telemetry.test.ts` | 删除 |
-| `packages/agent/test/run-summary.test.ts` | 删除 |
-| `packages/coding-agent/test/telemetry-full-capture-warning.test.ts` | 删除 |
-
-验证: `tsc --noEmit -p packages/agent` 零新增错误 ✅ | `tsc --noEmit -p packages/coding-agent` 零错误 ✅
-
-### 1.14 ~~DAP 调试器配置精简~~（✅ 已执行 — 14 个调试器 → 1 个）
-
-> **状态**: 已完成。`dap/defaults.json` 原定义 14 个调试适配器配置，面向 Python/C/C++/Rust/Go/JS/TS/C#/Kotlin/Ruby/PHP/Bash/Dart/Flutter/Elixir 全语言。经分析：
-> - 8 种语言（Go/C#/Kotlin/Ruby/PHP/Dart/Flutter/Elixir）与用户研究领域无关
-> - C/C++/Rust 的 gdb/lldb-dap 需 Ubuntu 24.04+，codelldb 是 VS Code 扩展不可独立安装
-> - JS/TS 的 js-debug-adapter 和 Bash 的 bash-debug-adapter 在 npm 上不存在，仅在 VS Code 内部使用
-> - 仅 Python 的 debugpy 可通过 `pip install debugpy` 正常安装使用
-
-删除清单：
-| 文件 | 操作 |
-|------|------|
-| `dap/defaults.json` | 删除 13 个调试器配置块（gdb, lldb-dap, codelldb, dlv, js-debug-adapter, netcoredbg, kotlin-debug-adapter, rdbg, php-debug-adapter, bash-debug-adapter, dart-debug-adapter, flutter-debug-adapter, elixir-ls-debugger），仅保留 debugpy（211 行 → 17 行） |
-| `dap/config.ts` | `EXTENSIONLESS_DEBUGGER_ORDER` 清空为 `[]`，注释更新 |
-| `dap/client.ts` | 3 处注释去掉 `dlv` 引用 |
-| `tools/debug.ts` | adapter 描述从 `(gdb, lldb-dap, debugpy, dlv)` 更新为 `(debugpy)` |
-| `prompts/tools/debug.md` | 内置调试器列表从 4 个更新为仅 debugpy |
-
-验证: `tsc --noEmit -p packages/coding-agent` 零错误 ✅
-
-### 1.15 ~~Autoresearch 自主实验循环~~（✅ 已移除 — 死代码，从未接线）
-
-> **状态**: 已删除。Autoresearch 是一个 AI 自主实验循环系统，让 AI 自动进行性能优化迭代（改代码 → 跑 `bash autoresearch.sh` benchmark → 记录结果 → 循环）。注册 4 个工具：`init_experiment`、`run_experiment`、`log_experiment`、`update_notes`，并配有 SQLite 存储、TUI 仪表板、git 分支管理。
-
-`createAutoresearchExtension` 工厂函数从未被任何生产代码调用，扩展加载器 (`extensibility/`) 也不包含它。仅被 3 个单测文件引用。
-
-删除清单：
-| 文件 | 操作 |
-|------|------|
-| `packages/coding-agent/src/autoresearch/` | 删除整个目录 (19 文件: index, storage, dashboard, git, state, helpers, types, 4 tools, 4 .md 模板) |
-| `packages/coding-agent/test/autoresearch-state.test.ts` | 删除 |
-| `packages/coding-agent/test/autoresearch-tools.test.ts` | 删除 |
-| `packages/coding-agent/test/autoresearch-discovery.test.ts` | 删除 |
-| `packages/utils/src/dirs.ts` | 移除 4 个 `getAutoresearch*` 函数 |
-| `scripts/verify-g002-gates.ts` | 移除 `FORBIDDEN_SKILL_PATTERNS`、`FORBIDDEN_PUBLIC_WORKFLOW_EXPORT_BLOCKS`、`FORBIDDEN_WORKFLOW_SURFACE_TOKENS` 中的 8 个 autoresearch 引用 |
-| `test/agent-session-concurrent.test.ts` | `customType: "autoresearch-resume"` → `"test-resume"` |
-
-验证: `tsgo --noEmit -p packages/coding-agent` 零新增错误 ✅ | `tsgo --noEmit -p packages/utils` 零错误 ✅
-
-### 1.16 ~~orchestration-token-benchmark 基准测试包~~（✅ 已移除 — 纯 CI 工具）
-
-> **状态**: 已删除。`@gajae-code/orchestration-token-benchmark` 是 `private: true` 的内部 CI 基准测试包，用于确定性测试编排 token 效率。纯 fixture 驱动，无网络/模型调用，零生产依赖。
-
-`runOrchestrationTokenBenchmark()` 计算 token metrics、prefix 稳定性和 spawn-gate 决策，全代码库零 `import`。仅根 `package.json` 的 2 个 `bench:orchestration-tokens*` 脚本引用。
-
-删除清单：
-| 文件 | 操作 |
-|------|------|
-| `packages/orchestration-token-benchmark/` | 删除整个包 (15 TS 文件: 8 src + 7 test) |
-| 根 `package.json` | 移除 `bench:orchestration-tokens` 和 `bench:orchestration-tokens:live` 脚本 |
-| `scripts/verify-g002-gates.ts` | 从 `ALLOWED_PRIVATE_PACKAGE_VERSIONS` 移除 `["@gajae-code/orchestration-token-benchmark", "0.0.1"]` |
-| `packages/coding-agent/src/task/types.ts` | JSDoc 注释去掉对已删除包的引用 |
-
-验证: `tsgo --noEmit -p packages/coding-agent` 零新增错误 ✅ | 全代码库零残留引用 ✅
-
-### 1.17 ~~typescript-edit-benchmark 基准测试包~~（✅ 已移除 — 纯 CI 工具）
-
-> **状态**: 已删除。`@gajae-code/typescript-edit-benchmark` 是 `private: true` 的内部 CI 基准测试包，测试 AI 模型编辑 TypeScript 代码的精确度。用 Babel AST 对 TS 源码做变异生成编辑任务，启动 gjc 让 AI 改代码，对比差异出报告。
-
-全代码库零 `import`。仅根 `package.json` 的 `bench:gen-fixtures`/`bench:edit` 脚本引用。
-
-删除清单：
-| 文件 | 操作 |
-|------|------|
-| `packages/typescript-edit-benchmark/` | 删除整个包 (15 文件: 13 TS + package.json + tsconfig.json) |
-| 根 `package.json` | 移除 `bench:gen-fixtures` 和 `bench:edit` 脚本 |
-| `scripts/verify-g002-gates.ts` | 移除 `ALLOWED_PRIVATE_PACKAGE_VERSIONS` 和 `ALLOWED_PACKAGE_BINARIES` 中的 2 条白名单条目 |
-| `docs/codebase-overview.md` | 删除整个 `typescript-edit-benchmark/` 小节 |
-| `docs/onboarding-packet.md` | 移除 1 行包描述 |
-| `packages/coding-agent/src/internal-urls/docs-index.generated.ts` | 自动重新生成 |
-
-验证: `tsgo --noEmit -p packages/coding-agent` 零新增错误 ✅ | 全代码库零残留引用 ✅ | `bun install` 1 package removed ✅
-
-### 1.18 ~~残留清理~~（✅ 第十轮 — 清除前九轮残留）
-
-> **状态**: 已完成。前九轮移除产生大量残留，本轮集中清理：未删除的测试文件、死 exports、过时 prompt、telemtry 类型引用、ACP 注释、文档。
-
-清理清单：
-| 文件 | 操作 |
-|------|------|
-| 6 个 hindsight 测试文件 | 删除（第三轮遗漏） |
-| `bench/word-diff-lcs.ts` | 删除（唯一引用是已删的 `hindsight/mental-models`） |
-| 3 个 prompt 文件 (retain/recall/reflect) | 删除（legacy Hindsight helper） |
-| `packages/coding-agent/package.json` | 移除 `./hindsight` 和 `./hindsight/*` exports |
-| `schemas/config.schema.json` | 移除 `"hindsight"` from `memory.backend` enum + 整个 `hindsight.*` schema |
-| `packages/coding-agent/src/tools/index.ts` | 移除 `AgentTelemetryConfig` import + `getTelemetry()` + Hindsight 注释 |
-| `packages/coding-agent/src/modes/components/settings-selector.ts` | 移除 Hindsight 注释 |
-| `test/issue-264-dogfood.test.ts` | 移除 `AgentTelemetryWarning`/`AgentTelemetryWarningCode` 测试用例 |
-| `test/task/executor-subagent-reminders.test.ts` | 移除 `AgentTelemetryConfig`/`Tracer` + "runSubprocess telemetry propagation" |
-| 5 个 hindsight 引用测试文件 | 清理 `"memory.backend": "hindsight"` 测试用例 |
-| `packages/agent/README.md` | 删除 `## Run-level telemetry` 整节 |
-| `packages/coding-agent/README.md` | 删除 Hindsight quickstart 节 |
-| `docs/cpu-hotspot-map.*` (3 文件) | 移除 `hindsight/mental-models.ts` 引用 |
-| `docs/handoff-generation-pipeline.md` | 移除 hindsight 状态行 |
-| `docs/codebase-overview.md` | 移除 telemetry 字样 + typescript-edit-benchmark 节 |
-| `slash-commands/builtin-registry.ts` | 删除 16 行注释化的 `acpDescription` / `acpInputHint` |
-
-验证: `tsgo --noEmit -p packages/coding-agent` 消除 ~25 个错误（hindsight tests + telemetry types），剩余 13 个均为 pre-existing ✅
+验证: 四个包 (`ai`, `agent`, `stats`, `coding-agent`) 均零新增错误 ✅ | 全代码库零过时 provider 引用 ✅
 
 ---
 
@@ -406,7 +178,7 @@ Hindsight 是 Vectorize.io 提供的远程向量化记忆服务。需要外部 A
 | `write` | `tools/write.ts` | 无 (始终可用) |
 | `resolve` | `tools/resolve.ts` | Hidden, 有 deferrable tool 时才加载 |
 | `yield` | `tools/yield.ts` | Hidden, 仅子进程使用 |
-| `report_finding` | `tools/hindsight-reflect.ts`? | Hidden |
+| `report_finding` | `tools/review.ts` | Hidden |
 
 ### 2.2 默认开启的工具（Settings 默认 true）
 
@@ -459,7 +231,6 @@ Hindsight 是 Vectorize.io 提供的远程向量化记忆服务。需要外部 A
 |------|---------|--------|---------|------|
 | **interactive** | 默认 (无 `-p`, 无 `--mode`) | ~20,000+ 行 (~70 文件) | 是 | 日常开发使用 |
 | **print** | `-p` 或管道输入 | ~121 行 | 否 | CI/脚本集成 |
-| ~~**acp**~~ | ~~`--mode acp`~~ | ~~~3,328 行~~ | — | ✅ 已移除 (第四轮) |
 | **bridge** | `--mode bridge` | ~1,000 行 (6 文件) | 否 | HTTP 远程控制 |
 | **rpc** | `--mode rpc` | ~2,102 行 (5 文件) | 否 | JSON-RPC 无头协议 |
 | **rpc-ui** | `--mode rpc-ui` | 同上 (共享) | 可通过 rpc 暴露 UI | RPC + UI 能力 |
@@ -474,7 +245,6 @@ Hindsight 是 Vectorize.io 提供的远程向量化记忆服务。需要外部 A
 
 | 目录 | 行数 | 说明 |
 |------|------|------|
-| ~~`modes/acp/`~~ | ~~~3,328 行~~ | ✅ 已移除 |
 | `modes/bridge/` | ~1,000 行 | HTTP 桥接服务器 |
 | `modes/rpc/` | ~2,102 行 | JSON-RPC 协议 |
 | `modes/shared/` | ~4,376 行 | Bridge+RPC 共享基础设施 |
@@ -613,24 +383,18 @@ svelte, swift, tlaplus, verilog, vue, xml, zig
 
 | 优先级 | 目录 | 功能 | 默认状态 | 估算行数 |
 |--------|------|------|---------|---------|
-| ✅ 已移除 | theme.ts macOS observer | 外观检测回退 (CoreFoundation) | 仅 macOS | ~80 行 TS |
-| ✅ 已移除 | `modes/acp/` | ACP IDE 协议 | 已删除 (~3,300 行 TS + 13 测试文件) | |
 | 🔴 高 | `modes/shared/` | Bridge+RPC 共享基础设施 | 仅 `--mode bridge/rpc` | ~4,400 |
 | 🔴 高 | `modes/rpc/` | JSON-RPC 协议 | 仅 `--mode rpc` | ~2,100 |
 | 🔴 高 | `modes/bridge/` | HTTP 桥接服务器 | 仅 `--mode bridge` | ~1,000 |
 | 🔴 高 | `modes/print-mode.ts` | 非交互单次模式 | `-p` 标志 | ~120 |
 | 🟡 中 | `stt/` | 语音转文字 | `stt.enabled: false` | ~300 |
 | 🟡 中 | `memories/` + `memory-backend/` | 本地记忆流水线 | `memory.backend: "off"` | ~500 |
-| ✅ 已移除 | `hindsight/` | Hindsight 远程记忆 | 已删除 (~1,800 行 TS) | |
-
-
 | 🟡 中 | `exa/` | Exa 搜索集成 | 需 API key | ~600 |
 | 🟡 中 | `ssh/` | SSH 远程执行 | 需 SSH 配置 | ~300 |
 | 🟡 中 | `tools/puppeteer/` | 浏览器反指纹脚本 (13个) | `browser.enabled: true` | ~200 |
 | 🟡 中 | `tools/browser/` | 浏览器自动化 | `browser.enabled: true` | ~800 |
 | 🟡 中 | `dap/` | Debug Adapter Protocol | `debug.enabled: true` | ~500 |
 | 🟡 中 | `debug/` | 调试诊断工具集 | 开发诊断 | ~1,500 |
-| ✅ 已移除 | `autoresearch/` | 自主实验循环 (死代码) | 已删除 (~4,039 行 TS) |
 | 🟡 中 | `vim/` | Vim 编辑模式 | 取决于 edit.mode | ~1,500 |
 | 🟢 低 | `tools/irc.ts` | Agent 间 IRC | `irc.enabled: true` | ~200 |
 | 🟢 低 | `tools/recipe/` | Recipe runner | `recipe.enabled: true` | ~400 |
@@ -640,8 +404,6 @@ svelte, swift, tlaplus, verilog, vue, xml, zig
 
 | 优先级 | Package/目录 | 功能 | 可移除? |
 |--------|-------------|------|---------|
-| ✅ 已移除 | `packages/orchestration-token-benchmark/` | Token 编排基准测试 | 已删除 (~2,313 行 TS) |
-| ✅ 已移除 | `packages/typescript-edit-benchmark/` | TS 编辑基准测试 | 已删除 (~6,932 行 TS) |
 | 🔴 高 | `packages/bridge-client/` | 独立桥接客户端库 | ✅ 仅 bridge 模式需要 |
 | 🟡 中 | `python/robogjc/` | Python 后端 worker | ✅ 可选 Python 服务 |
 | 🟡 中 | `python/gjc-rpc/` | Python RPC 客户端 | ✅ 可选 |
@@ -652,11 +414,6 @@ svelte, swift, tlaplus, verilog, vue, xml, zig
 
 | 优先级 | 模块 | 功能 | 可移除? |
 |--------|------|------|---------|
-| ✅ 已移除 | `power.rs` | macOS 电源断言 (IOKit) | ✅ 已删除 |
-| ✅ 已移除 | `appearance.rs` | macOS 外观检测 (CoreFoundation) | ✅ 已删除 |
-| ✅ 已移除 | `windows.rs` (pi-shell) | Windows PATH 配置 | ✅ 已删除 |
-| ✅ 已移除 | `winreg` crate | Windows 注册表访问 | ✅ 已从 workspace 移除 |
-| ✅ 已移除 | pty/fs_cache/shell Windows `#[cfg]` 分支 | ConPTY/路径/PATH 合并 | ✅ 已简化 |
 | 🔴 高 | `pi-shell` (整个 crate) | Brush shell + 输出最小化器 | ✅ 如果用外部 shell |
 | 🔴 高 | `full-langs` feature | 37 种额外 tree-sitter 语言 | ✅ 已默认关闭 |
 | 🟡 中 | syntect 嵌入数据 | 语法高亮数据 | ✅ 如果不需要高亮 |
@@ -682,10 +439,9 @@ svelte, swift, tlaplus, verilog, vue, xml, zig
 - `exa/`, `ssh/`
 - `dap/`, `debug/`
 - `tools/puppeteer/`, `tools/browser/`
-- 两个 benchmark package
 - `python/`
 
-> 注: `modes/acp/` 和 `hindsight/` 已在第三、第四轮移除，不再列入。
+> 注: `modes/acp/`、`hindsight/`、`autoresearch/`、两个 benchmark package 等已在前十二轮移除。
 
 **Settings 清理**:
 - 删除所有 `default: false` 且对应代码已移除的配置项
