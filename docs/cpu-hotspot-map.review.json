@@ -10,7 +10,6 @@
     "packages/coding-agent/src/edit/modes/replace.ts",
     "packages/coding-agent/src/edit/diff.ts",
     "packages/coding-agent/src/modes/components/diff.ts",
-    "packages/coding-agent/src/hindsight/mental-models.ts",
     "packages/coding-agent/src/hashline/hash.ts",
     "packages/agent/src/compaction/compaction.ts",
     "packages/agent/src/compaction/openai.ts",

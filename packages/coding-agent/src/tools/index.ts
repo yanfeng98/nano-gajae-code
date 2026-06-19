@@ -1,4 +1,4 @@
-import type { AgentTelemetryConfig, AgentTool } from "@gajae-code/agent-core";
+import type { AgentTool } from "@gajae-code/agent-core";
 import type { Model, ToolChoice } from "@gajae-code/ai";
 import { $env, $flag, logger } from "@gajae-code/utils";
 import type { PromptTemplate } from "../config/prompt-templates";
@@ -274,9 +274,6 @@ export interface ToolSession {
 		message: Pick<CustomMessage, "customType" | "content" | "display" | "details" | "attribution">,
 		options?: { triggerTurn?: boolean; deliverAs?: "steer" | "followUp" | "nextTurn" },
 	): Promise<void>;
-	/** Get the active OpenTelemetry config so subagent dispatch can forward
-	 *  the parent's tracer/hooks with the subagent's own identity stamped. */
-	getTelemetry?: () => AgentTelemetryConfig | undefined;
 	/** Build a sanitized fork-context seed for task subagents. */
 	buildForkContextSeed?: (options: ForkContextSeedOptions) => Promise<ForkContextSeed>;
 }
@@ -306,8 +303,6 @@ export function computeEssentialBuiltinNames(settings: Settings): string[] {
  * Public callable factory map. External callers may invoke `BUILTIN_TOOLS.read(session)` or
  * `BUILTIN_TOOLS[name](session)` to construct a public coding-harness tool directly.
  *
- * Hindsight memory helpers are intentionally excluded: memory is a private backend
- * integration, not a public gajae-code tool surface.
  */
 export const BUILTIN_TOOLS: Record<string, ToolFactory> = {
 	read: s => new ReadTool(s),

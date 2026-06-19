@@ -48,9 +48,9 @@ Provider/model boundary for LLM access.
 
 Stateful agent runtime built on `@gajae-code/ai`.
 
-- `packages/agent/src/index.ts` exports the `Agent`, loop APIs, append-only context, compaction, telemetry, proxy utilities, thinking helpers, and shared types.
+- `packages/agent/src/index.ts` exports the `Agent`, loop APIs, append-only context, compaction, proxy utilities, thinking helpers, and shared types.
 - `packages/agent/src/agent-loop.ts` owns the turn loop: transform context, call the model stream, execute tool calls, append tool results, and emit lifecycle events.
-- `packages/agent/src/agent.ts` wraps the loop with mutable state, subscriptions, prompt/continue/abort APIs, queues, provider session state, telemetry, and state mutation helpers.
+- `packages/agent/src/agent.ts` wraps the loop with mutable state, subscriptions, prompt/continue/abort APIs, queues, provider session state, and state mutation helpers.
 - `packages/agent/src/types.ts` defines `AgentMessage`, `AgentTool`, loop config, event, and runtime state contracts.
 
 ### `packages/tui/`

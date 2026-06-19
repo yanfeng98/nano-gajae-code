@@ -12,7 +12,8 @@
 > - 第七轮: Autoresearch 死代码模块 (~4,039 行 TS + 1,547 行测试)
 > - 第八轮: orchestration-token-benchmark 基准测试包 (~2,313 行 TS)
 > - 第九轮: typescript-edit-benchmark 基准测试包 (~6,932 行 TS)
-> - 总计减少 ~25,000+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
+> - 第十轮: 清理由前九轮移除产生的残留（~4,300 行：6 个 hindsight 测试 + bench + 3 个 prompt + 配置/注释/文档）
+> - 总计减少 ~29,300+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
 
 本文档对 Gajae-Code 项目中所有功能的默认启用/关闭状态、代码体量、可选性和移除影响进行全面分析，为魔改裁剪提供决策依据。
 
@@ -30,7 +31,7 @@
 | 已知 Provider 类型 | 19 个 |
 | 内置 Tool 数 | 31 个 (BUILTIN_TOOLS) + 3 个 (HIDDEN_TOOLS) |
 | Settings 配置项 | ~104 个 (已移除 4 power + 32 hindsight) |
-| 已移除代码行数 | ~25,000+ 行 (九轮) |
+| 已移除代码行数 | ~29,300+ 行 (十轮) |
 | 运行模式 | 4 种 (interactive, print, bridge, rpc) |
 | CLI 子命令 | 15 个 |
 
@@ -362,6 +363,32 @@ Hindsight 是 Vectorize.io 提供的远程向量化记忆服务。需要外部 A
 | `packages/coding-agent/src/internal-urls/docs-index.generated.ts` | 自动重新生成 |
 
 验证: `tsgo --noEmit -p packages/coding-agent` 零新增错误 ✅ | 全代码库零残留引用 ✅ | `bun install` 1 package removed ✅
+
+### 1.18 ~~残留清理~~（✅ 第十轮 — 清除前九轮残留）
+
+> **状态**: 已完成。前九轮移除产生大量残留，本轮集中清理：未删除的测试文件、死 exports、过时 prompt、telemtry 类型引用、ACP 注释、文档。
+
+清理清单：
+| 文件 | 操作 |
+|------|------|
+| 6 个 hindsight 测试文件 | 删除（第三轮遗漏） |
+| `bench/word-diff-lcs.ts` | 删除（唯一引用是已删的 `hindsight/mental-models`） |
+| 3 个 prompt 文件 (retain/recall/reflect) | 删除（legacy Hindsight helper） |
+| `packages/coding-agent/package.json` | 移除 `./hindsight` 和 `./hindsight/*` exports |
+| `schemas/config.schema.json` | 移除 `"hindsight"` from `memory.backend` enum + 整个 `hindsight.*` schema |
+| `packages/coding-agent/src/tools/index.ts` | 移除 `AgentTelemetryConfig` import + `getTelemetry()` + Hindsight 注释 |
+| `packages/coding-agent/src/modes/components/settings-selector.ts` | 移除 Hindsight 注释 |
+| `test/issue-264-dogfood.test.ts` | 移除 `AgentTelemetryWarning`/`AgentTelemetryWarningCode` 测试用例 |
+| `test/task/executor-subagent-reminders.test.ts` | 移除 `AgentTelemetryConfig`/`Tracer` + "runSubprocess telemetry propagation" |
+| 5 个 hindsight 引用测试文件 | 清理 `"memory.backend": "hindsight"` 测试用例 |
+| `packages/agent/README.md` | 删除 `## Run-level telemetry` 整节 |
+| `packages/coding-agent/README.md` | 删除 Hindsight quickstart 节 |
+| `docs/cpu-hotspot-map.*` (3 文件) | 移除 `hindsight/mental-models.ts` 引用 |
+| `docs/handoff-generation-pipeline.md` | 移除 hindsight 状态行 |
+| `docs/codebase-overview.md` | 移除 telemetry 字样 + typescript-edit-benchmark 节 |
+| `slash-commands/builtin-registry.ts` | 删除 16 行注释化的 `acpDescription` / `acpInputHint` |
+
+验证: `tsgo --noEmit -p packages/coding-agent` 消除 ~25 个错误（hindsight tests + telemetry types），剩余 13 个均为 pre-existing ✅
 
 ---
 

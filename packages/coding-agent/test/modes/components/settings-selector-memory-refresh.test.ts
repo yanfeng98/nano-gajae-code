@@ -39,47 +39,5 @@ function focusMemoryTab(comp: SettingsSelectorComponent): void {
 }
 
 describe("SettingsSelectorComponent memory tab", () => {
-	it("reveals condition-gated Hindsight rows the moment memory.backend changes via the submenu", () => {
-		settings.set("memory.backend", "off");
-		const comp = createSelector();
-		focusMemoryTab(comp);
-
-		const before = comp.render(120).join("\n");
-		expect(before).toContain("Memory Backend");
-		expect(before).not.toContain("Hindsight API URL");
-
-		// Memory Backend is the only visible row, so it's already selected at index 0.
-		// Enter opens the SelectSubmenu pre-positioned on "off"; navigate to "hindsight" (index 2) and confirm.
-		comp.handleInput("\n");
-		comp.handleInput("\x1b[B");
-		comp.handleInput("\x1b[B");
-		comp.handleInput("\n");
-
-		expect(settings.get("memory.backend")).toBe("hindsight");
-		const after = comp.render(120).join("\n");
-		expect(after).toContain("Memory Backend");
-		expect(after).toContain("Hindsight API URL");
-		expect(after).toContain("Hindsight Auto Recall");
-	});
-
-	it("hides Hindsight rows again when the backend is switched back to off without leaving the tab", () => {
-		settings.set("memory.backend", "hindsight");
-		const comp = createSelector();
-		focusMemoryTab(comp);
-
-		expect(comp.render(120).join("\n")).toContain("Hindsight API URL");
-
-		// Open Memory Backend → SelectSubmenu pre-selects the current value
-		// ("hindsight" at index 2) → step up twice to reach "off" → Enter confirms.
-		comp.handleInput("\n");
-		comp.handleInput("\x1b[A");
-		comp.handleInput("\x1b[A");
-		comp.handleInput("\n");
-
-		expect(settings.get("memory.backend")).toBe("off");
-		const after = comp.render(120).join("\n");
-		expect(after).toContain("Memory Backend");
-		expect(after).not.toContain("Hindsight API URL");
-		expect(after).not.toContain("Hindsight Auto Recall");
-	});
+	// Hindsight-related memory settings rows have been removed.
 });

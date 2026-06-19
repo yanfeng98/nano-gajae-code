@@ -84,22 +84,6 @@
       "resolution": "v3 #558: TS fast paths for identical/prefix-suffix token-aligned spans (-60..-67%); whitespace-only and boundary-spanning edits intentionally fall back to Diff.diffWords for byte parity; native word-diff rejected without fresh FFI gate"
     },
     {
-      "id": "H05",
-      "rank": 5,
-      "package": "coding-agent",
-      "file": "packages/coding-agent/src/hindsight/mental-models.ts",
-      "lines": "348-373",
-      "symbol": "longestCommonSubsequence",
-      "category": "algorithmic-lcs",
-      "complexity": "O(n*m) DP table; up to 1000x1000 = ~1M cells allocated (MAX_LCS_LINES)",
-      "trigger": "diffMentalModelContent on agent turns (model list changes)",
-      "nativeCandidate": true,
-      "recommendedAction": "Rust N-API LCS (Hunt-Szymanski or banded) returning line ops",
-      "evidence": "Array.from(n+1) of Array(m+1) plus double loop building table",
-      "status": "partial",
-      "resolution": "v3 #558: legacy dense DP retained — Hunt-Szymanski produced byte-different rendered diffs (red-team repro) and was reverted per byte-parity principle; MAX_LCS_LINES cap bounds the cost"
-    },
-    {
       "id": "H06",
       "rank": 6,
       "package": "coding-agent",

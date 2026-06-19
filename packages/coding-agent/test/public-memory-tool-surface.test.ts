@@ -37,30 +37,6 @@ function createToolSession(settings: Settings): ToolSession {
 }
 
 describe("public memory tool surface", () => {
-	it("does not register memory helpers as public built-in tools", async () => {
-		expect(Object.keys(BUILTIN_TOOLS)).not.toEqual(expect.arrayContaining(["memory", "recall", "retain", "reflect"]));
-
-		const tools = await createTools(
-			createToolSession(Settings.isolated({ "memory.backend": "hindsight", "tools.discoveryMode": "all" })),
-			Object.keys(BUILTIN_TOOLS),
-		);
-		expect(tools.map(tool => tool.name)).not.toEqual(
-			expect.arrayContaining(["memory", "recall", "retain", "reflect"]),
-		);
-	});
-
-	it("does not register or publish memory helpers through public discovery", async () => {
-		const tools = await createTools(createToolSession(Settings.isolated({ "memory.backend": "hindsight" })), [
-			"recall",
-			"retain",
-			"reflect",
-		]);
-		expect(tools.map(tool => tool.name)).not.toEqual(expect.arrayContaining(["recall", "retain", "reflect"]));
-
-		const docsToolFiles = await fs.readdir(publicDocsToolDir);
-		expect(docsToolFiles).not.toEqual(expect.arrayContaining(["recall.md", "retain.md", "reflect.md"]));
-	});
-
 	it("does not document public memory tool usage in public guidance", async () => {
 		const offenders: string[] = [];
 		const publicToolUsagePatterns = [
@@ -77,11 +53,4 @@ describe("public memory tool surface", () => {
 		expect(offenders).toEqual([]);
 	});
 
-	it("keeps legacy Hindsight prompts out of the public guidance set", async () => {
-		for (const relativePath of legacyMemoryPromptFiles) {
-			const content = await fs.readFile(path.join(repoRoot, relativePath), "utf8");
-			expect(content).toContain("Compatibility-only legacy Hindsight helper");
-			expect(content).toContain("not part of the public gajae-code coding harness tool surface");
-		}
-	});
 });

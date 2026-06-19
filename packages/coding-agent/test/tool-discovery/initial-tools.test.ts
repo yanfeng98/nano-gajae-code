@@ -32,7 +32,7 @@ const allToolsSettings = Settings.isolated({
 	"irc.enabled": true,
 	"recipe.enabled": true,
 	"todo.enabled": true,
-	"memory.backend": "hindsight",
+	"memory.backend": "off",
 	"tools.discoveryMode": "all",
 	"goal.enabled": true,
 });
@@ -112,7 +112,7 @@ describe("BUILTIN_TOOLS public factory map", () => {
 		const tools = await createTools(
 			{
 				...toolSession,
-				settings: Settings.isolated({ "memory.backend": "hindsight", "tools.discoveryMode": "all" }),
+				settings: Settings.isolated({ "memory.backend": "off", "tools.discoveryMode": "all" }),
 			},
 			Object.keys(BUILTIN_TOOLS),
 		);

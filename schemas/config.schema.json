@@ -255,7 +255,7 @@
 				},
 				"artifactHeadBytes": {
 					"type": "number",
-					"description": "Amount of head content kept inline alongside the tail when output spills to artifact (middle elision). 0 disables — keep tail only.",
+					"description": "Amount of head content kept inline alongside the tail when output spills to artifact (middle elision). 0 disables \u2014 keep tail only.",
 					"default": 20
 				},
 				"outputMaxColumns": {
@@ -840,132 +840,10 @@
 					"type": "string",
 					"enum": [
 						"off",
-						"local",
-						"hindsight"
+						"local"
 					],
-					"description": "Off, local memory pipeline, or Hindsight remote memory",
+					"description": "Off, or local memory pipeline",
 					"default": "off"
-				}
-			},
-			"additionalProperties": false
-		},
-		"hindsight": {
-			"type": "object",
-			"properties": {
-				"apiUrl": {
-					"type": "string",
-					"description": "Hindsight server URL (Cloud or self-hosted)",
-					"default": "http://localhost:8888"
-				},
-				"apiToken": {
-					"type": "string"
-				},
-				"bankId": {
-					"type": "string",
-					"description": "Memory bank identifier (default: project name)"
-				},
-				"bankIdPrefix": {
-					"type": "string"
-				},
-				"scoping": {
-					"type": "string",
-					"enum": [
-						"global",
-						"per-project",
-						"per-project-tagged"
-					],
-					"description": "global = one shared bank; per-project = isolated bank per cwd; per-project-tagged = shared bank with project tags so global + project memories merge on recall",
-					"default": "per-project-tagged"
-				},
-				"bankMission": {
-					"type": "string"
-				},
-				"retainMission": {
-					"type": "string"
-				},
-				"autoRecall": {
-					"type": "boolean",
-					"description": "Recall memories on the first turn of each session",
-					"default": true
-				},
-				"autoRetain": {
-					"type": "boolean",
-					"description": "Retain transcript every N turns and at session boundaries",
-					"default": true
-				},
-				"retainMode": {
-					"type": "string",
-					"enum": [
-						"full-session",
-						"last-turn"
-					],
-					"description": "full-session = upsert one document per session, last-turn = chunked",
-					"default": "full-session"
-				},
-				"retainEveryNTurns": {
-					"type": "number",
-					"default": 3
-				},
-				"retainOverlapTurns": {
-					"type": "number",
-					"default": 2
-				},
-				"retainContext": {
-					"type": "string",
-					"default": "gjc"
-				},
-				"recallBudget": {
-					"type": "string",
-					"enum": [
-						"low",
-						"mid",
-						"high"
-					],
-					"default": "mid"
-				},
-				"recallMaxTokens": {
-					"type": "number",
-					"default": 1024
-				},
-				"recallContextTurns": {
-					"type": "number",
-					"default": 1
-				},
-				"recallMaxQueryChars": {
-					"type": "number",
-					"default": 800
-				},
-				"recallTypes": {
-					"type": "array",
-					"items": {
-						"type": "string"
-					},
-					"default": [
-						"world",
-						"experience"
-					]
-				},
-				"debug": {
-					"type": "boolean",
-					"default": false
-				},
-				"mentalModelsEnabled": {
-					"type": "boolean",
-					"description": "Read curated reflect summaries (mental models) into developer instructions at boot. Loads existing models on the bank — does not write. Pair with hindsight.mentalModelAutoSeed to also auto-create the built-in seed set.",
-					"default": true
-				},
-				"mentalModelAutoSeed": {
-					"type": "boolean",
-					"description": "At session start, create any built-in mental models (project-conventions, project-decisions, user-preferences) that do not yet exist on the bank.",
-					"default": true
-				},
-				"mentalModelRefreshIntervalMs": {
-					"type": "number",
-					"default": 300000
-				},
-				"mentalModelMaxRenderChars": {
-					"type": "number",
-					"default": 16000
 				}
 			},
 			"additionalProperties": false
