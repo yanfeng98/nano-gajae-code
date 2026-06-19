@@ -4,7 +4,7 @@ import { hasRootMarkers, resolveCommand } from "../lsp/config";
 import DEFAULTS from "./defaults.json" with { type: "json" };
 import type { DapAdapterConfig, DapResolvedAdapter } from "./types";
 
-const EXTENSIONLESS_DEBUGGER_ORDER = ["gdb", "lldb-dap"] as const;
+const EXTENSIONLESS_DEBUGGER_ORDER: readonly string[] = [];
 
 function normalizeStringArray(value: unknown): string[] {
 	if (!Array.isArray(value)) return [];
@@ -77,9 +77,8 @@ function getMatchingAdapters(program: string, cwd: string): DapResolvedAdapter[]
 	const extension = path.extname(program).toLowerCase();
 	const available = getAvailableAdapters(cwd);
 	if (!extension) {
-		// For extensionless binaries, only consider native debuggers (gdb, lldb-dap)
-		// or adapters that match by root markers. Don't silently fall back to
-		// unrelated adapters like debugpy for a C binary.
+		// For extensionless binaries, only consider native debuggers
+		// or adapters that match by root markers.
 		const nativeDebuggers: ReadonlySet<string> = new Set(EXTENSIONLESS_DEBUGGER_ORDER);
 		return available.filter(
 			adapter =>

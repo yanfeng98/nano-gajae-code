@@ -8,7 +8,8 @@
 > - 第三轮: Hindsight 远程记忆系统 (~2,600 行)
 > - 第四轮: ACP IDE 集成协议 (~3,300 行 + 13 测试文件)
 > - 第五轮: OpenTelemetry 可观测性系统 (~2,660 行 + 4 测试文件 + 3 个 npm 包)
-> - 总计减少 ~10,030+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式运行。
+> - 第六轮: DAP 调试器配置精简 (14 个调试器 → 1 个，~190 行 JSON + 文档)
+> - 总计减少 ~10,220+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
 
 本文档对 Gajae-Code 项目中所有功能的默认启用/关闭状态、代码体量、可选性和移除影响进行全面分析，为魔改裁剪提供决策依据。
 
@@ -286,6 +287,25 @@ Hindsight 是 Vectorize.io 提供的远程向量化记忆服务。需要外部 A
 | `packages/coding-agent/test/telemetry-full-capture-warning.test.ts` | 删除 |
 
 验证: `tsc --noEmit -p packages/agent` 零新增错误 ✅ | `tsc --noEmit -p packages/coding-agent` 零错误 ✅
+
+### 1.14 ~~DAP 调试器配置精简~~（✅ 已执行 — 14 个调试器 → 1 个）
+
+> **状态**: 已完成。`dap/defaults.json` 原定义 14 个调试适配器配置，面向 Python/C/C++/Rust/Go/JS/TS/C#/Kotlin/Ruby/PHP/Bash/Dart/Flutter/Elixir 全语言。经分析：
+> - 8 种语言（Go/C#/Kotlin/Ruby/PHP/Dart/Flutter/Elixir）与用户研究领域无关
+> - C/C++/Rust 的 gdb/lldb-dap 需 Ubuntu 24.04+，codelldb 是 VS Code 扩展不可独立安装
+> - JS/TS 的 js-debug-adapter 和 Bash 的 bash-debug-adapter 在 npm 上不存在，仅在 VS Code 内部使用
+> - 仅 Python 的 debugpy 可通过 `pip install debugpy` 正常安装使用
+
+删除清单：
+| 文件 | 操作 |
+|------|------|
+| `dap/defaults.json` | 删除 13 个调试器配置块（gdb, lldb-dap, codelldb, dlv, js-debug-adapter, netcoredbg, kotlin-debug-adapter, rdbg, php-debug-adapter, bash-debug-adapter, dart-debug-adapter, flutter-debug-adapter, elixir-ls-debugger），仅保留 debugpy（211 行 → 17 行） |
+| `dap/config.ts` | `EXTENSIONLESS_DEBUGGER_ORDER` 清空为 `[]`，注释更新 |
+| `dap/client.ts` | 3 处注释去掉 `dlv` 引用 |
+| `tools/debug.ts` | adapter 描述从 `(gdb, lldb-dap, debugpy, dlv)` 更新为 `(debugpy)` |
+| `prompts/tools/debug.md` | 内置调试器列表从 4 个更新为仅 debugpy |
+
+验证: `tsc --noEmit -p packages/coding-agent` 零错误 ✅
 
 ---
 

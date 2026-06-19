@@ -17,8 +17,6 @@ const nativeBindings = loadNative();
 nativeBindings.initNativeCrashDiagnostics?.();
 // --- generated native exports (do not edit) ---
 // classes
-export const MacAppearanceObserver = nativeBindings.MacAppearanceObserver;
-export const MacOSPowerAssertion = nativeBindings.MacOSPowerAssertion;
 export const Process = nativeBindings.Process;
 export const PtySession = nativeBindings.PtySession;
 export const Shell = nativeBindings.Shell;
@@ -30,7 +28,6 @@ export const astEdit = nativeBindings.astEdit;
 export const astGrep = nativeBindings.astGrep;
 export const copyToClipboard = nativeBindings.copyToClipboard;
 export const countTokens = nativeBindings.countTokens;
-export const detectMacOSAppearance = nativeBindings.detectMacOSAppearance;
 export const diffLines = nativeBindings.diffLines;
 export const encodeSixel = nativeBindings.encodeSixel;
 export const executeShell = nativeBindings.executeShell;
@@ -118,10 +115,6 @@ export const KeyEventType = {
 	Press: 1,
 	Repeat: 2,
 	Release: 3,
-};
-export const MacOSAppearance = {
-	Dark: "dark",
-	Light: "light",
 };
 export const ProcessStatus = {
 	Running: "running",

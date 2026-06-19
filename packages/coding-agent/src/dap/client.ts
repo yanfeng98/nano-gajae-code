@@ -131,7 +131,7 @@ export class DapClient {
 	}
 
 	/**
-	 * Spawn a socket-mode adapter (e.g. dlv).
+	 * Spawn a socket-mode adapter.
 	 * Linux: connect to a unix domain socket via --listen=unix:<path>
 	 * macOS/other: the adapter dials into our TCP listener via --client-addr
 	 */
@@ -166,7 +166,7 @@ export class DapClient {
 			detached: true,
 		});
 
-		// Wait for the socket file to appear (dlv needs to start listening)
+		// Wait for the socket file to appear
 		await waitForCondition(
 			() => {
 				try {
@@ -221,7 +221,7 @@ export class DapClient {
 			detached: true,
 		});
 
-		// Wait for dlv to connect (with timeout)
+		// Wait for adapter to connect (with timeout)
 		let rawSocket: Bun.Socket<undefined>;
 		const { promise: timeoutPromise, reject: rejectTimeout } = Promise.withResolvers<never>();
 		const connectTimeout = setTimeout(

@@ -84,7 +84,7 @@ const debugSchema = z.object({
 	] as const),
 	program: z.string().describe("program path").optional(),
 	args: z.array(z.string()).describe("program arguments").optional(),
-	adapter: z.string().describe("debugger adapter (gdb, lldb-dap, debugpy, dlv)").optional(),
+	adapter: z.string().describe("debugger adapter (debugpy)").optional(),
 	cwd: z.string().optional(),
 	file: z.string().describe("source file").optional(),
 	line: z.number().describe("source line").optional(),
