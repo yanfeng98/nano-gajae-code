@@ -1135,11 +1135,11 @@ describe("AgentSession TTSR resume gate", () => {
 	it("prompt() waits for context-promotion continuation to finish", async () => {
 		const authStorage = await AuthStorage.create(path.join(tempDir, "testauth-promo.db"));
 		authStorages.push(authStorage);
-		authStorage.setRuntimeApiKey("openai-codex", "test-key");
+		authStorage.setRuntimeApiKey("openai", "test-key");
 		const modelRegistry = new ModelRegistry(authStorage, path.join(tempDir, "models.yml"));
 
-		const sparkModel = modelRegistry.find("openai-codex", "gpt-5.3-codex-spark");
-		const codexModel = modelRegistry.find("openai-codex", "gpt-5.5");
+		const sparkModel = modelRegistry.find("openai", "gpt-5-mini");
+		const codexModel = modelRegistry.find("openai", "gpt-5");
 		if (!sparkModel || !codexModel) {
 			throw new Error("Expected codex spark and codex models to exist");
 		}

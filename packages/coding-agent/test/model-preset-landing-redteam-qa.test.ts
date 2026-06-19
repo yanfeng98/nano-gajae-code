@@ -27,25 +27,25 @@ const model = (provider: string, id: string, minLevel = Effort.Low): Model =>
 		thinking: { minLevel, maxLevel: Effort.XHigh, mode: "effort" },
 	}) as Model;
 
-const codexModel = model("openai-codex", "gpt-5.5", Effort.Low);
+const codexModel = model("openai", "gpt-5.5", Effort.Low);
 const anthropicModel = model("anthropic", "claude-opus-4-8");
 const minimaxModel = model("minimax-code", "minimax-v3");
 const noSuffixModel = model("provider-a", "default");
 
 const codexEco: ModelProfileDefinition = {
 	name: "codex-eco",
-	requiredProviders: ["openai-codex"],
+	requiredProviders: ["openai"],
 	modelMapping: {
-		default: "openai-codex/gpt-5.5:low",
-		executor: "openai-codex/gpt-5.5:minimal",
-		planner: "openai-codex/gpt-5.5:low",
+		default: "openai/gpt-5:low",
+		executor: "openai/gpt-5:minimal",
+		planner: "openai/gpt-5:low",
 	},
 	source: "builtin",
 };
 const combo: ModelProfileDefinition = {
 	name: "opus-codex",
-	requiredProviders: ["anthropic", "openai-codex"],
-	modelMapping: { default: "anthropic/claude-opus-4-8:xhigh", executor: "openai-codex/gpt-5.5:low" },
+	requiredProviders: ["anthropic", "openai"],
+	modelMapping: { default: "anthropic/claude-opus-4-8:xhigh", executor: "openai/gpt-5:low" },
 	source: "builtin",
 };
 const minimax: ModelProfileDefinition = {
@@ -105,7 +105,7 @@ function createSelector(
 		undefined,
 		Settings.isolated(),
 		createRegistry(
-			options.authenticatedProviders ?? ["openai-codex", "anthropic", "minimax-code", "provider-a"],
+			options.authenticatedProviders ?? ["openai", "anthropic", "minimax-code", "provider-a"],
 			options.profiles,
 		) as never,
 		options.scopedModels ?? [],
@@ -200,7 +200,7 @@ describe("preset landing adversarial QA", () => {
 	test("partial combo auth blocks selection and MiniMax hint uses canonical provider id only", async () => {
 		const selections: ModelSelectorSelection[] = [];
 		const comboSelector = createSelector({
-			authenticatedProviders: ["openai-codex"],
+			authenticatedProviders: ["openai"],
 			onSelect: selection => {
 				selections.push(selection);
 			},
@@ -216,7 +216,7 @@ describe("preset landing adversarial QA", () => {
 		expect(text).toContain("anthropic");
 		expect(selections).toEqual([]);
 
-		const miniSelector = createSelector({ authenticatedProviders: ["openai-codex", "anthropic", "provider-a"] });
+		const miniSelector = createSelector({ authenticatedProviders: ["openai", "anthropic", "provider-a"] });
 		await rendered(miniSelector);
 		for (let i = 0; i < 2; i++) miniSelector.handleInput("\x1b[B");
 		miniSelector.handleInput("\n");
@@ -232,8 +232,8 @@ describe("preset landing adversarial QA", () => {
 		selector.handleInput("\x1b[B");
 		selector.handleInput("\n");
 		let text = normalizeRenderedText(selector.render(260).join("\n"));
-		expect(text).toContain("EXECUTOR: openai-codex/gpt-5.5");
-		expect(text).not.toContain("EXECUTOR: openai-codex/gpt-5.5:minimal");
+		expect(text).toContain("EXECUTOR: openai/gpt-5");
+		expect(text).not.toContain("EXECUTOR: openai/gpt-5:minimal");
 
 		const suffixless = createSelector({ profiles: [noSuffixProfile] });
 		await rendered(suffixless);

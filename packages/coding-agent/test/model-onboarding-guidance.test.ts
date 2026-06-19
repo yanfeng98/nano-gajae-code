@@ -151,8 +151,8 @@ describe("model onboarding guidance", () => {
 			await noModelSession.session.dispose();
 		}
 
-		const noCredentialModel = getBundledModel("xai", "grok-code-fast-1");
-		if (!noCredentialModel) throw new Error("Expected bundled xAI model");
+		const noCredentialModel = getBundledModel("openai", "gpt-5-mini");
+		if (!noCredentialModel) throw new Error("Expected bundled OpenAI model");
 		const noCredentialAgent = new Agent({
 			getApiKey: () => "unused-agent-key",
 			initialState: {
@@ -177,7 +177,7 @@ describe("model onboarding guidance", () => {
 			} catch (error) {
 				noCredentialMessage = error instanceof Error ? error.message : String(error);
 			}
-			expect(noCredentialMessage).toContain("No credentials found for xai");
+			expect(noCredentialMessage).toContain("No credentials found for openai");
 			expectProviderOnboardingGuidance(noCredentialMessage ?? "");
 		} finally {
 			await noCredentialSession.dispose();

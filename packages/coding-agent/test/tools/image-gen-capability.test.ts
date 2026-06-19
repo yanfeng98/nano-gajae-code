@@ -23,7 +23,7 @@ describe("isOpenAIHostedImageModel", () => {
 			true,
 		);
 		expect(
-			isOpenAIHostedImageModel(model({ id: "o3", api: "openai-codex-responses", provider: "openai-codex" })),
+			isOpenAIHostedImageModel(model({ id: "o3", api: "openai-responses", provider: "openai" })),
 		).toBe(true);
 	});
 

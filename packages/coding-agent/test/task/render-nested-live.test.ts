@@ -166,14 +166,14 @@ describe("task renderer: nested live rendering", () => {
 			makeRunningProgress({
 				id: "2-ModelSub",
 				modelSubstitutionWarning: {
-					requested: "openai-codex/gpt-5.3-codex",
-					effective: "openai-codex/gpt-5.5",
+					requested: "openai/gpt-5-mini",
+					effective: "openai/gpt-5",
 					reason: "auth_unavailable",
 				},
 			}),
 		);
 
-		expect(text).toContain("Requested model substituted: openai-codex/gpt-5.3-codex -> openai-codex/gpt-5.5");
+		expect(text).toContain("Requested model substituted: openai/gpt-5-mini -> openai/gpt-5");
 		expect(text).not.toContain("Model override substituted");
 	});
 
@@ -181,13 +181,13 @@ describe("task renderer: nested live rendering", () => {
 		const text = await renderResult({
 			...makeCompletedSubResult("4-ModelSub", "Model substituted child"),
 			modelSubstitutionWarning: {
-				requested: "openai-codex/gpt-5.3-codex",
-				effective: "openai-codex/gpt-5.5",
+				requested: "openai/gpt-5-mini",
+				effective: "openai/gpt-5",
 				reason: "assistant_model_mismatch",
 			},
 		});
 
-		expect(text).toContain("Requested model substituted: openai-codex/gpt-5.3-codex -> openai-codex/gpt-5.5");
+		expect(text).toContain("Requested model substituted: openai/gpt-5-mini -> openai/gpt-5");
 		expect(text).not.toContain("Model override substituted");
 	});
 

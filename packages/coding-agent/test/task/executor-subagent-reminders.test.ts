@@ -482,8 +482,8 @@ describe("runSubprocess yield reminders", () => {
 		const modelRegistry = {
 			refresh: async () => {},
 			getAvailable: () => [
-				{ provider: "openai-codex", id: "gpt-5.3-codex", name: "GPT-5.3 Codex", contextWindow: 272000 },
-				{ provider: "openai-codex", id: "gpt-5.5", name: "GPT-5.5", contextWindow: 400000 },
+				{ provider: "openai", id: "gpt-5.3-codex", name: "GPT-5.3 Codex", contextWindow: 272000 },
+				{ provider: "openai", id: "gpt-5.5", name: "GPT-5.5", contextWindow: 400000 },
 			],
 			getApiKey: async (model: { id: string }) => (model.id === "gpt-5.5" ? "sk-test" : undefined),
 		} as unknown as import("../../src/config/model-registry").ModelRegistry;
@@ -491,20 +491,20 @@ describe("runSubprocess yield reminders", () => {
 		const result = await runSubprocess({
 			...baseOptions,
 			id: "subagent-auth-fallback-warning",
-			modelOverride: "openai-codex/gpt-5.3-codex:high",
-			parentActiveModelPattern: "openai-codex/gpt-5.5",
+			modelOverride: "openai/gpt-5-mini:high",
+			parentActiveModelPattern: "openai/gpt-5",
 			modelRegistry,
 		});
 
 		expect(result.modelSubstitutionWarning).toEqual({
-			requested: "openai-codex/gpt-5.3-codex",
-			effective: "openai-codex/gpt-5.5",
+			requested: "openai/gpt-5-mini",
+			effective: "openai/gpt-5",
 			reason: "auth_unavailable",
 		});
 		expect(createAgentSessionSpy.mock.calls[0]?.[0]?.model?.id).toBe("gpt-5.5");
 		expect(createAgentSessionSpy.mock.calls[0]?.[0]?.modelSubstitution).toMatchObject({
 			reason: "auth_unavailable",
-			requestedModel: { provider: "openai-codex", id: "gpt-5.3-codex" },
+			requestedModel: { provider: "openai", id: "gpt-5.3-codex" },
 		});
 		expect(sessionModelChanges).toEqual([]);
 	});
@@ -519,7 +519,7 @@ describe("runSubprocess yield reminders", () => {
 		const session = createMockSession(({ emit, state }) => {
 			const assistant: AssistantMessage = {
 				...createAssistantStopMessage("done"),
-				provider: "openai-codex",
+				provider: "openai",
 				model: "gpt-5.5",
 			};
 			state.messages.push(assistant);
@@ -557,7 +557,7 @@ describe("runSubprocess yield reminders", () => {
 		const modelRegistry = {
 			refresh: async () => {},
 			getAvailable: () => [
-				{ provider: "openai-codex", id: "gpt-5.3-codex", name: "GPT-5.3 Codex", contextWindow: 272000 },
+				{ provider: "openai", id: "gpt-5.3-codex", name: "GPT-5.3 Codex", contextWindow: 272000 },
 			],
 			getApiKey: async () => "sk-test",
 		} as unknown as import("../../src/config/model-registry").ModelRegistry;
@@ -565,21 +565,21 @@ describe("runSubprocess yield reminders", () => {
 		const result = await runSubprocess({
 			...baseOptions,
 			id: "subagent-server-substitution-warning",
-			modelOverride: "openai-codex/gpt-5.3-codex:high",
+			modelOverride: "openai/gpt-5-mini:high",
 			modelRegistry,
 		});
 
 		expect(result.modelSubstitutionWarning).toEqual({
-			requested: "openai-codex/gpt-5.3-codex",
-			effective: "openai-codex/gpt-5.5",
+			requested: "openai/gpt-5-mini",
+			effective: "openai/gpt-5",
 			reason: "assistant_model_mismatch",
 		});
 		expect(sessionModelChanges).toEqual([
 			{
-				model: "openai-codex/gpt-5.5",
+				model: "openai/gpt-5",
 				role: undefined,
 				metadata: {
-					previousModel: "openai-codex/gpt-5.3-codex",
+					previousModel: "openai/gpt-5-mini",
 					reason: "assistant_model_mismatch",
 					thinkingLevel: Effort.High,
 				},

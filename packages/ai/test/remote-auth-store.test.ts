@@ -204,7 +204,7 @@ describe("RemoteAuthCredentialStore + AuthStorage integration", () => {
 		expect(fetchSpy).toHaveBeenCalledTimes(1);
 
 		// Unknown provider → null, no extra fetch.
-		const miss = await remoteStore.getUsageReport("openai-codex", credA);
+		const miss = await remoteStore.getUsageReport("openai", credA);
 		expect(miss).toBeNull();
 		expect(fetchSpy).toHaveBeenCalledTimes(1);
 

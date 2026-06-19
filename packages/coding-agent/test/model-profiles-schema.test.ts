@@ -43,13 +43,13 @@ describe("model profile schema", () => {
 		const result = ModelsConfigSchema.safeParse({
 			profiles: {
 				full: {
-					required_providers: ["openai-codex"],
+					required_providers: ["openai"],
 					model_mapping: {
-						default: "openai-codex/gpt-5.4:medium",
-						executor: "openai-codex/gpt-5.4:low",
-						architect: "openai-codex/gpt-5.4:xhigh",
-						planner: "openai-codex/gpt-5.4:medium",
-						critic: "openai-codex/gpt-5.4:high",
+						default: "openai/gpt-5-mini:medium",
+						executor: "openai/gpt-5-mini:low",
+						architect: "openai/gpt-5-mini:xhigh",
+						planner: "openai/gpt-5-mini:medium",
+						critic: "openai/gpt-5-mini:high",
 					},
 				},
 				partial: {
@@ -77,8 +77,8 @@ describe("model profile schema", () => {
 		const result = ModelsConfigSchema.safeParse({
 			profiles: {
 				bad: {
-					required_providers: ["openai-codex"],
-					model_mapping: { reviewer: "openai-codex/gpt-5.4" },
+					required_providers: ["openai"],
+					model_mapping: { reviewer: "openai/gpt-5.4" },
 				},
 			},
 		});
@@ -152,8 +152,8 @@ describe("model profile schema", () => {
 		const result = ModelsConfigSchema.safeParse({
 			profiles: {
 				bad: {
-					required_providers: ["openai-codex"],
-					model_mapping: { default: "openai-codex/gpt-5.4" },
+					required_providers: ["openai"],
+					model_mapping: { default: "openai/gpt-5.4" },
 					description: "not allowed",
 				},
 			},

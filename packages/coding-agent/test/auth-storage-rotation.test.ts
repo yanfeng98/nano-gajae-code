@@ -14,17 +14,17 @@ describe("AuthStorage account rotation", () => {
 	let usageExhausted = false;
 
 	const usageProvider: UsageProvider = {
-		id: "openai-codex",
+		id: "openai",
 		async fetchUsage(params) {
 			const accountId = params.credential.accountId ?? "unknown";
 			return {
-				provider: "openai-codex",
+				provider: "openai",
 				fetchedAt: Date.now(),
 				limits: [
 					{
 						id: `requests-${accountId}`,
 						label: "Requests",
-						scope: { provider: "openai-codex", accountId },
+						scope: { provider: "openai", accountId },
 						amount: { unit: "requests", used: usageExhausted ? 100 : 10, limit: 100 },
 						status: usageExhausted ? "exhausted" : "ok",
 					},
@@ -39,7 +39,7 @@ describe("AuthStorage account rotation", () => {
 		usageExhausted = false;
 
 		authStorage = await AuthStorage.create(path.join(tempDir, "testauth.db"), {
-			usageProviderResolver: provider => (provider === "openai-codex" ? usageProvider : undefined),
+			usageProviderResolver: provider => (provider === "openai" ? usageProvider : undefined),
 		});
 
 		// Stub the refresh path so AuthStorage doesn't hit a real OAuth endpoint
@@ -49,7 +49,7 @@ describe("AuthStorage account rotation", () => {
 			return credential;
 		});
 		vi.spyOn(oauth, "getOAuthApiKey").mockImplementation(async (_provider, credentials) => {
-			const credential = credentials["openai-codex"] as OAuthCredentials | undefined;
+			const credential = credentials["openai"] as OAuthCredentials | undefined;
 			if (!credential) return null;
 			return {
 				apiKey: `api-${credential.accountId ?? "unknown"}`,
@@ -67,7 +67,7 @@ describe("AuthStorage account rotation", () => {
 	});
 
 	test("returns a fallback key when every OAuth account is usage-limited", async () => {
-		await authStorage.set("openai-codex", [
+		await authStorage.set("openai", [
 			{
 				type: "oauth",
 				access: "access-1",
@@ -85,14 +85,14 @@ describe("AuthStorage account rotation", () => {
 		]);
 
 		const sessionId = "issue-55-session";
-		const firstKey = await authStorage.getApiKey("openai-codex", sessionId);
+		const firstKey = await authStorage.getApiKey("openai", sessionId);
 		expect(firstKey).toMatch(/^api-acct-/);
 
 		usageExhausted = true;
-		const switched = await authStorage.markUsageLimitReached("openai-codex", sessionId);
+		const switched = await authStorage.markUsageLimitReached("openai", sessionId);
 		expect(switched).toBe(true);
 
-		const exhaustedFallbackKey = await authStorage.getApiKey("openai-codex", sessionId);
+		const exhaustedFallbackKey = await authStorage.getApiKey("openai", sessionId);
 		expect(exhaustedFallbackKey).toMatch(/^api-acct-/);
 	});
 });

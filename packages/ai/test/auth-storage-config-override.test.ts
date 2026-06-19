@@ -81,14 +81,14 @@ describe("AuthStorage config-override apiKey", () => {
 		await withEnv(SUPPRESS_ANTHROPIC_ENV, async () => {
 			if (!authStorage) throw new Error("test setup failed");
 			await seedOAuth("anthropic", "oauth-anthropic");
-			await seedOAuth("openai-codex", "oauth-codex");
+			await seedOAuth("openai", "oauth-codex");
 			authStorage.setConfigApiKey("anthropic", "gateway-bearer-A");
-			authStorage.setConfigApiKey("openai-codex", "gateway-bearer-B");
+			authStorage.setConfigApiKey("openai", "gateway-bearer-B");
 
 			authStorage.clearConfigApiKeys();
 
 			expect(await authStorage.getApiKey("anthropic")).toBe("oauth-anthropic");
-			expect(await authStorage.getApiKey("openai-codex")).toBe("oauth-codex");
+			expect(await authStorage.getApiKey("openai")).toBe("oauth-codex");
 		});
 	});
 

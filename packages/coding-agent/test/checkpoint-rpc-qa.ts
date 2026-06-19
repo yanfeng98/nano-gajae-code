@@ -55,11 +55,10 @@ async function main() {
 			anthropic: Bun.env.ANTHROPIC_API_KEY,
 			openai: Bun.env.OPENAI_API_KEY,
 			google: Bun.env.GEMINI_API_KEY ?? Bun.env.GOOGLE_API_KEY,
-			xai: Bun.env.XAI_API_KEY,
 			zai: Bun.env.ZAI_API_KEY,
 			perplexity: Bun.env.PERPLEXITY_API_KEY,
 		};
-		const preferredProviders = ["zai", "google", "anthropic", "openai", "xai", "perplexity"];
+		const preferredProviders = ["zai", "google", "anthropic", "openai", "perplexity"];
 		for (const provider of preferredProviders) {
 			if (!providerKeyMap[provider]) continue;
 			const providerModels = availableModels.filter(candidate => candidate.provider === provider);

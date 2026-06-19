@@ -27,7 +27,7 @@ function normalizeBaseline(message: AgentMessage): unknown {
 			};
 		case "assistant": {
 			const isResponsesFamilyMessage =
-				message.api === "openai-responses" || message.api === "openai-codex-responses";
+				message.api === "openai-responses" || message.api === "openai-responses";
 			return {
 				role: message.role,
 				content:

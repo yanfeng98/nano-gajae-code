@@ -19,39 +19,6 @@ const roles: Role[] = ["default", "executor", "planner", "critic", "architect"];
 
 const expectedProfiles: Array<{ name: string; requiredProviders: string[]; mapping: Record<Role, string> }> = [
 	{
-		name: "codex-eco",
-		requiredProviders: ["openai-codex"],
-		mapping: {
-			default: "openai-codex/gpt-5.5:low",
-			executor: "openai-codex/gpt-5.5:minimal",
-			planner: "openai-codex/gpt-5.5:low",
-			critic: "openai-codex/gpt-5.5:medium",
-			architect: "openai-codex/gpt-5.5:high",
-		},
-	},
-	{
-		name: "codex-medium",
-		requiredProviders: ["openai-codex"],
-		mapping: {
-			default: "openai-codex/gpt-5.5:medium",
-			executor: "openai-codex/gpt-5.5:low",
-			planner: "openai-codex/gpt-5.5:medium",
-			critic: "openai-codex/gpt-5.5:high",
-			architect: "openai-codex/gpt-5.5:xhigh",
-		},
-	},
-	{
-		name: "codex-pro",
-		requiredProviders: ["openai-codex"],
-		mapping: {
-			default: "openai-codex/gpt-5.5:xhigh",
-			executor: "openai-codex/gpt-5.5:medium",
-			planner: "openai-codex/gpt-5.5:high",
-			critic: "openai-codex/gpt-5.5:xhigh",
-			architect: "openai-codex/gpt-5.5:xhigh",
-		},
-	},
-	{
 		name: "opencodego",
 		requiredProviders: ["opencode-go"],
 		mapping: {
@@ -173,39 +140,6 @@ const expectedProfiles: Array<{ name: string; requiredProviders: string[]; mappi
 		},
 	},
 	{
-		name: "grok-eco",
-		requiredProviders: ["xai"],
-		mapping: {
-			default: "xai/grok-4.3:low",
-			executor: "xai/grok-4.3:minimal",
-			planner: "xai/grok-4.3:low",
-			critic: "xai/grok-4.3:medium",
-			architect: "xai/grok-4.3:high",
-		},
-	},
-	{
-		name: "grok-medium",
-		requiredProviders: ["xai"],
-		mapping: {
-			default: "xai/grok-4.3:medium",
-			executor: "xai/grok-4.3:low",
-			planner: "xai/grok-4.3:medium",
-			critic: "xai/grok-4.3:high",
-			architect: "xai/grok-4.3:xhigh",
-		},
-	},
-	{
-		name: "grok-pro",
-		requiredProviders: ["xai"],
-		mapping: {
-			default: "xai/grok-4.3:xhigh",
-			executor: "xai/grok-4.3:medium",
-			planner: "xai/grok-4.3:high",
-			critic: "xai/grok-4.3:xhigh",
-			architect: "xai/grok-4.3:xhigh",
-		},
-	},
-	{
 		name: "minimax-eco",
 		requiredProviders: ["minimax-code"],
 		mapping: {
@@ -238,28 +172,6 @@ const expectedProfiles: Array<{ name: string; requiredProviders: string[]; mappi
 			architect: "minimax-code/minimax-v3:xhigh",
 		},
 	},
-	{
-		name: "opus-codex",
-		requiredProviders: ["anthropic", "openai-codex"],
-		mapping: {
-			default: "anthropic/claude-opus-4-8:xhigh",
-			executor: "openai-codex/gpt-5.5:low",
-			planner: "openai-codex/gpt-5.5:medium",
-			critic: "openai-codex/gpt-5.5:high",
-			architect: "openai-codex/gpt-5.5:xhigh",
-		},
-	},
-	{
-		name: "codex-opencodego",
-		requiredProviders: ["openai-codex", "opencode-go"],
-		mapping: {
-			default: "openai-codex/gpt-5.5:medium",
-			executor: "opencode-go/deepseek-v4-pro",
-			planner: "opencode-go/kimi-k2.6",
-			critic: "opencode-go/MiniMax-M2.5",
-			architect: "openai-codex/gpt-5.5:xhigh",
-		},
-	},
 ];
 
 const oldNames = [
@@ -285,7 +197,7 @@ function selectorExists(selector: string): boolean {
 }
 
 describe("built-in model profile catalog", () => {
-	test("contains exact 25-profile matrix cell-for-cell", () => {
+	test("contains exact 17-profile matrix cell-for-cell", () => {
 		expect(BUILTIN_MODEL_PROFILES.map(profile => profile.name)).toEqual(
 			expectedProfiles.map(profile => profile.name),
 		);
@@ -299,8 +211,8 @@ describe("built-in model profile catalog", () => {
 	test("old builtin names are absent and available names list current names", () => {
 		const profiles = mergeModelProfiles();
 		for (const oldName of oldNames) expect(profiles.has(oldName)).toBe(false);
-		expect(formatAvailableProfileNames(profiles)).toContain("codex-medium");
-		expect(formatAvailableProfileNames(profiles)).not.toContain("codex-standard");
+		expect(formatAvailableProfileNames(profiles)).toContain("glm-medium");
+		expect(formatAvailableProfileNames(profiles)).not.toContain("glm-standard");
 	});
 
 	test("every selector parses with schema validation and exists in models.json", () => {
@@ -332,36 +244,31 @@ describe("built-in model profile catalog", () => {
 			providerGroup: "KIMI CODING PLAN",
 		});
 		expect([...groupModelProfilesForPresetLanding(profiles).keys()]).toEqual([
-			"CODEX",
 			"OPENCODEGO",
 			"CLAUDE",
 			"GLM",
 			"KIMI CODING PLAN",
 			"MINIMAX",
-			"GROK",
 			"CURSOR",
 			"MINIMAX",
-			"COMBOS",
 		]);
-		expect(recommendModelProfileForProvider("openai-codex", profiles)?.name).toBe("codex-medium");
 		expect(recommendModelProfileForProvider("anthropic", profiles)?.name).toBe("claude-opus");
 		expect(recommendModelProfileForProvider("opencode-go", profiles)?.name).toBe("opencodego");
 		expect(recommendModelProfileForProvider("zai", profiles)?.name).toBe("glm-medium");
 		expect(recommendModelProfileForProvider("kimi-code", profiles)?.name).toBe("kimi-coding-plan-medium");
 		expect(recommendModelProfileForProvider("minimax-cn", profiles)?.name).toBe("minimax-medium");
-		expect(recommendModelProfileForProvider("xai", profiles)?.name).toBe("grok-medium");
 	});
 
 	test("user same-name profile overrides builtin via mergeModelProfiles", () => {
 		const merged = mergeModelProfiles({
-			"codex-medium": {
+			"glm-medium": {
 				required_providers: ["custom"],
 				model_mapping: { default: "custom/model" },
 			},
 		});
-		const profile = merged.get("codex-medium");
+		const profile = merged.get("glm-medium");
 		expect(profile).toEqual({
-			name: "codex-medium",
+			name: "glm-medium",
 			requiredProviders: ["custom"],
 			modelMapping: { default: "custom/model" },
 			source: "user",

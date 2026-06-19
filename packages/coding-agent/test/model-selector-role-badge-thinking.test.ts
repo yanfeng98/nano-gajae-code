@@ -80,13 +80,13 @@ function createSelector(
 	);
 }
 
-function createOpenAIModel(provider: "openai" | "openai-codex", id: string, reasoning = true): Model {
+function createOpenAIModel(provider: "openai", id: string, reasoning = true): Model {
 	return {
 		id,
 		name: id,
-		api: provider === "openai-codex" ? "openai-codex-responses" : "openai-responses",
+		api: "openai-responses",
 		provider,
-		baseUrl: provider === "openai-codex" ? "https://chatgpt.com/backend-api" : "https://api.openai.com/v1",
+		baseUrl: "https://api.openai.com/v1",
 		reasoning,
 		thinking: reasoning
 			? {
@@ -424,72 +424,6 @@ describe("ModelSelector canonical model selection", () => {
 		expect(selectedAfterThinking.role).toBe("default");
 		expect(selectedAfterThinking.thinkingLevel).toBe(ThinkingLevel.Off);
 		expect(selectedAfterThinking.selector).toBe(`${model.provider}/${model.id}`);
-	});
-
-	test("prompts for reasoning before assigning OpenAI Codex role-agent models", async () => {
-		installTestTheme();
-		const model = createOpenAIModel("openai-codex", "gpt-codex-reasoning-test");
-		const settings = Settings.isolated({});
-
-		let selected: SelectionCapture | undefined;
-		const selector = createSelector(
-			model,
-			settings,
-			selection => {
-				if (selection.kind === "assignment") selected = selection;
-			},
-			{ thinkingLevel: null },
-		);
-		await Bun.sleep(0);
-		installTestTheme();
-
-		selector.handleInput("\n");
-		selector.handleInput("\x1b[B");
-		selector.handleInput("\n");
-
-		expect(selected).toBeUndefined();
-		const thinkingRendered = normalizeRenderedText(selector.render(220).join("\n"));
-		expect(thinkingRendered).toContain("Reasoning for Executor");
-
-		selector.handleInput("\x1b[B");
-		selector.handleInput("\x1b[B");
-		selector.handleInput("\x1b[B");
-		selector.handleInput("\n");
-
-		const selectedAfterThinking = selected;
-		if (!selectedAfterThinking) throw new Error("Expected OpenAI Codex selection after reasoning choice");
-		expect(selectedAfterThinking.role).toBe("executor");
-		expect(selectedAfterThinking.thinkingLevel).toBe(ThinkingLevel.High);
-		expect(selectedAfterThinking.selector).toBe(`${model.provider}/${model.id}:high`);
-	});
-
-	test("shows only role assignment actions for OpenAI Codex reasoning models", async () => {
-		installTestTheme();
-		const model = createOpenAIModel("openai-codex", "gpt-codex-actions-test");
-		model.thinking = {
-			minLevel: Effort.Low,
-			maxLevel: Effort.XHigh,
-			defaultLevel: Effort.Medium,
-			mode: "effort",
-		};
-		const settings = Settings.isolated({});
-
-		const selector = createSelector(model, settings, undefined, { thinkingLevel: null });
-		await Bun.sleep(0);
-		installTestTheme();
-
-		selector.handleInput("\n");
-		const actionRendered = normalizeRenderedText(selector.render(260).join("\n"));
-
-		expect(actionRendered).toContain("Set as DEFAULT (Default)");
-		expect(actionRendered).toContain("Set as EXECUTOR (Executor)");
-		expect(actionRendered).toContain("Set as ARCHITECT (Architect)");
-		expect(actionRendered).toContain("Set as PLANNER (Planner)");
-		expect(actionRendered).toContain("Set as CRITIC (Critic)");
-		expect(actionRendered).not.toContain("Apply OpenAI Codex role preset");
-		expect(actionRendered).not.toContain(
-			"Default medium, Executor low, Architect xhigh, Planner medium, Critic high",
-		);
 	});
 
 	test("prompts for reasoning when scoped OpenAI thinking came from defaults", async () => {

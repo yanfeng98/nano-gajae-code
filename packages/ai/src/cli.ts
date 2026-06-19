@@ -101,8 +101,7 @@ Commands:
 Providers:
   anthropic         Anthropic
   google-gemini-cli Google Gemini CLI
-  google-antigravity Antigravity (Gemini 3, Anthropic, GPT-OSS)
-  openai-codex      OpenAI code provider (ChatGPT Plus/Pro)
+
   kimi-code         Kimi Code
   kilo              Kilo Gateway
   kagi              Kagi

@@ -41,7 +41,7 @@ describe("issue #1022 — path-scoped enabledModels respected by default fallbac
 		await Bun.write(
 			path.join(agentDir, "config.yml"),
 			YAML.stringify({
-				enabledModels: [{ path: privatePath, models: ["openai-codex"] }],
+				enabledModels: [{ path: privatePath, models: ["openai"] }],
 				disabledProviders: [{ path: privatePath, providers: ["github-copilot"] }],
 				modelRoles: { default: "github-copilot/gpt-5.5" },
 			}),
@@ -49,7 +49,7 @@ describe("issue #1022 — path-scoped enabledModels respected by default fallbac
 
 		const settings = await Settings.init({ cwd, agentDir });
 		// Sanity-check the path-scoped values resolved correctly for this cwd.
-		expect(settings.get("enabledModels")).toEqual(["openai-codex"]);
+		expect(settings.get("enabledModels")).toEqual(["openai"]);
 		expect(settings.get("disabledProviders")).toEqual(["github-copilot"]);
 
 		const authStorage = await AuthStorage.create(path.join(testDir, "auth.db"));

@@ -185,7 +185,7 @@ describe("apply_patch rendering", () => {
 					op: "update",
 					diff: [
 						" 10|}",
-						'+11|import { CODEX_INSTRUCTIONS } from "@gajae-code/ai/providers/openai-codex-responses";',
+						'+11|import { CODEX_INSTRUCTIONS } from "@gajae-code/ai/providers/openai-responses";',
 						" 12|\t$env,",
 						" 228|\toutput_format: typeof OPENAI_IMAGE_OUTPUT_FORMAT;",
 						"+235|\tinstructions?: string;",

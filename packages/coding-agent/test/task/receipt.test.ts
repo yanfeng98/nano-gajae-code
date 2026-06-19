@@ -113,22 +113,22 @@ describe("task result receipts", () => {
 	it("surfaces model substitution warnings without raw output", () => {
 		const receipt = buildTaskReceipt(
 			makeRaw({
-				modelOverride: "openai-codex/gpt-5.3-codex:high",
+				modelOverride: "openai/gpt-5-mini:high",
 				modelSubstitutionWarning: {
-					requested: "openai-codex/gpt-5.3-codex",
-					effective: "openai-codex/gpt-5.5",
+					requested: "openai/gpt-5-mini",
+					effective: "openai/gpt-5",
 					reason: "auth_unavailable",
 				},
 			}),
 		);
 
 		expect(receipt.modelSubstitutionWarning).toEqual({
-			requested: "openai-codex/gpt-5.3-codex",
-			effective: "openai-codex/gpt-5.5",
+			requested: "openai/gpt-5-mini",
+			effective: "openai/gpt-5",
 			reason: "auth_unavailable",
 		});
 		expect(receipt.preview).toBe(
-			"Task completed; requested model substituted from openai-codex/gpt-5.3-codex to openai-codex/gpt-5.5.",
+			"Task completed; requested model substituted from openai/gpt-5-mini to openai/gpt-5.",
 		);
 		expect(findRawTaskLeakKeys(receipt)).toEqual([]);
 	});

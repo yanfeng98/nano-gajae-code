@@ -4,7 +4,7 @@ import { OAuthManualInputManager } from "@gajae-code/coding-agent/modes/oauth-ma
 describe("OAuthManualInputManager", () => {
 	it("resolves waitForInput with submitted value", async () => {
 		const manager = new OAuthManualInputManager();
-		const promise = manager.waitForInput("openai-codex");
+		const promise = manager.waitForInput("openai");
 
 		const submitted = manager.submit("callback-url");
 

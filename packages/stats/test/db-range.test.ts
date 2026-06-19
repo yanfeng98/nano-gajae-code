@@ -35,8 +35,8 @@ function makeMessage(timestamp: number, entryId: string): MessageStats {
 		entryId,
 		folder: "/tmp/project",
 		model: "gpt-5.4",
-		provider: "openai-codex",
-		api: "openai-codex-responses",
+		provider: "openai",
+		api: "openai-responses",
 		timestamp,
 		duration: 1000,
 		ttft: 100,
@@ -71,12 +71,12 @@ describe("getDashboardStats time range", () => {
 		expect(dayStats.byModel[0]).toMatchObject({
 			totalRequests: 1,
 			model: "gpt-5.4",
-			provider: "openai-codex",
+			provider: "openai",
 		});
 
 		const weekStats = await getDashboardStats("7d");
 		expect(weekStats.overall.totalRequests).toBe(2);
-		expect(weekStats.byModel[0]).toMatchObject({ totalRequests: 2, model: "gpt-5.4", provider: "openai-codex" });
+		expect(weekStats.byModel[0]).toMatchObject({ totalRequests: 2, model: "gpt-5.4", provider: "openai" });
 
 		const allStats = await getDashboardStats("all");
 		expect(allStats.overall.totalRequests).toBe(2);

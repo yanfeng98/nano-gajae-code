@@ -31,7 +31,7 @@ describe("issue #849: explicit default model survives later assistant-message in
 		const message: AssistantMessage = {
 			role: "assistant",
 			content: [{ type: "text", text: "ok" }],
-			api: "openai-codex-responses",
+			api: "openai-responses",
 			provider: provider as AssistantMessage["provider"],
 			model,
 			usage: {
@@ -71,14 +71,14 @@ describe("issue #849: explicit default model survives later assistant-message in
 		// model_change with role="temporary" pointing at gpt-5.4, and the
 		// next assistant message is produced under that temporary model.
 		const entries: SessionEntry[] = [
-			makeModelChange("a1", null, "openai-codex/gpt-5.5", "default"),
-			makeAssistantEntry("a2", "a1", "openai-codex", "gpt-5.5"),
-			makeModelChange("a3", "a2", "openai-codex/gpt-5.4", "temporary"),
-			makeAssistantEntry("a4", "a3", "openai-codex", "gpt-5.4"),
+			makeModelChange("a1", null, "openai/gpt-5", "default"),
+			makeAssistantEntry("a2", "a1", "openai", "gpt-5.5"),
+			makeModelChange("a3", "a2", "openai/gpt-5.4", "temporary"),
+			makeAssistantEntry("a4", "a3", "openai", "gpt-5.4"),
 		];
 
 		const ctx = buildSessionContext(entries);
-		expect(ctx.models.default).toBe("openai-codex/gpt-5.5");
+		expect(ctx.models.default).toBe("openai/gpt-5");
 	});
 
 	it("preserves explicit user-selected default when the codex backend reports a different model id", () => {
@@ -86,20 +86,20 @@ describe("issue #849: explicit default model survives later assistant-message in
 		// OpenAI code backend backend is tagged "gpt-5.4" (server-side downgrade /
 		// stale id mapping).  Resume must still restore what the user picked.
 		const entries: SessionEntry[] = [
-			makeModelChange("b1", null, "openai-codex/gpt-5.5", "default"),
-			makeAssistantEntry("b2", "b1", "openai-codex", "gpt-5.4"),
+			makeModelChange("b1", null, "openai/gpt-5", "default"),
+			makeAssistantEntry("b2", "b1", "openai", "gpt-5.4"),
 		];
 
 		const ctx = buildSessionContext(entries);
-		expect(ctx.models.default).toBe("openai-codex/gpt-5.5");
+		expect(ctx.models.default).toBe("openai/gpt-5");
 	});
 
 	it("still infers default from assistant messages when no model_change entry exists", () => {
 		// Backwards compatibility: legacy sessions have no model_change entries
 		// and rely on assistant-message inference.
-		const entries: SessionEntry[] = [makeAssistantEntry("c1", null, "openai-codex", "gpt-5.4")];
+		const entries: SessionEntry[] = [makeAssistantEntry("c1", null, "openai", "gpt-5.4")];
 
 		const ctx = buildSessionContext(entries);
-		expect(ctx.models.default).toBe("openai-codex/gpt-5.4");
+		expect(ctx.models.default).toBe("openai/gpt-5.4");
 	});
 });

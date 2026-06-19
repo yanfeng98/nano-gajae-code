@@ -17,7 +17,7 @@ const model = (provider: string, id: string): Model =>
 		thinking: { minLevel: ThinkingLevel.Low, maxLevel: ThinkingLevel.XHigh },
 	}) as Model;
 
-const codexModel = model("openai-codex", "gpt-5.5");
+const codexModel = model("openai", "gpt-5.5");
 const minimaxModel = model("minimax-code", "minimax-v3");
 
 const profile = (name: string, provider: string, selector: string): ModelProfileDefinition => ({
@@ -27,7 +27,7 @@ const profile = (name: string, provider: string, selector: string): ModelProfile
 	source: "builtin",
 });
 
-const codexProfile = profile("codex-medium", "openai-codex", "openai-codex/gpt-5.5:medium");
+const codexProfile = profile("codex-medium", "openai", "openai/gpt-5.5:medium");
 const minimaxProfile = profile("minimax-medium", "minimax-code", "minimax-code/minimax-v3:medium");
 const plainMinimaxProfile = profile("minimax", "minimax-code", "minimax-code/minimax-v3:medium");
 let testTheme = await getThemeByName("red-claw");
@@ -46,7 +46,7 @@ function createControllerContext(
 	} = {},
 ) {
 	const settings = Settings.isolated({
-		"task.agentModelOverrides": { executor: "openai-codex/original-executor" },
+		"task.agentModelOverrides": { executor: "openai/original-executor" },
 		"modelProfile.default": options.defaultProfile,
 	});
 	const setCalls: Array<{ path: string; value: unknown }> = [];
@@ -117,10 +117,10 @@ describe("login preset recommendation", () => {
 		installTestTheme();
 	});
 
-	test("login on openai-codex with no active profile prompts and confirm activates session-only profile", async () => {
+	test("login on openai with no active profile prompts and confirm activates session-only profile", async () => {
 		const { ctx, settings, session, setCalls } = createControllerContext({ confirm: true });
 
-		await login(ctx, "openai-codex");
+		await login(ctx, "openai");
 
 		expect(ctx.showError).not.toHaveBeenCalled();
 		expect(ctx.showHookConfirm).toHaveBeenCalledWith("Apply codex-medium now?", "");
@@ -133,18 +133,18 @@ describe("login preset recommendation", () => {
 	test("declining the post-login recommendation performs no mutation", async () => {
 		const { ctx, session, settings } = createControllerContext({ confirm: false });
 
-		await login(ctx, "openai-codex");
+		await login(ctx, "openai");
 
 		expect(ctx.showHookConfirm).toHaveBeenCalledWith("Apply codex-medium now?", "");
 		expect(session.setModelTemporaryCalls).toEqual([]);
 		expect(session.setActiveModelProfile).not.toHaveBeenCalled();
-		expect(settings.get("task.agentModelOverrides")).toEqual({ executor: "openai-codex/original-executor" });
+		expect(settings.get("task.agentModelOverrides")).toEqual({ executor: "openai/original-executor" });
 	});
 
 	test("login with session active profile shows hint instead of prompting", async () => {
 		const { ctx, session } = createControllerContext({ activeProfile: "codex-eco" });
 
-		await login(ctx, "openai-codex");
+		await login(ctx, "openai");
 
 		expect(ctx.showHookConfirm).not.toHaveBeenCalled();
 		expect(ctx.showStatus).toHaveBeenCalledWith("Preset codex-medium is available in /model.");
@@ -154,7 +154,7 @@ describe("login preset recommendation", () => {
 	test("login with default profile setting shows hint instead of prompting", async () => {
 		const { ctx, session } = createControllerContext({ defaultProfile: "codex-eco" });
 
-		await login(ctx, "openai-codex");
+		await login(ctx, "openai");
 
 		expect(ctx.showHookConfirm).not.toHaveBeenCalled();
 		expect(ctx.showStatus).toHaveBeenCalledWith("Preset codex-medium is available in /model.");

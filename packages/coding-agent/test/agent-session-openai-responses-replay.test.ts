@@ -191,7 +191,6 @@ async function createSessionHarness(
 	]);
 	const authStorage = await AuthStorage.create(path.join(tempDir, `testauth-${Snowflake.next()}.db`));
 	authStorage.setRuntimeApiKey("openai", "test-key");
-	authStorage.setRuntimeApiKey("openai-codex", "test-key");
 	const model = getBundledModel(provider, modelId);
 	if (!model) {
 		throw new Error(`Expected bundled test model ${provider}/${modelId}`);
@@ -284,29 +283,6 @@ describe("AgentSession OpenAI Responses replay boundaries", () => {
 		expect(runtimeUser.providerPayload).toEqual(preservedUserPayload);
 	});
 
-	it("sanitizes stale Responses-family assistant replay metadata for direct SessionManager.open consumers", async () => {
-		const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `pi-issue-505-open-${Snowflake.next()}-`));
-		tempDirs.push(tempDir);
-		const assistantText = "Codex assistant snapshot";
-
-		const { sessionFile } = await createPersistedSession(tempDir, sessionManager => {
-			sessionManager.appendMessage(
-				createStaleAssistantMessage(assistantText, {
-					api: "openai-codex-responses",
-					provider: "openai-codex",
-					model: "gpt-5.2-codex",
-				}),
-			);
-		});
-
-		const openedSessionManager = await SessionManager.open(sessionFile, tempDir);
-		const persistedAssistant = findPersistedMessageEntry(openedSessionManager, "assistant", assistantText).message;
-		if (persistedAssistant.role !== "assistant") {
-			throw new Error("Expected persisted codex assistant message");
-		}
-		expectAssistantReplayMetadataSanitized(persistedAssistant);
-		await openedSessionManager.close();
-	});
 
 	it("sanitizes stale assistant replay metadata when forking a persisted session", async () => {
 		const sourceDir = fs.mkdtempSync(path.join(os.tmpdir(), `pi-issue-505-fork-source-${Snowflake.next()}-`));
@@ -340,161 +316,6 @@ describe("AgentSession OpenAI Responses replay boundaries", () => {
 		await forkedSessionManager.close();
 	});
 
-	it("keeps same-file reload safe without resetting live provider state after startup sanitization", async () => {
-		const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `pi-issue-505-reload-${Snowflake.next()}-`));
-		tempDirs.push(tempDir);
-		const assistantText = "Reloaded assistant response";
-
-		const { sessionFile } = await createPersistedSession(tempDir, sessionManager => {
-			sessionManager.appendModelChange("openai-codex/gpt-5.2-codex");
-			sessionManager.appendMessage({ role: "user", content: "Reload summary", timestamp: Date.now() - 2 });
-			sessionManager.appendMessage(
-				createStaleAssistantMessage(assistantText, {
-					api: "openai-codex-responses",
-					provider: "openai-codex",
-					model: "gpt-5.2-codex",
-				}),
-			);
-			sessionManager.appendMessage({ role: "user", content: "Reload follow-up", timestamp: Date.now() - 1 });
-		});
-
-		const reloadedSessionManager = await SessionManager.open(sessionFile, tempDir);
-		const { session, authStorage } = await createSessionHarness(tempDir, reloadedSessionManager, {
-			provider: "openai-codex",
-			modelId: "gpt-5.2-codex",
-		});
-		sessions.push(session);
-		authStorages.push(authStorage);
-
-		const closeSpy = vi.fn();
-		session.providerSessionState.set("openai-codex-responses", { close: closeSpy } satisfies ProviderSessionState);
-
-		await session.reload();
-
-		expect(closeSpy).not.toHaveBeenCalled();
-		expect(session.providerSessionState.size).toBe(1);
-		expectAssistantReplayMetadataSanitized(findRuntimeAssistant(session, assistantText));
-
-		const persistedAssistant = findPersistedMessageEntry(session.sessionManager, "assistant", assistantText).message;
-		if (persistedAssistant.role !== "assistant") {
-			throw new Error("Expected reloaded assistant message");
-		}
-		expectAssistantReplayMetadataSanitized(persistedAssistant);
-	});
-
-	it("builds sanitized fork seeds while sharing cache identity without provider transport state", async () => {
-		const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `pi-fork-seed-${Snowflake.next()}-`));
-		tempDirs.push(tempDir);
-		const parentManager = SessionManager.create(tempDir, tempDir);
-		const { session: parent, authStorage: parentAuthStorage } = await createSessionHarness(tempDir, parentManager, {
-			provider: "openai-codex",
-			modelId: "gpt-5.2-codex",
-		});
-		sessions.push(parent);
-		authStorages.push(parentAuthStorage);
-
-		parent.agent.appendMessage({
-			role: "user",
-			content: "Parent summary",
-			providerPayload: createUserHistoryPayload("openai-codex"),
-			timestamp: Date.now() - 2,
-		});
-		parent.agent.appendMessage(
-			createStaleAssistantMessage("Parent assistant", {
-				api: "openai-codex-responses",
-				provider: "openai-codex",
-				model: "gpt-5.2-codex",
-			}),
-		);
-		parent.agent.appendMessage({
-			role: "developer",
-			content: [{ type: "text", text: "Do not override child" }],
-			timestamp: Date.now() - 1,
-		});
-		parent.agent.appendMessage({
-			role: "toolResult",
-			toolCallId: "parent-tool",
-			toolName: "bash",
-			content: [{ type: "text", text: "parent tool output" }],
-			isError: false,
-			timestamp: Date.now(),
-		});
-
-		const parentCloseSpy = vi.fn();
-		parent.providerSessionState.set("openai-codex-responses", {
-			close: parentCloseSpy,
-		} satisfies ProviderSessionState);
-
-		const seed = await parent.buildForkContextSeed({ maxMessages: 10, maxTokens: 10_000 });
-		expect(seed.cacheIdentity).toBe(parent.sessionId);
-		expect(seed.messages).toHaveLength(2);
-		expect(seed.metadata.skippedReasons["developer-role"]).toBe(1);
-		expect(seed.metadata.skippedReasons["tool-result-role"]).toBe(1);
-		expect(seed.agentMessages).toEqual(seed.messages);
-		expect(seed.messages.every(message => !("providerPayload" in message))).toBe(true);
-		const inheritedAssistant = seed.messages.find(message => message.role === "assistant");
-		if (!inheritedAssistant || typeof inheritedAssistant.content === "string") {
-			throw new Error("Expected sanitized inherited assistant message");
-		}
-		expect(inheritedAssistant.content.every(block => block.type !== "thinking")).toBe(true);
-
-		const jsonEdgeMessage = {
-			role: "user" as const,
-			content: {
-				dropped: undefined,
-				date: new Date("2026-06-12T08:12:00.000Z"),
-				proto: Object.assign(Object.create({ inherited: "ignored" }), { own: "kept" }),
-				// biome-ignore lint/suspicious/noSparseArray: array hole is an intentional JSON-semantics fixture
-				array: [undefined, , new Date("2024-01-02T03:04:05.000Z")],
-			},
-			timestamp: Date.now(),
-		};
-		const providerMessages = (
-			parent as unknown as { model: unknown; messages: Message[]; agent: { state: { messages: Message[] } } }
-		).messages;
-		const originalProviderMessages = [...providerMessages];
-		providerMessages.splice(0, providerMessages.length, jsonEdgeMessage as unknown as Message);
-		const jsonSeed = await parent.buildForkContextSeed({ maxMessages: 10, maxTokens: 10_000 });
-		const seededJsonMessage = jsonSeed.messages.find(
-			message => message.role === "user" && typeof message.content === "object",
-		);
-		expect(JSON.stringify(seededJsonMessage)).toBe(
-			JSON.stringify({ ...JSON.parse(JSON.stringify(jsonEdgeMessage)), attribution: "user" }),
-		);
-		expect(jsonSeed.agentMessages).toEqual(jsonSeed.messages);
-		providerMessages.splice(0, providerMessages.length, ...originalProviderMessages);
-		const childState = new Map<string, ProviderSessionState>();
-		const childManager = SessionManager.create(tempDir, tempDir);
-		const { session: child, authStorage: childAuthStorage } = await createSessionHarness(tempDir, childManager, {
-			provider: "openai-codex",
-			modelId: "gpt-5.2-codex",
-			forkContextSeed: seed,
-			providerSessionState: childState,
-		});
-		sessions.push(child);
-		authStorages.push(childAuthStorage);
-
-		expect(child.sessionId).not.toBe(parent.sessionId);
-		expect(child.agent.providerSessionId).toBe(parent.sessionId);
-		expect(child.providerSessionState).toBe(childState);
-		expect(child.providerSessionState).not.toBe(parent.providerSessionState);
-		const childCodexState = child.providerSessionState.get("openai-codex-responses") as
-			| { webSocketSessions?: Map<string, { lastResponseId?: string; lastResponseItems?: unknown[] }> }
-			| undefined;
-		expect(childCodexState?.webSocketSessions).toBeDefined();
-		for (const sessionState of childCodexState?.webSocketSessions?.values() ?? []) {
-			expect(sessionState.lastResponseId).toBeUndefined();
-			expect(sessionState.lastResponseItems).toBeUndefined();
-		}
-		expect(parent.providerSessionState.size).toBe(1);
-		expect(parentCloseSpy).not.toHaveBeenCalled();
-		expect(child.messages.slice(0, 2)).toEqual(seed.agentMessages);
-
-		parent.agent.appendMessage({ role: "user", content: "oversized ".repeat(5_000), timestamp: Date.now() });
-		const boundedSeed = await parent.buildForkContextSeed({ maxMessages: 10, maxTokens: 1 });
-		expect(boundedSeed.messages).toHaveLength(0);
-		expect(boundedSeed.metadata.skippedReasons["token-limit"]).toBeGreaterThan(0);
-	});
 
 	it("propagates appendOnlyPrefixSnapshot through buildForkContextSeed when append-only mode is active", async () => {
 		const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `pi-fc-default-append-only-${Snowflake.next()}-`));
@@ -696,54 +517,6 @@ describe("AgentSession OpenAI Responses replay boundaries", () => {
 		}
 	});
 
-	it("keeps provider session state when same-file reload only changes message metadata", async () => {
-		const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `pi-issue-505-reload-metadata-${Snowflake.next()}-`));
-		tempDirs.push(tempDir);
-		const assistantText = "Reloaded metadata-only response";
-
-		const { sessionFile } = await createPersistedSession(tempDir, sessionManager => {
-			sessionManager.appendModelChange("openai-codex/gpt-5.2-codex");
-			sessionManager.appendMessage(
-				createStaleAssistantMessage(assistantText, {
-					api: "openai-codex-responses",
-					provider: "openai-codex",
-					model: "gpt-5.2-codex",
-				}),
-			);
-		});
-
-		const reloadedSessionManager = await SessionManager.open(sessionFile, tempDir);
-		const { session, authStorage } = await createSessionHarness(tempDir, reloadedSessionManager, {
-			provider: "openai-codex",
-			modelId: "gpt-5.2-codex",
-		});
-		sessions.push(session);
-		authStorages.push(authStorage);
-
-		const closeSpy = vi.fn();
-		session.providerSessionState.set("openai-codex-responses", { close: closeSpy } satisfies ProviderSessionState);
-
-		const rewrittenLines = fs
-			.readFileSync(sessionFile, "utf8")
-			.trimEnd()
-			.split("\n")
-			.map(line => {
-				const entry = JSON.parse(line) as { type?: string; message?: { role?: string; timestamp?: number } };
-				if (entry.type === "message" && entry.message?.role === "assistant") {
-					entry.message.timestamp = (entry.message.timestamp ?? 0) + 10_000;
-				}
-				return JSON.stringify(entry);
-			});
-		fs.writeFileSync(sessionFile, `${rewrittenLines.join("\n")}\n`, "utf8");
-
-		await session.reload();
-
-		expect(closeSpy).not.toHaveBeenCalled();
-		expect(session.providerSessionState.size).toBe(1);
-		expect(session.model?.provider).toBe("openai-codex");
-		expect(session.model?.id).toBe("gpt-5.2-codex");
-		expectAssistantReplayMetadataSanitized(findRuntimeAssistant(session, assistantText));
-	});
 
 	it("captures session-manager state when custom message details are proxy-backed", async () => {
 		const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `pi-issue-505-capture-proxy-${Snowflake.next()}-`));
@@ -792,96 +565,7 @@ describe("AgentSession OpenAI Responses replay boundaries", () => {
 		expect(session.sessionFile).toBe(originalSessionFile);
 	});
 
-	it("resets provider session state when same-file reload restores different messages under the same model", async () => {
-		const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `pi-issue-505-reload-content-${Snowflake.next()}-`));
-		tempDirs.push(tempDir);
-		const assistantText = "Reloaded content change response";
 
-		const { sessionFile } = await createPersistedSession(tempDir, sessionManager => {
-			sessionManager.appendModelChange("openai-codex/gpt-5.2-codex");
-			sessionManager.appendMessage(
-				createStaleAssistantMessage(assistantText, {
-					api: "openai-codex-responses",
-					provider: "openai-codex",
-					model: "gpt-5.2-codex",
-				}),
-			);
-		});
-
-		const reloadedSessionManager = await SessionManager.open(sessionFile, tempDir);
-		const { session, authStorage } = await createSessionHarness(tempDir, reloadedSessionManager, {
-			provider: "openai-codex",
-			modelId: "gpt-5.2-codex",
-		});
-		sessions.push(session);
-		authStorages.push(authStorage);
-
-		const closeSpy = vi.fn();
-		session.providerSessionState.set("openai-codex-responses", { close: closeSpy } satisfies ProviderSessionState);
-
-		const mutatedSessionManager = await SessionManager.open(sessionFile, tempDir);
-		mutatedSessionManager.appendMessage({
-			role: "user",
-			content: "Externally appended follow-up",
-			timestamp: Date.now() + 1,
-		});
-		await mutatedSessionManager.flush();
-		await mutatedSessionManager.close();
-
-		await session.reload();
-
-		expect(closeSpy).toHaveBeenCalledTimes(1);
-		expect(session.providerSessionState.size).toBe(0);
-		expect(session.model?.provider).toBe("openai-codex");
-		expect(session.model?.id).toBe("gpt-5.2-codex");
-		expect(
-			session.messages.some(
-				message => message.role === "user" && getTextContent(message) === "Externally appended follow-up",
-			),
-		).toBe(true);
-	});
-
-	it("resets provider session state when same-file reload restores a different saved model", async () => {
-		const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `pi-issue-505-reload-model-${Snowflake.next()}-`));
-		tempDirs.push(tempDir);
-		const assistantText = "Reloaded model change response";
-
-		const { sessionFile } = await createPersistedSession(tempDir, sessionManager => {
-			sessionManager.appendModelChange("openai-codex/gpt-5.2-codex");
-			sessionManager.appendMessage(
-				createStaleAssistantMessage(assistantText, {
-					api: "openai-codex-responses",
-					provider: "openai-codex",
-					model: "gpt-5.2-codex",
-				}),
-			);
-		});
-
-		const reloadedSessionManager = await SessionManager.open(sessionFile, tempDir);
-		const { session, authStorage } = await createSessionHarness(tempDir, reloadedSessionManager, {
-			provider: "openai-codex",
-			modelId: "gpt-5.2-codex",
-		});
-		sessions.push(session);
-		authStorages.push(authStorage);
-
-		const closeSpy = vi.fn();
-		session.providerSessionState.set("openai-codex-responses", { close: closeSpy } satisfies ProviderSessionState);
-
-		const mutatedSessionManager = await SessionManager.open(sessionFile, tempDir);
-		mutatedSessionManager.appendModelChange("openai/gpt-5-mini");
-		await mutatedSessionManager.flush();
-		expect(mutatedSessionManager.buildSessionContext().models.default).toBe("openai/gpt-5-mini");
-		await mutatedSessionManager.close();
-
-		await session.reload();
-
-		expect(session.model?.provider).toBe("openai");
-		expect(session.model?.id).toBe("gpt-5-mini");
-		expect(closeSpy).toHaveBeenCalledTimes(1);
-		expect(session.providerSessionState.size).toBe(0);
-		expectAssistantReplayMetadataSanitized(findRuntimeAssistant(session, assistantText));
-	});
 
 	it("resets plain openai-responses provider state when same-file reload restores a different saved model", async () => {
 		const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `pi-issue-505-reload-openai-${Snowflake.next()}-`));

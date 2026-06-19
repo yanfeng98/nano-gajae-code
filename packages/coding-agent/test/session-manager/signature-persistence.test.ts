@@ -72,7 +72,7 @@ describe("SessionManager signature persistence", () => {
 			content: "look at this",
 			providerPayload: {
 				type: "openaiResponsesHistory",
-				provider: "openai-codex",
+				provider: "openai",
 				items: [
 					{
 						type: "message",
@@ -89,8 +89,8 @@ describe("SessionManager signature persistence", () => {
 		session.appendMessage({
 			role: "assistant",
 			content: [{ type: "text", text: "done" }],
-			api: "openai-codex-responses",
-			provider: "openai-codex",
+			api: "openai-responses",
+			provider: "openai",
 			model: "gpt-5.4",
 			usage: {
 				input: 1,
@@ -119,7 +119,7 @@ describe("SessionManager signature persistence", () => {
 
 		expect(reloadedUserEntry.message.providerPayload).toEqual({
 			type: "openaiResponsesHistory",
-			provider: "openai-codex",
+			provider: "openai",
 			items: [
 				{
 					type: "message",

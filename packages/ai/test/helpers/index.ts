@@ -54,12 +54,12 @@ export async function waitForDelayOrAbort(delayMs: number, signal: AbortSignal |
 	}
 }
 
-export function createCodexModel(id: string): Model<"openai-codex-responses"> {
+export function createOpenAIModel(id: string): Model<"openai-responses"> {
 	return enrichModelThinking({
 		id,
 		name: id,
-		api: "openai-codex-responses",
-		provider: "openai-codex",
+		api: "openai-responses",
+		provider: "openai",
 		baseUrl: "https://api.openai.com/v1",
 		reasoning: true,
 		input: ["text"],

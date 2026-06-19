@@ -38,12 +38,12 @@ const compat: Required<OpenAICompat> = {
 	toolStrictMode: "none",
 };
 
-function createXaiModel(id: string): Model<"openai-completions"> {
+function createOpenAIModel(id: string): Model<"openai-completions"> {
 	return {
 		id,
 		name: id,
 		api: "openai-completions",
-		provider: "xai",
+		provider: "openai",
 		baseUrl: "https://api.x.ai/v1",
 		reasoning: true,
 		input: ["text"],
@@ -73,7 +73,7 @@ describe("isComposerHarnessModel", () => {
 describe("openai-completions composer discipline injection", () => {
 	it("prepends the discipline prompt for composer models", () => {
 		const params = convertMessages(
-			createXaiModel("grok-composer-2.5-fast"),
+			createOpenAIModel("grok-composer-2.5-fast"),
 			createContext(["Host system prompt."]),
 			compat,
 		);
@@ -82,20 +82,20 @@ describe("openai-completions composer discipline injection", () => {
 	});
 
 	it("does not inject for non-composer models", () => {
-		const params = convertMessages(createXaiModel("grok-4.3"), createContext(["Host system prompt."]), compat);
+		const params = convertMessages(createOpenAIModel("grok-4.3"), createContext(["Host system prompt."]), compat);
 		expect(params[0]).toEqual({ role: "system", content: "Host system prompt." });
 		expect(JSON.stringify(params)).not.toContain("File-editing discipline");
 	});
 
 	it("does not inject when there is no host system prompt", () => {
-		const params = convertMessages(createXaiModel("grok-composer-2.5-fast"), createContext(undefined), compat);
+		const params = convertMessages(createOpenAIModel("grok-composer-2.5-fast"), createContext(undefined), compat);
 		expect(JSON.stringify(params)).not.toContain("File-editing discipline");
 	});
 
 	it("joins the discipline prompt first when multiple system messages are unsupported", () => {
 		const singleMessageCompat = { ...compat, supportsMultipleSystemMessages: false };
 		const params = convertMessages(
-			createXaiModel("grok-composer-2.5-fast"),
+			createOpenAIModel("grok-composer-2.5-fast"),
 			createContext(["Host system prompt."]),
 			singleMessageCompat,
 		);

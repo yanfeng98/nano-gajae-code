@@ -211,8 +211,8 @@ describe("resolveProviderChain — active-model-gated resolution", () => {
 	});
 
 	it("maps real registry provider strings to their native search", async () => {
-		expect(await chainIds(fakeAuth({ oauth: ["openai-codex"] }), "auto", "openai")).toEqual(["codex", "duckduckgo"]);
-		expect(await chainIds(fakeAuth({ oauth: ["openai-codex"] }), "auto", "openai-codex")).toEqual([
+		expect(await chainIds(fakeAuth({ oauth: ["openai"] }), "auto", "openai")).toEqual(["codex", "duckduckgo"]);
+		expect(await chainIds(fakeAuth({ oauth: ["openai"] }), "auto", "openai")).toEqual([
 			"codex",
 			"duckduckgo",
 		]);
@@ -220,7 +220,7 @@ describe("resolveProviderChain — active-model-gated resolution", () => {
 			"gemini",
 			"duckduckgo",
 		]);
-		expect(await chainIds(fakeAuth({ oauth: ["google-antigravity"] }), "auto", "google-antigravity")).toEqual([
+		expect(await chainIds(fakeAuth({ oauth: ["google"] }), "auto", "google")).toEqual([
 			"gemini",
 			"duckduckgo",
 		]);
@@ -232,10 +232,10 @@ describe("resolveProviderChain — active-model-gated resolution", () => {
 		expect(await chainIds(fakeAuth(), "auto", "my-custom-llm")).toEqual(["duckduckgo"]);
 	});
 
-	it("REGRESSION: a stray openai-codex OAuth on a non-OpenAI model resolves to DuckDuckGo, not codex", async () => {
+	it("REGRESSION: a stray openai OAuth on a non-OpenAI model resolves to DuckDuckGo", async () => {
 		// This is the reported bug: auto mode used to 401 on a custom model because a
 		// stray OpenAI OAuth credential was selected. It must now resolve to DuckDuckGo.
-		expect(await chainIds(fakeAuth({ oauth: ["openai-codex"] }), "auto", "my-custom-llm")).toEqual(["duckduckgo"]);
+		expect(await chainIds(fakeAuth({ oauth: ["openai"] }), "auto", "my-custom-llm")).toEqual(["duckduckgo"]);
 	});
 });
 

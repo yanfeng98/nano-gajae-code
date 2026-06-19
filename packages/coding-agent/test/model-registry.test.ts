@@ -202,11 +202,11 @@ describe("ModelRegistry", () => {
 			const restore = setEnvForTest("OPENAI_BASE_URL", "https://openai-proxy.example.com/v1");
 			try {
 				const registry = new ModelRegistry(authStorage, modelsJsonPath);
-				const codexModels = getModelsForProvider(registry, "openai-codex");
+				const codexModels = getModelsForProvider(registry, "openai");
 
 				expect(codexModels.length).toBeGreaterThan(0);
 				expect(codexModels.every(model => model.baseUrl !== "https://openai-proxy.example.com/v1")).toBe(true);
-				expect(registry.getProviderBaseUrl("openai-codex")).not.toBe("https://openai-proxy.example.com/v1");
+				expect(registry.getProviderBaseUrl("openai")).not.toBe("https://openai-proxy.example.com/v1");
 			} finally {
 				restore();
 			}
@@ -770,12 +770,12 @@ describe("ModelRegistry", () => {
 			try {
 				const registry = new ModelRegistry(authStorage, modelsJsonPath);
 				const openaiModels = getModelsForProvider(registry, "openai");
-				const codexModels = getModelsForProvider(registry, "openai-codex");
+				const codexModels = getModelsForProvider(registry, "openai");
 
 				expect(openaiModels.length).toBeGreaterThan(0);
 				expect(codexModels.length).toBeGreaterThan(0);
 				expect(registry.getAvailable().some(model => model.provider === "openai")).toBe(true);
-				expect(registry.getAvailable().some(model => model.provider === "openai-codex")).toBe(false);
+				expect(registry.getAvailable().some(model => model.provider === "openai")).toBe(false);
 				await expect(registry.getApiKey(openaiModels[0])).resolves.toBe("env-openai-key");
 				await expect(registry.getApiKey(codexModels[0])).resolves.toBeUndefined();
 			} finally {

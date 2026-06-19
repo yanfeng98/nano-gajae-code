@@ -53,15 +53,6 @@ describe("auth-broker import (CLIProxyAPI)", () => {
 			id_token: "ignored",
 			last_refresh: "2025-01-01T00:00:00Z",
 		});
-		await writeCliProxyJson("codex-sample.json", {
-			type: "codex",
-			access_token: "codex-access-1",
-			refresh_token: "codex-refresh-1",
-			expired: "2099-12-31T23:59:59Z",
-			email: "codex-user@example.com",
-			account_id: "acct-codex-1",
-			websockets: true,
-		});
 		await writeCliProxyJson("disabled.json", {
 			type: "claude",
 			access_token: "x",
@@ -90,12 +81,6 @@ describe("auth-broker import (CLIProxyAPI)", () => {
 				expect(claude[0].credential.expires).toBe(Date.parse("2099-12-31T23:59:59Z"));
 			}
 
-			const codex = store.listAuthCredentials("openai-codex");
-			expect(codex).toHaveLength(1);
-			if (codex[0].credential.type === "oauth") {
-				expect(codex[0].credential.access).toBe("codex-access-1");
-				expect(codex[0].credential.accountId).toBe("acct-codex-1");
-			}
 
 			// disabled.json was skipped by default
 			const disabled = store

@@ -35,8 +35,8 @@ describe("model thinking metadata", () => {
 	it("stores supported efforts for Codex mini in model metadata", () => {
 		const model = createModel({
 			id: "gpt-5.1-codex-mini",
-			api: "openai-codex-responses",
-			provider: "openai-codex",
+			api: "openai-responses",
+			provider: "openai",
 		});
 
 		expect(model.thinking).toEqual({
@@ -51,8 +51,8 @@ describe("model thinking metadata", () => {
 	it("stores xhigh support directly in metadata for GPT-5.2", () => {
 		const model = createModel({
 			id: "gpt-5.2-codex",
-			api: "openai-codex-responses",
-			provider: "openai-codex",
+			api: "openai-responses",
+			provider: "openai",
 		});
 
 		expect(model.thinking).toEqual({
@@ -171,8 +171,8 @@ describe("generated model policies", () => {
 			{
 				id: "gpt-5.2-codex",
 				name: "GPT-5.2 Codex",
-				api: "openai-codex-responses",
-				provider: "openai-codex",
+				api: "openai-responses",
+				provider: "openai",
 				baseUrl: "https://example.com",
 				reasoning: true,
 				input: ["text"],
@@ -183,8 +183,8 @@ describe("generated model policies", () => {
 			{
 				id: "gpt-5.4-mini",
 				name: "GPT-5.4 mini",
-				api: "openai-codex-responses",
-				provider: "openai-codex",
+				api: "openai-responses",
+				provider: "openai",
 				baseUrl: "https://example.com",
 				reasoning: true,
 				input: ["text"],
@@ -263,24 +263,24 @@ describe("generated model policies", () => {
 		const models = [
 			createModel({
 				id: "gpt-5.3-codex-spark",
-				api: "openai-codex-responses",
-				provider: "openai-codex",
+				api: "openai-responses",
+				provider: "openai",
 			}),
 			createModel({
 				id: "gpt-5.5",
-				api: "openai-codex-responses",
-				provider: "openai-codex",
+				api: "openai-responses",
+				provider: "openai",
 			}),
 			createModel({
 				id: "gpt-5.4",
-				api: "openai-codex-responses",
-				provider: "openai-codex",
+				api: "openai-responses",
+				provider: "openai",
 			}),
 		];
 
 		linkOpenAIPromotionTargets(models);
 
-		expect(models[0]?.contextPromotionTarget).toBe("openai-codex/gpt-5.5");
+		expect(models[0]?.contextPromotionTarget).toBe("openai/gpt-5.5");
 		// gpt-5.5 is a 400K model and must not demote to the smaller gpt-5.4.
 		expect(models[1]?.contextPromotionTarget).toBeUndefined();
 	});
@@ -290,8 +290,8 @@ describe("generated model policies", () => {
 			{
 				...createModel({
 					id: "gpt-5.5",
-					api: "openai-codex-responses",
-					provider: "openai-codex",
+					api: "openai-responses",
+					provider: "openai",
 				}),
 				// OpenAI code discovery can fall back to the stale 272K default.
 				contextWindow: 272000,
@@ -313,8 +313,8 @@ describe("generated model policies", () => {
 			}),
 			createModel({
 				id: "gpt-5.3-codex-spark",
-				api: "openai-codex-responses",
-				provider: "openai-codex",
+				api: "openai-responses",
+				provider: "openai",
 			}),
 			{
 				...createModel({
@@ -345,10 +345,10 @@ describe("generated model policies", () => {
 
 describe("model thinking runtime helpers", () => {
 	it("clamps from explicit metadata instead of inferring from model id", () => {
-		const model: Model<"openai-codex-responses"> = {
+		const model: Model<"openai-responses"> = {
 			id: "custom-reasoner",
 			name: "Custom Reasoner",
-			api: "openai-codex-responses",
+			api: "openai-responses",
 			provider: "custom",
 			baseUrl: "https://example.com",
 			reasoning: true,
@@ -458,7 +458,7 @@ describe("model thinking runtime helpers", () => {
 		);
 	});
 
-	it("enables xhigh for openai-responses and openai-codex-responses APIs", () => {
+	it("enables xhigh for openai-responses API", () => {
 		const responsesModel = createModel({
 			id: "custom-responses",
 			api: "openai-responses",
@@ -467,7 +467,7 @@ describe("model thinking runtime helpers", () => {
 
 		const codexModel = createModel({
 			id: "custom-codex",
-			api: "openai-codex-responses",
+			api: "openai-responses",
 			provider: "custom",
 		});
 

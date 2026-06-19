@@ -127,10 +127,10 @@ const mockProviderOverlapModels: Model<"anthropic-messages">[] = [
 
 const mockCodexOverlapModels: Model<"anthropic-messages">[] = [
 	{
-		id: "gpt-5.3-codex",
+		id: "gpt-5-mini",
 		name: "GPT-5.3 Codex",
 		api: "anthropic-messages",
-		provider: "openai-codex",
+		provider: "openai",
 		baseUrl: "https://api.openai.com",
 		reasoning: true,
 		thinking: {
@@ -147,7 +147,7 @@ const mockCodexOverlapModels: Model<"anthropic-messages">[] = [
 		id: "gpt-5.3-codex-spark",
 		name: "GPT-5.3 Codex Spark",
 		api: "anthropic-messages",
-		provider: "openai-codex",
+		provider: "openai",
 		baseUrl: "https://api.openai.com",
 		reasoning: true,
 		thinking: {
@@ -466,15 +466,15 @@ describe("resolveModelRoleValue", () => {
 	});
 
 	test("does not resolve exact codex role values to codex-spark via substring matching", () => {
-		const providerQualified = resolveModelRoleValue("openai-codex/gpt-5.3-codex:xhigh", allModels);
-		expect(providerQualified.model?.provider).toBe("openai-codex");
-		expect(providerQualified.model?.id).toBe("gpt-5.3-codex");
+		const providerQualified = resolveModelRoleValue("openai/gpt-5-mini:xhigh", allModels);
+		expect(providerQualified.model?.provider).toBe("openai");
+		expect(providerQualified.model?.id).toBe("gpt-5-mini");
 		expect(providerQualified.thinkingLevel).toBe(Effort.XHigh);
 		expect(providerQualified.explicitThinkingLevel).toBe(true);
 
-		const idOnly = resolveModelRoleValue("gpt-5.3-codex:xhigh", allModels);
-		expect(idOnly.model?.provider).toBe("openai-codex");
-		expect(idOnly.model?.id).toBe("gpt-5.3-codex");
+		const idOnly = resolveModelRoleValue("gpt-5-mini:xhigh", allModels);
+		expect(idOnly.model?.provider).toBe("openai");
+		expect(idOnly.model?.id).toBe("gpt-5-mini");
 		expect(idOnly.thinkingLevel).toBe(Effort.XHigh);
 		expect(idOnly.explicitThinkingLevel).toBe(true);
 	});
@@ -836,7 +836,7 @@ const codexDefaultModels: Model<"anthropic-messages">[] = [
 		id: "gpt-5.4",
 		name: "GPT-5.4",
 		api: "anthropic-messages",
-		provider: "openai-codex",
+		provider: "openai",
 		baseUrl: "https://chatgpt.com/backend-api",
 		reasoning: true,
 		thinking: { mode: "effort", minLevel: Effort.Low, maxLevel: Effort.XHigh },
@@ -846,10 +846,10 @@ const codexDefaultModels: Model<"anthropic-messages">[] = [
 		maxTokens: 128000,
 	},
 	{
-		id: "gpt-5.5",
-		name: "GPT-5.5",
+		id: "gpt-5",
+		name: "GPT-5",
 		api: "anthropic-messages",
-		provider: "openai-codex",
+		provider: "openai",
 		baseUrl: "https://chatgpt.com/backend-api",
 		reasoning: true,
 		thinking: { mode: "effort", minLevel: Effort.Low, maxLevel: Effort.XHigh, defaultLevel: Effort.XHigh },
@@ -875,24 +875,24 @@ describe("OpenAI Codex default resolution", () => {
 			modelRegistry: codexDefaultRegistry,
 		});
 
-		expect(result.model?.provider).toBe("openai-codex");
-		expect(result.model?.id).toBe("gpt-5.5");
+		expect(result.model?.provider).toBe("openai");
+		expect(result.model?.id).toBe("gpt-5");
 		expect(result.model?.thinking?.defaultLevel).toBe(Effort.XHigh);
 	});
 
 	test("restore fallback keeps visible fallback on gpt-5.5 instead of silently drifting to gpt-5.4", async () => {
 		const result = await restoreModelFromSession(
-			"openai-codex",
+			"openai",
 			"missing-gpt",
 			undefined,
 			false,
 			codexDefaultRegistry,
 		);
 
-		expect(result.model?.provider).toBe("openai-codex");
-		expect(result.model?.id).toBe("gpt-5.5");
+		expect(result.model?.provider).toBe("openai");
+		expect(result.model?.id).toBe("gpt-5");
 		expect(result.fallbackMessage).toBe(
-			"Could not restore model openai-codex/missing-gpt (model no longer exists). Using openai-codex/gpt-5.5.",
+			"Could not restore model openai/missing-gpt (model no longer exists). Using openai/gpt-5.",
 		);
 	});
 });

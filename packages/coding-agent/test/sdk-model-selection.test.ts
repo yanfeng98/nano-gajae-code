@@ -153,8 +153,8 @@ describe("createAgentSession deferred model pattern resolution", () => {
 		const effectiveModel: Model = {
 			id: "gpt-5.5",
 			name: "GPT-5.5",
-			api: "openai-codex-responses",
-			provider: "openai-codex",
+			api: "openai-responses",
+			provider: "openai",
 			baseUrl: "https://api.openai.com/v1",
 			reasoning: true,
 			thinking: { minLevel: Effort.Minimal, maxLevel: Effort.XHigh, mode: "effort" },
@@ -195,8 +195,8 @@ describe("createAgentSession deferred model pattern resolution", () => {
 			expect(modelChanges).toHaveLength(1);
 			expect(modelChanges[0]).toMatchObject({
 				type: "model_change",
-				model: "openai-codex/gpt-5.5",
-				previousModel: "openai-codex/gpt-5.3-codex",
+				model: "openai/gpt-5",
+				previousModel: "openai/gpt-5-mini",
 				reason: "auth_unavailable",
 				thinkingLevel: Effort.High,
 			});

@@ -121,10 +121,9 @@ function buildStreamOptions(parsed: ParsedFormatRequest, api: Api, signal: Abort
 	// so we drop them silently for that one provider. Every other unsupported
 	// option is just ignored by `streamSimple` if the underlying provider
 	// doesn't honour it.
-	const isCodex = api === "openai-codex-responses";
 	if (options.maxOutputTokens !== undefined) opts.maxTokens = options.maxOutputTokens;
-	if (options.temperature !== undefined && !isCodex) opts.temperature = options.temperature;
-	if (options.topP !== undefined && !isCodex) opts.topP = options.topP;
+	if (options.temperature !== undefined) opts.temperature = options.temperature;
+	if (options.topP !== undefined) opts.topP = options.topP;
 	if (options.topK !== undefined) opts.topK = options.topK;
 	if (options.minP !== undefined) opts.minP = options.minP;
 	if (options.stopSequences !== undefined) opts.stopSequences = options.stopSequences;
@@ -512,7 +511,7 @@ async function handlePiNative(bootOpts: AuthGatewayBootOptions, req: Request, pe
 			"pi-native",
 			peer,
 		);
-	if (model.api === "openai-codex-responses") {
+	if (false) {
 		delete streamOpts.temperature;
 		delete streamOpts.topP;
 	}

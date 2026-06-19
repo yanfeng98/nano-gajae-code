@@ -36,8 +36,8 @@ function createCodexGptStats(entryId: string): MessageStats {
 		entryId,
 		folder: "/tmp/project",
 		model: "gpt-5.4",
-		provider: "openai-codex",
-		api: "openai-codex-responses",
+		provider: "openai",
+		api: "openai-responses",
 		timestamp: Date.now(),
 		duration: 1000,
 		ttft: 100,
@@ -55,7 +55,7 @@ function createCodexGptStats(entryId: string): MessageStats {
 }
 
 function expectedCodexGptCost() {
-	const cost = getBundledModel("openai-codex", "gpt-5.4").cost;
+	const cost = getBundledModel("openai", "gpt-5-mini").cost;
 	const input = (cost.input / 1_000_000) * 1000;
 	const output = (cost.output / 1_000_000) * 500;
 	const cacheRead = (cost.cacheRead / 1_000_000) * 200;
@@ -101,8 +101,8 @@ describe("stats GPT cost correction", () => {
 				"backfilled",
 				"/tmp/project",
 				"gpt-5.4",
-				"openai-codex",
-				"openai-codex-responses",
+				"openai",
+				"openai-responses",
 				Date.now(),
 				1000,
 				100,

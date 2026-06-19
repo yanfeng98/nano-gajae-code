@@ -82,8 +82,8 @@ function createTestModel(id: string): Model {
 	return {
 		id,
 		name: id,
-		api: "openai-codex-responses",
-		provider: "openai-codex",
+		api: "openai-responses",
+		provider: "openai",
 		baseUrl: "https://chatgpt.com/backend-api",
 		reasoning: true,
 		input: ["text"],
@@ -273,7 +273,7 @@ describe("SkillTool", () => {
 		const deepInterview = await makeSkill("deep-interview", "---\nname: deep-interview\n---\nInterview");
 		const ralplan = await makeSkill("ralplan", "---\nname: ralplan\n---\nPlan");
 		const ultragoal = await makeSkill("ultragoal", "---\nname: ultragoal\n---\nGo");
-		const explicitModel = createTestModel("gpt-5.5");
+		const explicitModel = createTestModel("gpt-5");
 		const staleDefaultModel = createTestModel("gpt-5.4");
 		const settings = Settings.isolated();
 		settings.setModelRole("default", `${explicitModel.provider}/${explicitModel.id}`);
@@ -296,9 +296,9 @@ describe("SkillTool", () => {
 		await tool.execute("call-2", { name: "ultragoal" });
 
 		expect(session.model).toBe(explicitModel);
-		expect(session.getActiveModelString?.()).toBe("openai-codex/gpt-5.5");
-		expect(settings.getModelRole("default")).toBe("openai-codex/gpt-5.5");
-		expect(settings.getModelRole("plan")).toBe("openai-codex/gpt-5.4");
+		expect(session.getActiveModelString?.()).toBe("openai/gpt-5");
+		expect(settings.getModelRole("default")).toBe("openai/gpt-5");
+		expect(settings.getModelRole("plan")).toBe("openai/gpt-5.4");
 		expect(captured).toHaveLength(2);
 		expect(captured.map(item => item.message.details)).toEqual([
 			expect.objectContaining({ name: "ralplan" }),

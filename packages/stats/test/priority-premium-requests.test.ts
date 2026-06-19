@@ -83,7 +83,7 @@ describe("priority service-tier premium-request backfill", () => {
 				{ type: "session", version: 1, id: "s1", timestamp: new Date().toISOString(), cwd: "/tmp/proj" },
 				{ type: "service_tier_change", id: "stc1", timestamp: new Date().toISOString(), serviceTier: "priority" },
 				assistantEntry({ id: "a1", provider: "openai" }),
-				assistantEntry({ id: "a2", provider: "openai-codex" }),
+				assistantEntry({ id: "a2", provider: "openai" }),
 				// Direct Anthropic under priority tier counts as fast-mode premium.
 				assistantEntry({ id: "a3", provider: "anthropic" }),
 				{ type: "service_tier_change", id: "stc2", timestamp: new Date().toISOString(), serviceTier: null },

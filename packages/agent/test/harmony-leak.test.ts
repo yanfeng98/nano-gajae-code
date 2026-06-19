@@ -27,7 +27,7 @@ interface CorpusNegative {
 const positives = corpus.positives as CorpusPositive[];
 const negatives = corpus.negatives as CorpusNegative[];
 
-const codexModel: Model = getBundledModel("openai-codex", "gpt-5.4");
+const codexModel: Model = getBundledModel("openai", "gpt-5.4");
 const anthropicModel: Model = getBundledModel("anthropic", "claude-sonnet-4-5");
 
 function makeToolCallMessage(toolName: string, input: string | null, argJson: string | null): AssistantMessage {
@@ -43,7 +43,7 @@ function makeToolCallMessage(toolName: string, input: string | null, argJson: st
 }
 
 describe("isHarmonyLeakMitigationTarget", () => {
-	it("targets every openai-codex model (don't enumerate ids)", () => {
+	it("targets every openai model (don't enumerate ids)", () => {
 		expect(isHarmonyLeakMitigationTarget(codexModel)).toBe(true);
 	});
 

@@ -7,7 +7,6 @@ import {
 	prepareModelProfileActivation,
 } from "../src/config/model-profile-activation";
 import type { ModelProfileDefinition } from "../src/config/model-profiles";
-import { BUILTIN_MODEL_PROFILES } from "../src/config/model-profiles";
 import { Settings } from "../src/config/settings";
 
 const model = (provider: string, id: string, thinking?: Model["thinking"]): Model =>
@@ -48,15 +47,6 @@ function fakeRegistry(options?: { missingProviders?: string[]; profiles?: ModelP
 			model("provider-a", "default"),
 			model("provider-b", "executor"),
 			model("provider-a", "architect"),
-			model("openai-codex", "gpt-5.4"),
-			model("openai-codex", "gpt-5.1-codex-max"),
-			model("openai-codex", "gpt-5.2-codex"),
-			model("openai-codex", "gpt-5.5", {
-				mode: "effort",
-				minLevel: ThinkingLevel.Low,
-				maxLevel: ThinkingLevel.XHigh,
-			}),
-			model("openai-codex", "gpt-5.3-codex-spark"),
 			model("minimax-code", "minimax-m3"),
 			model("minimax-code-cn", "minimax-m3"),
 			model("kimi-code", "kimi-k2.5"),
@@ -105,23 +95,6 @@ describe("model profile activation", () => {
 			executor: "provider-b/executor",
 			architect: "provider-a/architect",
 		});
-	});
-
-	test("builtin codex-eco executor selector clamps from catalog minimal to prepared low", async () => {
-		const registry = fakeRegistry({ profiles: [...BUILTIN_MODEL_PROFILES] });
-		const catalog = BUILTIN_MODEL_PROFILES.find(profile => profile.name === "codex-eco");
-		expect(catalog?.modelMapping.executor).toBe("openai-codex/gpt-5.5:minimal");
-
-		const prepared = await prepareModelProfileActivation({
-			session: fakeSession(),
-			modelRegistry: registry,
-			settings: Settings.isolated(),
-			profileName: "codex-eco",
-		});
-		expect(prepared.agentModelOverrides.executor).toBe("openai-codex/gpt-5.5:low");
-		expect(prepared.agentModelOverrides.architect).toBe("openai-codex/gpt-5.5:high");
-		expect(prepared.agentModelOverrides.planner).toBe("openai-codex/gpt-5.5:low");
-		expect(prepared.agentModelOverrides.critic).toBe("openai-codex/gpt-5.5:medium");
 	});
 
 	test("session-only changes active model and applies runtime overrides without persisted sets", async () => {
