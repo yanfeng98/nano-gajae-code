@@ -41,8 +41,6 @@ Primary implementation:
 - `src/modes/bridge/bridge-client-bridge.ts`
 - `src/modes/bridge/bridge-ui-context.ts`
 - `src/modes/shared/agent-wire/*` (protocol, scopes, handshake, command dispatch/validation, host bridges)
-- `packages/bridge-client/src/*`
-
 ## Startup
 
 ```bash
@@ -231,15 +229,6 @@ continue to report typed unsupported results instead of silent defaults:
 - `ui.tools_expanded`
 - Theme switching is unsupported (`setTheme` returns `{ success: false }`).
 
-## SDK Usage
-
-`@gajae-code/bridge-client` exposes `BridgeClient` with handshake, command
-helpers mirroring the full RPC command catalog, an `events()` async generator,
-controller/UI/host-callback helpers, and an idempotency-key helper. The bridge
-session-control surface remains fail-closed by default, so against an
-unconfigured bridge those helpers should be expected to fail because the server
-endpoint matrix disables the corresponding session endpoints until they are
-explicitly enabled.
 
 `BridgeClient.respondGate(sessionId, gateId, ownerToken, answer, options)` posts to the fail-closed UI-response endpoint and returns the gate resolution envelope emitted by the bridge. It deliberately does not send `workflow_gate_response` through `/commands`. Gate answers are authorized by bearer auth plus the `control` scope on the (by-default-disabled) `ui-responses` endpoint; the owner token is carried for idempotency/controller correlation, but — unlike UI/permission responses — gate resolution itself is gated by `control` scope rather than a separately enforced controller-owner-token check.
 

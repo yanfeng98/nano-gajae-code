@@ -1,8 +1,8 @@
 # Gajae-Code 功能默认状态完整分析
 
-> 分析日期: 2026-06-19 | 分支: 260613-v0.5.0-dev | 代码基线: 0.5.0
+> 分析日期: 2026-06-20 | 分支: 260613-v0.5.0-dev | 代码基线: 0.5.0
 >
-> **已执行移除（13 轮）**:
+> **已执行移除（14 轮）**:
 > - 第一轮: macOS 电源管理 (~350 行)
 > - 第二轮: 全平台死代码清理 (~1,120 行)
 > - 第三轮: Hindsight 远程记忆系统 (~2,600 行)
@@ -15,8 +15,9 @@
 > - 第十轮: 清理由前九轮移除产生的残留（~4,300 行：6 个 hindsight 测试 + bench + 3 个 prompt + 配置/注释/文档）
 > - 第十一轮: 过时 provider 测试文件清理（5 个文件删除 + 30 个测试文件清洗）
 > - 第十二轮: Provider 残留深度清理（ai/stats/agent 包：~200 行源码 + 14 个测试文件）
-> - 第十三轮: RPC 模式移除（~2,100 行源码 + 18 个测试文件，rpc-types.ts 迁至 shared/agent-wire）
-> - 总计减少 ~35,000+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
+> - 第十三轮: RPC 模式移除（~2,100 行源码 + 18 个测试文件）
+> - 第十四轮: bridge-client 包移除（~1,150 行，独立 npm 包，零 import）
+> - 总计减少 ~36,000+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
 
 本文档对 Gajae-Code 项目中所有功能的默认启用/关闭状态、代码体量、可选性和移除影响进行全面分析，为魔改裁剪提供决策依据。
 
@@ -34,7 +35,7 @@
 | 已知 Provider 类型 | 19 个 |
 | 内置 Tool 数 | 31 个 (BUILTIN_TOOLS) + 3 个 (HIDDEN_TOOLS) |
 | Settings 配置项 | ~104 个 (已移除 4 power + 32 hindsight) |
-| 已移除代码行数 | ~35,000+ 行 (十三轮) |
+| 已移除代码行数 | ~36,000+ 行 (十四轮) |
 | 运行模式 | 3 种 (interactive, print, bridge) |
 | CLI 子命令 | 15 个 |
 
@@ -185,6 +186,24 @@
 - `modes/shared/agent-wire/` 全部文件 — bridge 共享
 
 验证: `tsgo --noEmit -p packages/coding-agent` 仅 2 个 pre-existing 错误，零新增 ✅
+
+### 1.19 ~~bridge-client 包~~（✅ 第十四轮 — 独立 npm SDK）
+
+> **状态**: 已删除。`@gajae-code/bridge-client` 是独立的 TypeScript SDK 包，供外部程序通过 HTTP 远程控制 gjc bridge 模式。gj c 源码全代码库零 import，纯死代码。
+
+删除清单：
+| 文件 | 操作 |
+|------|------|
+| `packages/bridge-client/` (8 文件: 4 src + 4 test) | 删除 |
+| `test/bridge/bridge-conformance.test.ts` | 删除（唯一引用已删除包） |
+| `docs/rpc.md` | 删除（RPC 已移除，文档过时） |
+| `docs/bridge.md` | 移除 SDK Usage 节和 bridge-client 引用 |
+| 根 `package.json` | 移除 catalog 条目 |
+| `scripts/ci-release-publish.ts` | 移除发布配置 |
+| `bun.lock` | `bun install` 自动更新 |
+| `docs-index.generated.ts` | 自动重新生成 |
+
+验证: 全代码库零 `bridge-client` 引用 ✅ | 4 个包均零新增错误 ✅
 
 ---
 
@@ -427,7 +446,7 @@ svelte, swift, tlaplus, verilog, vue, xml, zig
 
 | 优先级 | Package/目录 | 功能 | 可移除? |
 |--------|-------------|------|---------|
-| 🔴 高 | `packages/bridge-client/` | 独立桥接客户端库 | ✅ 仅 bridge 模式需要 |
+| ✅ 已移除 | `packages/bridge-client/` | 独立桥接客户端库 | 已删除 (~1,150 行) |
 | 🟡 中 | `python/robogjc/` | Python 后端 worker | ✅ 可选 Python 服务 |
 | 🟡 中 | `python/gjc-rpc/` | Python RPC 客户端 | ✅ 可选 |
 | 🟡 中 | `packages/gajae-code/` | 顶层 npm 包 | 需调查用途 |
@@ -482,7 +501,7 @@ svelte, swift, tlaplus, verilog, vue, xml, zig
 **TypeScript 额外移除**:
 - `vim/`, `tools/irc.ts`, `tools/recipe/`, `tools/calculator.ts`, `tools/checkpoint.ts`
 - `lsp/` (如果不需要诊断), `debug/`
-- `packages/stats/`, `packages/bridge-client/`
+- `packages/stats/`
 - 多余的 CLI 子命令 (team, ultragoal, ralplan, deep-interview, coordinator, harness等)
 
 **AI Provider 清理**:
