@@ -2,7 +2,7 @@
 
 > 分析日期: 2026-06-20 | 分支: 260613-v0.5.0-dev | 代码基线: 0.5.0
 >
-> **已执行移除（14 轮）**:
+> **已执行移除（15 轮）**:
 > - 第一轮: macOS 电源管理 (~350 行)
 > - 第二轮: 全平台死代码清理 (~1,120 行)
 > - 第三轮: Hindsight 远程记忆系统 (~2,600 行)
@@ -17,7 +17,8 @@
 > - 第十二轮: Provider 残留深度清理（ai/stats/agent 包：~200 行源码 + 14 个测试文件）
 > - 第十三轮: RPC 模式移除（~2,100 行源码 + 18 个测试文件）
 > - 第十四轮: bridge-client 包移除（~1,150 行，独立 npm 包，零 import）
-> - 总计减少 ~36,000+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
+> - 第十五轮: Python 目录移除（~30,000 行：gjc-rpc + robogjc，RPC 已删导致的死代码）
+> - 总计减少 ~66,000+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
 
 本文档对 Gajae-Code 项目中所有功能的默认启用/关闭状态、代码体量、可选性和移除影响进行全面分析，为魔改裁剪提供决策依据。
 
@@ -35,7 +36,7 @@
 | 已知 Provider 类型 | 19 个 |
 | 内置 Tool 数 | 31 个 (BUILTIN_TOOLS) + 3 个 (HIDDEN_TOOLS) |
 | Settings 配置项 | ~104 个 (已移除 4 power + 32 hindsight) |
-| 已移除代码行数 | ~36,000+ 行 (十四轮) |
+| 已移除代码行数 | ~66,000+ 行 (十五轮) |
 | 运行模式 | 3 种 (interactive, print, bridge) |
 | CLI 子命令 | 15 个 |
 
@@ -204,6 +205,24 @@
 | `docs-index.generated.ts` | 自动重新生成 |
 
 验证: 全代码库零 `bridge-client` 引用 ✅ | 4 个包均零新增错误 ✅
+
+### 1.20 ~~Python 目录~~（✅ 第十五轮 — gjc-rpc + robogjc）
+
+> **状态**: 已删除。第十三轮 RPC 移除后，`python/` 目录变成纯死代码：`gjc-rpc` (Python RPC 客户端库) spawn `gjc --mode rpc`，`robogjc` (GitHub 自动修 bug 机器人) 同样依赖 RPC 模式。
+
+删除清单：
+| 文件 | 操作 |
+|------|------|
+| `python/` 目录 (~30,000 行) | 删除 — gjc-rpc + robogjc + web UI + 测试 |
+| 根 `package.json` | 移除 `python/robogjc/web` workspace + 18 个 robogjc/lint/test:py 脚本 |
+| `scripts/ci-dev-affected.ts` | 移除 python/web 路径检测和 CI 任务 |
+| `scripts/check-node20-baseline.test.ts` | 替换测试 fixture (robogjc → generic) |
+| `docs/onboarding-packet.md` | 移除 3 处 python/ 引用 |
+| `docs/codebase-overview.md` | 移除 "Python packages" 整节 |
+| `docs/natives-build-release-debugging.md` | 移除 robogjc 缓存章节 |
+| `bun.lock` + docs-index | 自动更新 |
+
+验证: 全代码库零 `python/gjc-rpc` / `python/robogjc` 引用 ✅ | 4 包零新增错误 ✅
 
 ---
 
@@ -447,8 +466,7 @@ svelte, swift, tlaplus, verilog, vue, xml, zig
 | 优先级 | Package/目录 | 功能 | 可移除? |
 |--------|-------------|------|---------|
 | ✅ 已移除 | `packages/bridge-client/` | 独立桥接客户端库 | 已删除 (~1,150 行) |
-| 🟡 中 | `python/robogjc/` | Python 后端 worker | ✅ 可选 Python 服务 |
-| 🟡 中 | `python/gjc-rpc/` | Python RPC 客户端 | ✅ 可选 |
+| ✅ 已移除 | `python/robogjc/` + `python/gjc-rpc/` | Python 后端 + RPC 客户端 | 已删除 (~30,000 行) |
 | 🟡 中 | `packages/gajae-code/` | 顶层 npm 包 | 需调查用途 |
 | 🟢 低 | `packages/stats/` | 本地可观测性仪表板 | 如果不用 `gjc stats` |
 
@@ -476,14 +494,13 @@ svelte, swift, tlaplus, verilog, vue, xml, zig
 适合「只保留核心对话 + 编辑功能」：
 
 **TypeScript 移除**:
-- `modes/bridge/`, `modes/rpc/`, `modes/shared/`, `modes/print-mode.ts`
+- `modes/bridge/`, `modes/shared/`, `modes/print-mode.ts`
 - `stt/`, `memories/`, `memory-backend/`
 - `exa/`, `ssh/`
 - `dap/`, `debug/`
 - `tools/puppeteer/`, `tools/browser/`
-- `python/`
 
-> 注: `modes/acp/`、`hindsight/`、`autoresearch/`、两个 benchmark package 等已在前十二轮移除。
+> 注: `modes/acp/`、`hindsight/`、`autoresearch/`、两个 benchmark package、`modes/rpc/`、`python/` 等已在前十五轮移除。
 
 **Settings 清理**:
 - 删除所有 `default: false` 且对应代码已移除的配置项

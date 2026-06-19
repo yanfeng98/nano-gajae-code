@@ -177,8 +177,6 @@ function planTasks(paths: readonly string[], packages: readonly WorkspacePackage
 	const touchedPackages = findTouchedPackages(paths, packages);
 	const rootPackageReleaseHarnessOnly = isRootPackageReleaseHarnessOnly(paths);
 	const fullWorkspace = paths.some(isFullWorkspacePath) && !rootPackageReleaseHarnessOnly;
-	const pythonChanged = paths.some(isPythonPath);
-	const webChanged = paths.some(changedPath => changedPath.startsWith("python/robogjc/web/"));
 	const rustChanged = paths.some(isRustPath);
 	const installChanged = paths.some(isInstallPath);
 	const publishChanged = paths.some(isReleasePublishPath);
@@ -222,14 +220,6 @@ function planTasks(paths: readonly string[], packages: readonly WorkspacePackage
 		add(tasks, "release-publish-dry-run", "Release publish dry-run", ["bun", "scripts/ci-release-publish.ts", "--dry-run"]);
 	}
 
-	if (pythonChanged) {
-		add(tasks, "python-lint", "Python lint", ["bun", "run", "lint:py"]);
-		add(tasks, "python-test", "Python tests", ["bun", "run", "test:py"]);
-	}
-	if (webChanged) {
-		add(tasks, "robogjc-web-typecheck", "robogjc web typecheck", ["bun", "--cwd=python/robogjc/web", "run", "typecheck"]);
-		add(tasks, "robogjc-web-build", "robogjc web build", ["bun", "--cwd=python/robogjc/web", "run", "build"]);
-	}
 	if (rustChanged) {
 		add(tasks, "rust-check", "Rust check", ["bun", "run", "check:rs"]);
 		add(tasks, "rust-test", "Rust tests", ["bun", "run", "test:rs"]);
@@ -328,9 +318,6 @@ function isReleaseHarnessScriptPath(changedPath: string): boolean {
 	].includes(changedPath);
 }
 
-function isPythonPath(changedPath: string): boolean {
-	return changedPath.startsWith("python/robogjc/") && !changedPath.startsWith("python/robogjc/web/");
-}
 
 function isRustPath(changedPath: string): boolean {
 	const fileName = path.basename(changedPath);

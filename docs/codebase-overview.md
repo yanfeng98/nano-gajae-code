@@ -90,24 +90,6 @@ Local observability dashboard for session and model usage.
 - `packages/stats/src/server.ts` serves local dashboard API routes and static SPA assets.
 - `packages/stats/src/types.ts` and `packages/stats/src/shared-types.ts` define dashboard and aggregate metric shapes.
 
-## Python packages
-
-### `python/gjc-rpc/`
-
-Typed Python client for `gjc --mode rpc`.
-
-- `python/gjc-rpc/pyproject.toml` packages `gjc-rpc` for Python 3.11+.
-- `python/gjc-rpc/README.md` documents the process-backed stdio client, typed command methods, startup flags, event listeners, todo seeding, host-owned tools, and host-owned URI schemes.
-
-### `python/robogjc/`
-
-Self-hosted GitHub triage/fix bot that drives `gjc --mode rpc`.
-
-- `python/robogjc/AGENTS.md` is the authoritative local contract for this subtree.
-- `python/robogjc/pyproject.toml` packages `robogjc` for Python 3.11+ with FastAPI, httpx, pydantic settings, Click, and `gjc-rpc`.
-- `python/robogjc/README.md` documents the webhook-to-worktree-to-gjc flow, GitHub sidecar trust boundary, persistent per-issue sessions, and audit trail.
-- Important modules include `src/server.py`, `src/queue.py`, `src/tasks.py`, `src/worker.py`, `src/host_tools.py`, `src/sandbox.py`, `src/github_client.py`, `src/github_events.py`, `src/db.py`, and `src/config.py`.
-
 ## Runtime flow
 
 A normal CLI session starts in `packages/coding-agent/src/cli.ts`, routes through command handling, then reaches `packages/coding-agent/src/main.ts`. `main.ts` converts CLI/runtime settings into `CreateAgentSessionOptions` and calls `createAgentSession()` in `packages/coding-agent/src/sdk.ts`.

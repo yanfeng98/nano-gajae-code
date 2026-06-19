@@ -85,7 +85,7 @@ describe("gajae trinity wire contract", () => {
 			direction: "recv",
 			frame: { type: "response", command: "get_state", success: true },
 		});
-		expect((rows[1].frame.data as { sessionId?: string }).sessionId).toBe("gjc-rpc-session-0001");
+		expect((rows[1].frame.data as { sessionId?: string }).sessionId).toBe("test-session-0001");
 		// prompt commands carry `message` (RpcCommand contract) and succeed via response.command.success.
 		expect(rows[2]).toMatchObject({ direction: "send", frame: { id: "cmd-0001", type: "prompt" } });
 		expect(typeof rows[2].frame.message).toBe("string");

@@ -40,8 +40,6 @@ Do not add a fifth default skill, fifth public role agent, new command, new conf
 - `packages/natives/` plus `crates/*` — native helpers, Rust/N-API bindings, shell/PTY, text search, AST, filesystem, and media utilities.
 - `packages/utils/` — shared TypeScript utilities, logging, formatting, process helpers, JSON/frontmatter, and sanitization.
 - `packages/stats/` — local observability dashboard and session/model usage aggregation.
-- `python/gjc-rpc/` — Python client for `gjc --mode rpc`.
-- `python/robogjc/` — GitHub triage/fix bot that drives `gjc --mode rpc`; this subtree has its own `AGENTS.md`.
 
 ## Build, test, and validation commands
 
@@ -70,7 +68,6 @@ Repository rule: do not run `tsc` or `npx tsc`; use the Bun scripts above.
 - **TUI/logging:** Avoid `console.log`, `console.warn`, or `console.error` inside `packages/coding-agent/`; use the centralized logger to avoid corrupting TUI rendering.
 - **Secrets/auth/config:** Keep `docs/secrets.md`, auth broker/gateway code, settings, and environment-variable docs public-safe. Do not expose tokens or private infrastructure.
 - **Native/Rust build:** `packages/natives/` and `crates/*` can require platform-specific toolchains and CI artifact behavior.
-- **Python bot subtree:** `python/robogjc/` has its own local instructions and trust boundaries.
 - **Generated model data:** Do not edit `packages/ai/src/models.json` directly; update generators/descriptors/resolvers and regenerate with `bun --cwd=packages/ai run generate-models`.
 
 ## Unknowns worth preserving

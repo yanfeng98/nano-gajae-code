@@ -216,10 +216,6 @@ bun --cwd=packages/natives run embed:native
 bun --cwd=packages/natives run embed:native -- --reset
 ```
 
-## Orchestrator-side content-addressed build cache (robogjc)
-
-When `pi-natives` is built inside the robogjc orchestrator (`python/robogjc/`), workspaces share built artifacts through a content-addressed cache instead of rebuilding from scratch in every per-issue worktree. The cache is **orchestrator-side only** — `bun --cwd=packages/natives run build` itself is unchanged; the cache lives outside the build pipeline and is populated/captured around `ensure_workspace` and post-task success in `python/robogjc/src/natives_cache.py`.
-
 ### What is cached
 
 The complete set of files in `packages/natives/native/` that are pure functions of the cache-key inputs:
@@ -268,7 +264,7 @@ A periodic GC loop runs in `WorkerPool` with two caps per repo. When either cap 
 
 Workspaces that hardlinked a `.node` before GC retain access via the kernel inode refcount — `rmtree` of the cache entry does not delete the file from the workspace.
 
-### Configuration (settings on `robogjc.config.Settings`)
+### Configuration
 
 | Env var                                      | Default                  | Effect                                                        |
 | -------------------------------------------- | ------------------------ | ------------------------------------------------------------- |
