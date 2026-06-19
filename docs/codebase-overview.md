@@ -90,13 +90,6 @@ Local observability dashboard for session and model usage.
 - `packages/stats/src/server.ts` serves local dashboard API routes and static SPA assets.
 - `packages/stats/src/types.ts` and `packages/stats/src/shared-types.ts` define dashboard and aggregate metric shapes.
 
-### `packages/typescript-edit-benchmark/`
-
-Private benchmark package for TypeScript edit tasks.
-
-- `packages/typescript-edit-benchmark/package.json` exposes `typescript-edit-benchmark` and depends on the coding-agent, agent-core, ai, tui, utils, diff, prettier, and Babel tooling.
-- `packages/typescript-edit-benchmark/src/index.ts` is the benchmark CLI: it resolves fixtures, loads tasks, runs edit attempts, records progress, and writes reports/conversation dumps under `runs/`.
-
 ## Python packages
 
 ### `python/gjc-rpc/`

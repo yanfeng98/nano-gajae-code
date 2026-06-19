@@ -16,16 +16,13 @@ const EXPECTED_DEFINITIONS = ["deep-interview", "ralplan", "team", "ultragoal"] 
 const EXPECTED_ROLE_AGENTS = ["architect", "critic", "executor", "planner"] as const;
 const EXPECTED_PUBLIC_PACKAGE_VERSION_CATALOG_KEY = "@gajae-code/coding-agent";
 const ALLOWED_PUBLIC_PACKAGE_VERSIONS = new Map<string, string>();
-const ALLOWED_PRIVATE_PACKAGE_VERSIONS = new Map<string, string>([
-	["@gajae-code/typescript-edit-benchmark", "0.0.1"],
-]);
+const ALLOWED_PRIVATE_PACKAGE_VERSIONS = new Map<string, string>([]);
 const ALLOWED_UNSCOPED_PACKAGE_NAMES = new Set<string>(["gajae-code"]);
 const ALLOWED_PACKAGE_BINARIES = new Map<string, readonly string[]>([
 	["@gajae-code/ai", ["pi-ai"]],
 	["@gajae-code/coding-agent", ["gjc"]],
 	["gajae-code", ["gjc"]],
 	["@gajae-code/stats", ["gjc-stats"]],
-	["@gajae-code/typescript-edit-benchmark", ["typescript-edit-benchmark"]],
 ]);
 const PUBLIC_DOC_FILES = ["README.md", "packages/coding-agent/README.md"] as const;
 const LEGACY_NAME_PATTERNS: readonly RegExp[] = [

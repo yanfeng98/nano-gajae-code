@@ -11,7 +11,8 @@
 > - 第六轮: DAP 调试器配置精简 (14 个调试器 → 1 个，~190 行 JSON + 文档)
 > - 第七轮: Autoresearch 死代码模块 (~4,039 行 TS + 1,547 行测试)
 > - 第八轮: orchestration-token-benchmark 基准测试包 (~2,313 行 TS)
-> - 总计减少 ~18,100+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
+> - 第九轮: typescript-edit-benchmark 基准测试包 (~6,932 行 TS)
+> - 总计减少 ~25,000+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
 
 本文档对 Gajae-Code 项目中所有功能的默认启用/关闭状态、代码体量、可选性和移除影响进行全面分析，为魔改裁剪提供决策依据。
 
@@ -29,7 +30,7 @@
 | 已知 Provider 类型 | 19 个 |
 | 内置 Tool 数 | 31 个 (BUILTIN_TOOLS) + 3 个 (HIDDEN_TOOLS) |
 | Settings 配置项 | ~104 个 (已移除 4 power + 32 hindsight) |
-| 已移除代码行数 | ~18,100+ 行 (八轮) |
+| 已移除代码行数 | ~25,000+ 行 (九轮) |
 | 运行模式 | 4 种 (interactive, print, bridge, rpc) |
 | CLI 子命令 | 15 个 |
 
@@ -344,6 +345,24 @@ Hindsight 是 Vectorize.io 提供的远程向量化记忆服务。需要外部 A
 
 验证: `tsgo --noEmit -p packages/coding-agent` 零新增错误 ✅ | 全代码库零残留引用 ✅
 
+### 1.17 ~~typescript-edit-benchmark 基准测试包~~（✅ 已移除 — 纯 CI 工具）
+
+> **状态**: 已删除。`@gajae-code/typescript-edit-benchmark` 是 `private: true` 的内部 CI 基准测试包，测试 AI 模型编辑 TypeScript 代码的精确度。用 Babel AST 对 TS 源码做变异生成编辑任务，启动 gjc 让 AI 改代码，对比差异出报告。
+
+全代码库零 `import`。仅根 `package.json` 的 `bench:gen-fixtures`/`bench:edit` 脚本引用。
+
+删除清单：
+| 文件 | 操作 |
+|------|------|
+| `packages/typescript-edit-benchmark/` | 删除整个包 (15 文件: 13 TS + package.json + tsconfig.json) |
+| 根 `package.json` | 移除 `bench:gen-fixtures` 和 `bench:edit` 脚本 |
+| `scripts/verify-g002-gates.ts` | 移除 `ALLOWED_PRIVATE_PACKAGE_VERSIONS` 和 `ALLOWED_PACKAGE_BINARIES` 中的 2 条白名单条目 |
+| `docs/codebase-overview.md` | 删除整个 `typescript-edit-benchmark/` 小节 |
+| `docs/onboarding-packet.md` | 移除 1 行包描述 |
+| `packages/coding-agent/src/internal-urls/docs-index.generated.ts` | 自动重新生成 |
+
+验证: `tsgo --noEmit -p packages/coding-agent` 零新增错误 ✅ | 全代码库零残留引用 ✅ | `bun install` 1 package removed ✅
+
 ---
 
 ## 二、内置默认 Tool 完整清单
@@ -595,7 +614,7 @@ svelte, swift, tlaplus, verilog, vue, xml, zig
 | 优先级 | Package/目录 | 功能 | 可移除? |
 |--------|-------------|------|---------|
 | ✅ 已移除 | `packages/orchestration-token-benchmark/` | Token 编排基准测试 | 已删除 (~2,313 行 TS) |
-| 🔴 高 | `packages/typescript-edit-benchmark/` | TS 编辑基准测试 | ✅ 仅开发用 |
+| ✅ 已移除 | `packages/typescript-edit-benchmark/` | TS 编辑基准测试 | 已删除 (~6,932 行 TS) |
 | 🔴 高 | `packages/bridge-client/` | 独立桥接客户端库 | ✅ 仅 bridge 模式需要 |
 | 🟡 中 | `python/robogjc/` | Python 后端 worker | ✅ 可选 Python 服务 |
 | 🟡 中 | `python/gjc-rpc/` | Python RPC 客户端 | ✅ 可选 |

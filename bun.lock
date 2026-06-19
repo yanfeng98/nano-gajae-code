@@ -140,32 +140,6 @@
         "chalk": "catalog:",
       },
     },
-    "packages/typescript-edit-benchmark": {
-      "name": "@gajae-code/typescript-edit-benchmark",
-      "version": "0.0.1",
-      "bin": {
-        "typescript-edit-benchmark": "src/index.ts",
-      },
-      "dependencies": {
-        "@babel/generator": "catalog:",
-        "@babel/parser": "catalog:",
-        "@babel/traverse": "catalog:",
-        "@babel/types": "catalog:",
-        "@gajae-code/agent-core": "catalog:",
-        "@gajae-code/ai": "catalog:",
-        "@gajae-code/coding-agent": "catalog:",
-        "@gajae-code/tui": "catalog:",
-        "@gajae-code/utils": "catalog:",
-        "diff": "catalog:",
-        "prettier": "catalog:",
-        "regexp-tree": "catalog:",
-      },
-      "devDependencies": {
-        "@types/babel__generator": "catalog:",
-        "@types/babel__traverse": "catalog:",
-        "@types/bun": "catalog:",
-      },
-    },
     "packages/utils": {
       "name": "@gajae-code/utils",
       "version": "0.5.0",
@@ -387,8 +361,6 @@
     "@gajae-code/stats": ["@gajae-code/stats@workspace:packages/stats"],
 
     "@gajae-code/tui": ["@gajae-code/tui@workspace:packages/tui"],
-
-    "@gajae-code/typescript-edit-benchmark": ["@gajae-code/typescript-edit-benchmark@workspace:packages/typescript-edit-benchmark"],
 
     "@gajae-code/utils": ["@gajae-code/utils@workspace:packages/utils"],
 
@@ -1097,8 +1069,6 @@
     "react-dom": ["react-dom@19.2.5", "https://registry.npmmirror.com/react-dom/-/react-dom-19.2.5.tgz", { "dependencies": { "scheduler": "^0.27.0" }, "peerDependencies": { "react": "^19.2.5" } }, "sha512-J5bAZz+DXMMwW/wV3xzKke59Af6CHY7G4uYLN1OvBcKEsWOs4pQExj86BBKamxl/Ik5bx9whOrvBlSDfWzgSag=="],
 
     "readable-stream": ["readable-stream@3.6.2", "https://registry.npmmirror.com/readable-stream/-/readable-stream-3.6.2.tgz", { "dependencies": { "inherits": "^2.0.3", "string_decoder": "^1.1.1", "util-deprecate": "^1.0.1" } }, "sha512-9u/sniCrY3D5WdsERHzHE4G2YCXqoG5FTHUiCC4SIbr6XcLZBY05ya9EKjYek9O5xOAwjGq+1JdGBAS7Q9ScoA=="],
-
-    "regexp-tree": ["regexp-tree@0.1.27", "https://registry.npmmirror.com/regexp-tree/-/regexp-tree-0.1.27.tgz", { "bin": { "regexp-tree": "bin/regexp-tree" } }, "sha512-iETxpjK6YoRWJG5o6hXLwvjYAoW+FEZn9os0PD/b6AP6xQwsa/Y7lCVgIixBbUPMfhu+i2LtdeAqVTgGlQarfA=="],
 
     "require-directory": ["require-directory@2.1.1", "https://registry.npmmirror.com/require-directory/-/require-directory-2.1.1.tgz", {}, "sha512-fGxEI7+wsG9xrvdjsrlmL22OMTTiHRwAMroiEeMgq8gzoLC/PQr7RsRDSTLUg/bZAZtF+TVIkHc6/4RIKrui+Q=="],
 
