@@ -10,7 +10,8 @@
 > - 第五轮: OpenTelemetry 可观测性系统 (~2,660 行 + 4 测试文件 + 3 个 npm 包)
 > - 第六轮: DAP 调试器配置精简 (14 个调试器 → 1 个，~190 行 JSON + 文档)
 > - 第七轮: Autoresearch 死代码模块 (~4,039 行 TS + 1,547 行测试)
-> - 总计减少 ~15,800+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
+> - 第八轮: orchestration-token-benchmark 基准测试包 (~2,313 行 TS)
+> - 总计减少 ~18,100+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
 
 本文档对 Gajae-Code 项目中所有功能的默认启用/关闭状态、代码体量、可选性和移除影响进行全面分析，为魔改裁剪提供决策依据。
 
@@ -28,7 +29,7 @@
 | 已知 Provider 类型 | 19 个 |
 | 内置 Tool 数 | 31 个 (BUILTIN_TOOLS) + 3 个 (HIDDEN_TOOLS) |
 | Settings 配置项 | ~104 个 (已移除 4 power + 32 hindsight) |
-| 已移除代码行数 | ~15,800+ 行 (七轮) |
+| 已移除代码行数 | ~18,100+ 行 (八轮) |
 | 运行模式 | 4 种 (interactive, print, bridge, rpc) |
 | CLI 子命令 | 15 个 |
 
@@ -327,6 +328,22 @@ Hindsight 是 Vectorize.io 提供的远程向量化记忆服务。需要外部 A
 
 验证: `tsgo --noEmit -p packages/coding-agent` 零新增错误 ✅ | `tsgo --noEmit -p packages/utils` 零错误 ✅
 
+### 1.16 ~~orchestration-token-benchmark 基准测试包~~（✅ 已移除 — 纯 CI 工具）
+
+> **状态**: 已删除。`@gajae-code/orchestration-token-benchmark` 是 `private: true` 的内部 CI 基准测试包，用于确定性测试编排 token 效率。纯 fixture 驱动，无网络/模型调用，零生产依赖。
+
+`runOrchestrationTokenBenchmark()` 计算 token metrics、prefix 稳定性和 spawn-gate 决策，全代码库零 `import`。仅根 `package.json` 的 2 个 `bench:orchestration-tokens*` 脚本引用。
+
+删除清单：
+| 文件 | 操作 |
+|------|------|
+| `packages/orchestration-token-benchmark/` | 删除整个包 (15 TS 文件: 8 src + 7 test) |
+| 根 `package.json` | 移除 `bench:orchestration-tokens` 和 `bench:orchestration-tokens:live` 脚本 |
+| `scripts/verify-g002-gates.ts` | 从 `ALLOWED_PRIVATE_PACKAGE_VERSIONS` 移除 `["@gajae-code/orchestration-token-benchmark", "0.0.1"]` |
+| `packages/coding-agent/src/task/types.ts` | JSDoc 注释去掉对已删除包的引用 |
+
+验证: `tsgo --noEmit -p packages/coding-agent` 零新增错误 ✅ | 全代码库零残留引用 ✅
+
 ---
 
 ## 二、内置默认 Tool 完整清单
@@ -577,7 +594,7 @@ svelte, swift, tlaplus, verilog, vue, xml, zig
 
 | 优先级 | Package/目录 | 功能 | 可移除? |
 |--------|-------------|------|---------|
-| 🔴 高 | `packages/orchestration-token-benchmark/` | Token 编排基准测试 | ✅ 仅开发用 |
+| ✅ 已移除 | `packages/orchestration-token-benchmark/` | Token 编排基准测试 | 已删除 (~2,313 行 TS) |
 | 🔴 高 | `packages/typescript-edit-benchmark/` | TS 编辑基准测试 | ✅ 仅开发用 |
 | 🔴 高 | `packages/bridge-client/` | 独立桥接客户端库 | ✅ 仅 bridge 模式需要 |
 | 🟡 中 | `python/robogjc/` | Python 后端 worker | ✅ 可选 Python 服务 |

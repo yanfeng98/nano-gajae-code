@@ -379,12 +379,9 @@ export interface TaskToolDetails {
 	};
 }
 /**
- * Persisted per-turn / per-subagent token record (Phase 0 instrumentation).
+ * Persisted per-turn / per-subagent token record.
  *
- * Additive: this does not alter any existing task result shape. It is the
- * durable, model-independent unit the deterministic orchestration-token
- * benchmark (`@gajae-code/orchestration-token-benchmark`) consumes to measure
- * token efficiency without any live-model calls.
+ * Additive: this does not alter any existing task result shape.
  */
 export interface TaskTokenLog {
 	/** Subagent id, or "root" for the orchestrator's own turn. */
