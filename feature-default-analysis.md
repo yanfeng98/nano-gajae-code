@@ -2,7 +2,7 @@
 
 > 分析日期: 2026-06-20 | 分支: 260613-v0.5.0-dev | 代码基线: 0.5.0
 >
-> **已执行移除（17 轮）**:
+> **已执行移除（18 轮）**:
 > - 第一轮: macOS 电源管理 (~350 行)
 > - 第二轮: 全平台死代码清理 (~1,120 行)
 > - 第三轮: Hindsight 远程记忆系统 (~2,600 行)
@@ -20,7 +20,8 @@
 > - 第十五轮: Python 目录移除（~30,000 行：gjc-rpc + robogjc，RPC 已删导致的死代码）
 > - 第十六轮: Harness Control Plane 移除（~12,200 行：RPC 已删导致的死代码）
 > - 第十七轮: exa/ MCP 工具集移除（~1,200 行：零消费者死代码）
-> - 总计减少 ~79,400+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
+> - 第十八轮: MCP 交互式管理界面移除（~4,000 行：被隔离的 TUI 死代码链）
+> - 总计减少 ~83,400+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
 
 本文档对 Gajae-Code 项目中所有功能的默认启用/关闭状态、代码体量、可选性和移除影响进行全面分析，为魔改裁剪提供决策依据。
 
@@ -38,7 +39,7 @@
 | 已知 Provider 类型 | 19 个 |
 | 内置 Tool 数 | 31 个 (BUILTIN_TOOLS) + 3 个 (HIDDEN_TOOLS) |
 | Settings 配置项 | ~104 个 (已移除 4 power + 32 hindsight) |
-| 已移除代码行数 | ~79,400+ 行 (十七轮) |
+| 已移除代码行数 | ~83,400+ 行 (十八轮) |
 | 运行模式 | 3 种 (interactive, print, bridge) |
 | CLI 子命令 | 14 个 |
 
@@ -264,6 +265,29 @@
 
 验证: 全代码库零 `src/exa/` 引用 ✅ | 构建零新增错误 ✅ | web 搜索功能完好 ✅
 
+### 1.23 ~~MCP 交互式管理界面~~（✅ 第十八轮 — 被隔离的 TUI 死代码链）
+
+> **状态**: 已删除。一套完整的 MCP 服务器管理 TUI 界面（`/mcp add/search/login/list/remove` 等 15 种子命令），从 OMP 基线迁移时带入但从未启用。`package.json` 明确将入口文件设为 `null`，隔离测试禁止导入，交互模式仅显示 "MCP commands are not available" 占位符。
+
+删除清单：
+| 文件 | 操作 |
+|------|------|
+| `src/modes/controllers/runtime-mcp-command-controller.ts` (~1,934 行) | 删除 — `/mcp` 命令 TUI 控制器 |
+| `src/modes/components/runtime-mcp-add-wizard.ts` (~1,341 行) | 删除 — 多步骤添加向导 |
+| `src/runtime-mcp/oauth-discovery.ts` (~349 行) | 删除 — OAuth 端点自动发现 |
+| `src/runtime-mcp/smithery-connect.ts` (~145 行) | 删除 — Smithery 云平台连接管理 |
+| `src/runtime-mcp/json-rpc.ts` (~84 行) | 删除 — 一次性 JSON-RPC 调用（唯一消费者 exa/ 已删） |
+| `src/runtime-mcp/loader.ts` (~124 行) | 删除 — MCP 工具加载器（被隔离测试禁止） |
+| `test/issue-956-repro.test.ts` | 删除 |
+| `test/oauth-discovery.test.ts` | 删除 |
+| `src/runtime-mcp/index.ts` | 移除 3 行死 re-export |
+| `package.json` | 移除 2 行 null 导出 |
+
+保留（manager.ts 依赖）：
+- `src/runtime-mcp/oauth-flow.ts` — MCP OAuth token 刷新，`manager.ts` 在用，保留
+
+验证: 隔离测试 3/3 通过 ✅ | 构建零错误 ✅ | 活 runtime-mcp 文件完好 ✅
+
 ---
 
 ## 二、内置默认 Tool 完整清单
@@ -488,6 +512,7 @@ svelte, swift, tlaplus, verilog, vue, xml, zig
 | ✅ 已移除 | `python/` | Python 后端 + RPC 客户端 | 已删除 (~30,000 行) |
 | ✅ 已移除 | `harness-control-plane/` + `commands/harness.ts` | Harness 控制平面 | 已删除 (~12,200 行) |
 | ✅ 已移除 | `exa/` | Exa MCP 工具集 | 已删除 (~1,200 行) |
+| ✅ 已移除 | `modes/controllers/runtime-mcp-command-controller.ts` + 5 个 MCP 依赖 | MCP 交互式管理界面 | 已删除 (~4,000 行) |
 | 🔴 高 | `modes/shared/` | Bridge 共享基础设施 | 仅 `--mode bridge` | ~4,400 |
 | 🔴 高 | `modes/bridge/` | HTTP 桥接服务器 | 仅 `--mode bridge` | ~1,000 |
 | 🔴 高 | `modes/print-mode.ts` | 非交互单次模式 | `-p` 标志 | ~120 |
@@ -543,7 +568,7 @@ svelte, swift, tlaplus, verilog, vue, xml, zig
 - `dap/`, `debug/`
 - `tools/puppeteer/`, `tools/browser/`
 
-> 注: `modes/acp/`、`hindsight/`、`autoresearch/`、两个 benchmark package、`modes/rpc/`、`bridge-client/`、`python/`、`harness-control-plane/`、`exa/` 等已在前十七轮移除。
+> 注: `modes/acp/`、`hindsight/`、`autoresearch/`、两个 benchmark package、`modes/rpc/`、`bridge-client/`、`python/`、`harness-control-plane/`、`exa/`、MCP 管理界面等已在前十八轮移除。
 
 **Settings 清理**:
 - 删除所有 `default: false` 且对应代码已移除的配置项

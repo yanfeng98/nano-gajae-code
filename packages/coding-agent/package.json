@@ -102,8 +102,6 @@
 		"./config/mcp-schema": null,
 		"./discovery/mcp-json": null,
 		"./internal-urls/mcp-protocol": null,
-		"./modes/components/runtime-mcp-add-wizard": null,
-		"./modes/controllers/runtime-mcp-command-controller": null,
 		"./slash-commands/helpers/mcp": null,
 		"./*": {
 			"types": "./src/*.ts",
