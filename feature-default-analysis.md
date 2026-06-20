@@ -2,7 +2,7 @@
 
 > 分析日期: 2026-06-20 | 分支: 260613-v0.5.0-dev | 代码基线: 0.5.0
 >
-> **已执行移除（19 轮）**:
+> **已执行移除（20 轮）**:
 > - 第一轮: macOS 电源管理 (~350 行)
 > - 第二轮: 全平台死代码清理 (~1,120 行)
 > - 第三轮: Hindsight 远程记忆系统 (~2,600 行)
@@ -22,7 +22,8 @@
 > - 第十七轮: exa/ MCP 工具集移除（~1,200 行：零消费者死代码）
 > - 第十八轮: MCP 交互式管理界面移除（~4,000 行：被隔离的 TUI 死代码链）
 > - 第十九轮: Slash Command Helper 死代码清理（~800 行：未接入的 ACP 命令处理）
-> - 总计减少 ~84,200+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
+> - 第二十轮: MCP Protocol 死代码清理（~500 行：未注册的 URL 协议处理器 + 残留 package.json 条目）
+> - 总计减少 ~84,700+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
 
 本文档对 Gajae-Code 项目中所有功能的默认启用/关闭状态、代码体量、可选性和移除影响进行全面分析，为魔改裁剪提供决策依据。
 
@@ -40,7 +41,7 @@
 | 已知 Provider 类型 | 19 个 |
 | 内置 Tool 数 | 31 个 (BUILTIN_TOOLS) + 3 个 (HIDDEN_TOOLS) |
 | Settings 配置项 | ~104 个 (已移除 4 power + 32 hindsight) |
-| 已移除代码行数 | ~84,200+ 行 (十九轮) |
+| 已移除代码行数 | ~84,700+ 行 (二十轮) |
 | 运行模式 | 3 种 (interactive, print, bridge) |
 | CLI 子命令 | 14 个 |
 
@@ -304,6 +305,22 @@
 - `context-report.ts`, `format.ts`, `parse.ts`, `ssh.ts`, `usage-report.ts` — 均被 `builtin-registry.ts` 导入
 
 验证: 全代码库零引用 ✅ | 构建零错误 ✅ | AI todo_write 工具正常 ✅
+
+### 1.25 ~~MCP Protocol 死代码清理~~（✅ 第二十轮 — 未注册的 URL 协议处理器）
+
+> **状态**: 已删除。`src/internal-urls/mcp-protocol.ts` 实现了 `mcp://` URL 协议处理器（`McpProtocolHandler`），可从 MCP 服务器读取资源。但从未在 `internal-urls/index.ts` barrel 中注册，隔离测试明确禁止。同时清理了 12 个指向已删除文件的 `package.json` null 条目。
+
+删除清单：
+| 文件 | 操作 |
+|------|------|
+| `src/internal-urls/mcp-protocol.ts` (~151 行) | 删除 — 未注册的 mcp:// 协议处理器 |
+| `test/internal-urls/mcp-protocol.test.ts` (~345 行) | 删除 — 只测试上述死文件 |
+| `package.json` | 移除 13 行死 null 条目 |
+
+保留（MCP 核心引擎）：
+- `runtime-mcp/manager.ts` + 其他 15 个 runtime-mcp 文件 — 被 `sdk.ts`, `agent-session.ts` 使用，支持 `.mcp.json` 配置和 MCP 工具发现
+
+验证: 构建零错误 ✅ | MCP 核心功能完好 ✅
 
 ---
 
@@ -585,7 +602,7 @@ svelte, swift, tlaplus, verilog, vue, xml, zig
 - `dap/`, `debug/`
 - `tools/puppeteer/`, `tools/browser/`
 
-> 注: `modes/acp/`、`hindsight/`、`autoresearch/`、两个 benchmark package、`modes/rpc/`、`bridge-client/`、`python/`、`harness-control-plane/`、`exa/`、MCP 管理界面、ACP helper 死代码等已在前十九轮移除。
+> 注: `modes/acp/`、`hindsight/`、`autoresearch/`、两个 benchmark package、`modes/rpc/`、`bridge-client/`、`python/`、`harness-control-plane/`、`exa/`、MCP 管理界面、ACP helper、MCP protocol 等已在前二十轮移除。
 
 **Settings 清理**:
 - 删除所有 `default: false` 且对应代码已移除的配置项
