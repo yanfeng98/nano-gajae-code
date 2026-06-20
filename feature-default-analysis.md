@@ -2,7 +2,7 @@
 
 > 分析日期: 2026-06-20 | 分支: 260613-v0.5.0-dev | 代码基线: 0.5.0
 >
-> **已执行移除（15 轮）**:
+> **已执行移除（16 轮）**:
 > - 第一轮: macOS 电源管理 (~350 行)
 > - 第二轮: 全平台死代码清理 (~1,120 行)
 > - 第三轮: Hindsight 远程记忆系统 (~2,600 行)
@@ -18,7 +18,8 @@
 > - 第十三轮: RPC 模式移除（~2,100 行源码 + 18 个测试文件）
 > - 第十四轮: bridge-client 包移除（~1,150 行，独立 npm 包，零 import）
 > - 第十五轮: Python 目录移除（~30,000 行：gjc-rpc + robogjc，RPC 已删导致的死代码）
-> - 总计减少 ~66,000+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
+> - 第十六轮: Harness Control Plane 移除（~12,200 行：RPC 已删导致的死代码）
+> - 总计减少 ~78,200+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
 
 本文档对 Gajae-Code 项目中所有功能的默认启用/关闭状态、代码体量、可选性和移除影响进行全面分析，为魔改裁剪提供决策依据。
 
@@ -36,9 +37,9 @@
 | 已知 Provider 类型 | 19 个 |
 | 内置 Tool 数 | 31 个 (BUILTIN_TOOLS) + 3 个 (HIDDEN_TOOLS) |
 | Settings 配置项 | ~104 个 (已移除 4 power + 32 hindsight) |
-| 已移除代码行数 | ~66,000+ 行 (十五轮) |
+| 已移除代码行数 | ~78,200+ 行 (十六轮) |
 | 运行模式 | 3 种 (interactive, print, bridge) |
-| CLI 子命令 | 15 个 |
+| CLI 子命令 | 14 个 |
 
 ---
 
@@ -224,6 +225,30 @@
 
 验证: 全代码库零 `python/gjc-rpc` / `python/robogjc` 引用 ✅ | 4 包零新增错误 ✅
 
+### 1.21 ~~Harness Control Plane~~（✅ 第十六轮 — 批量 AI 任务编排系统）
+
+> **状态**: 已删除。Harness Control Plane (`gjc harness <verb>`) 是批量 AI 任务编排系统，用于 CI/自动化流水线。其核心机制 spawn `gjc --mode rpc` 子进程并通过 JSONL 协议控制 gjc。第十三轮 RPC 移除后，所有 harness 动词 (start/submit/observe/recover/finalize/retire/operate) 均无法工作。
+
+删除清单：
+| 文件 | 操作 |
+|------|------|
+| `src/harness-control-plane/` (16 文件, ~5,176 行) | 删除 — types, state-machine, storage, receipts, rpc-adapter, owner, session-lease, operate, finalize, classifier, control-endpoint, phase-rollup, preserve, receipt-ingest, receipt-spool, seams |
+| `src/commands/harness.ts` (~1,203 行) | 删除 — CLI 命令入口 |
+| `test/harness-control-plane/` (27 测试文件 + 1 fixture + 1 utility, ~6,398 行) | 删除 |
+| `test/agent-wire/command-contract.redteam.test.ts` (~105 行) | 删除 — 扫描已删除目录 |
+| `bench/context-optimization.bench.ts` (~585 行) | 删除 — 引用 harness 收据类型 |
+| `test/bench/context-optimization-effectiveness.test.ts` (~45 行) | 删除 — 引用上述 bench |
+| `src/cli.ts` | 移除 harness 命令注册 |
+| `test/cli-command-surface.test.ts` | 移除 `"harness"` 预期值 |
+| `package.json` | 移除 `bench:context` 脚本 |
+| `docs-index.generated.ts` | 自动重新生成 |
+
+保留（非 harness 专用）：
+- `src/gjc-runtime/tmux-common.ts` — 也被 team-runtime.ts / tmux-sessions.ts / launch-tmux.ts 使用，保留
+- `tui/test/replay-harness.ts` — TUI 测试工具，"harness" 意为 "测试夹具"，与 Harness Control Plane 无关
+
+验证: 全代码库零 `harness-control-plane` 引用 ✅ | 构建零新增错误 ✅ | 四个核心能力完好 ✅
+
 ---
 
 ## 二、内置默认 Tool 完整清单
@@ -322,7 +347,7 @@
 | `setup` | 安装默认技能文件 | 保留 (首次安装需要) |
 | `state` | 会话状态管理 | 可移除 |
 | `session` | 会话管理 | 可移除 |
-| `harness` | Agent harness 控制 | 可移除 |
+| `harness` | Agent harness 控制 | ✅ 已移除（第十六轮） |
 | `coordinator` | 多 agent 协调 | 可移除 |
 | `team` | 团队任务编排 | 可移除 |
 | `ultragoal` | Ultragoal 工作流 | 可移除 |
@@ -445,6 +470,8 @@ svelte, swift, tlaplus, verilog, vue, xml, zig
 | 优先级 | 目录 | 功能 | 默认状态 | 估算行数 |
 |--------|------|------|---------|---------|
 | ✅ 已移除 | `modes/rpc/` | JSON-RPC 协议 | 已删除 (~2,100 行) | |
+| ✅ 已移除 | `python/` | Python 后端 + RPC 客户端 | 已删除 (~30,000 行) |
+| ✅ 已移除 | `harness-control-plane/` + `commands/harness.ts` | Harness 控制平面 | 已删除 (~12,200 行) |
 | 🔴 高 | `modes/shared/` | Bridge 共享基础设施 | 仅 `--mode bridge` | ~4,400 |
 | 🔴 高 | `modes/bridge/` | HTTP 桥接服务器 | 仅 `--mode bridge` | ~1,000 |
 | 🔴 高 | `modes/print-mode.ts` | 非交互单次模式 | `-p` 标志 | ~120 |
@@ -500,7 +527,7 @@ svelte, swift, tlaplus, verilog, vue, xml, zig
 - `dap/`, `debug/`
 - `tools/puppeteer/`, `tools/browser/`
 
-> 注: `modes/acp/`、`hindsight/`、`autoresearch/`、两个 benchmark package、`modes/rpc/`、`python/` 等已在前十五轮移除。
+> 注: `modes/acp/`、`hindsight/`、`autoresearch/`、两个 benchmark package、`modes/rpc/`、`bridge-client/`、`python/`、`harness-control-plane/` 等已在前十六轮移除。
 
 **Settings 清理**:
 - 删除所有 `default: false` 且对应代码已移除的配置项
