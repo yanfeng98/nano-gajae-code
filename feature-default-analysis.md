@@ -2,7 +2,7 @@
 
 > 分析日期: 2026-06-20 | 分支: 260613-v0.5.0-dev | 代码基线: 0.5.0
 >
-> **已执行移除（16 轮）**:
+> **已执行移除（17 轮）**:
 > - 第一轮: macOS 电源管理 (~350 行)
 > - 第二轮: 全平台死代码清理 (~1,120 行)
 > - 第三轮: Hindsight 远程记忆系统 (~2,600 行)
@@ -19,7 +19,8 @@
 > - 第十四轮: bridge-client 包移除（~1,150 行，独立 npm 包，零 import）
 > - 第十五轮: Python 目录移除（~30,000 行：gjc-rpc + robogjc，RPC 已删导致的死代码）
 > - 第十六轮: Harness Control Plane 移除（~12,200 行：RPC 已删导致的死代码）
-> - 总计减少 ~78,200+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
+> - 第十七轮: exa/ MCP 工具集移除（~1,200 行：零消费者死代码）
+> - 总计减少 ~79,400+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
 
 本文档对 Gajae-Code 项目中所有功能的默认启用/关闭状态、代码体量、可选性和移除影响进行全面分析，为魔改裁剪提供决策依据。
 
@@ -37,7 +38,7 @@
 | 已知 Provider 类型 | 19 个 |
 | 内置 Tool 数 | 31 个 (BUILTIN_TOOLS) + 3 个 (HIDDEN_TOOLS) |
 | Settings 配置项 | ~104 个 (已移除 4 power + 32 hindsight) |
-| 已移除代码行数 | ~78,200+ 行 (十六轮) |
+| 已移除代码行数 | ~79,400+ 行 (十七轮) |
 | 运行模式 | 3 种 (interactive, print, bridge) |
 | CLI 子命令 | 14 个 |
 
@@ -248,6 +249,20 @@
 - `tui/test/replay-harness.ts` — TUI 测试工具，"harness" 意为 "测试夹具"，与 Harness Control Plane 无关
 
 验证: 全代码库零 `harness-control-plane` 引用 ✅ | 构建零新增错误 ✅ | 四个核心能力完好 ✅
+
+### 1.22 ~~exa/ MCP 工具集~~（✅ 第十七轮 — 零消费者死代码）
+
+> **状态**: 已删除。`src/exa/` 包含 22 个硬编码 Exa MCP 工具（搜索、深度研究、数据集），通过 `https://mcp.exa.ai/mcp` API 调用。工具已完整实现但从未接入工具系统：导出的 `exaTools` 数组零 import，不在 `package.json` exports 中，不在 `tool-discovery` 注册表中。
+
+删除清单：
+| 文件 | 操作 |
+|------|------|
+| `src/exa/` (8 文件, ~1,192 行) | 删除 — index.ts, factory.ts, mcp-client.ts, render.ts, researcher.ts, search.ts, types.ts, websets.ts |
+
+保留（同名不同物）：
+- `web/search/providers/exa.ts` — 活的 Exa web search provider，被 `web/search/provider.ts` 动态加载，继续使用
+
+验证: 全代码库零 `src/exa/` 引用 ✅ | 构建零新增错误 ✅ | web 搜索功能完好 ✅
 
 ---
 
@@ -472,6 +487,7 @@ svelte, swift, tlaplus, verilog, vue, xml, zig
 | ✅ 已移除 | `modes/rpc/` | JSON-RPC 协议 | 已删除 (~2,100 行) | |
 | ✅ 已移除 | `python/` | Python 后端 + RPC 客户端 | 已删除 (~30,000 行) |
 | ✅ 已移除 | `harness-control-plane/` + `commands/harness.ts` | Harness 控制平面 | 已删除 (~12,200 行) |
+| ✅ 已移除 | `exa/` | Exa MCP 工具集 | 已删除 (~1,200 行) |
 | 🔴 高 | `modes/shared/` | Bridge 共享基础设施 | 仅 `--mode bridge` | ~4,400 |
 | 🔴 高 | `modes/bridge/` | HTTP 桥接服务器 | 仅 `--mode bridge` | ~1,000 |
 | 🔴 高 | `modes/print-mode.ts` | 非交互单次模式 | `-p` 标志 | ~120 |
@@ -523,11 +539,11 @@ svelte, swift, tlaplus, verilog, vue, xml, zig
 **TypeScript 移除**:
 - `modes/bridge/`, `modes/shared/`, `modes/print-mode.ts`
 - `stt/`, `memories/`, `memory-backend/`
-- `exa/`, `ssh/`
+- `ssh/`
 - `dap/`, `debug/`
 - `tools/puppeteer/`, `tools/browser/`
 
-> 注: `modes/acp/`、`hindsight/`、`autoresearch/`、两个 benchmark package、`modes/rpc/`、`bridge-client/`、`python/`、`harness-control-plane/` 等已在前十六轮移除。
+> 注: `modes/acp/`、`hindsight/`、`autoresearch/`、两个 benchmark package、`modes/rpc/`、`bridge-client/`、`python/`、`harness-control-plane/`、`exa/` 等已在前十七轮移除。
 
 **Settings 清理**:
 - 删除所有 `default: false` 且对应代码已移除的配置项
