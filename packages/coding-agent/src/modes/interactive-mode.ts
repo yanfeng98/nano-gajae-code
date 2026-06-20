@@ -86,7 +86,11 @@ import type { HookInputComponent } from "./components/hook-input";
 import type { HookSelectorComponent } from "./components/hook-selector";
 import { StatusLineComponent } from "./components/status-line";
 import type { ToolExecutionHandle } from "./components/tool-execution";
-import { WelcomeComponent, type LspServerInfo as WelcomeLspServerInfo } from "./components/welcome";
+import {
+	WelcomeComponent,
+	type WelcomeLogoMode,
+	type LspServerInfo as WelcomeLspServerInfo,
+} from "./components/welcome";
 import { BtwController } from "./controllers/btw-controller";
 import { CommandController } from "./controllers/command-controller";
 import { EventController } from "./controllers/event-controller";
@@ -216,6 +220,21 @@ function parseGoalSubcommand(args: string): { sub: GoalSubcommand | undefined; r
 		return { sub: first as GoalSubcommand, rest: match[2]?.trim() ?? "" };
 	}
 	return { sub: undefined, rest: trimmed };
+}
+
+export type WelcomeBannerSettingMode = "auto" | "unicode" | "square" | "ascii";
+
+export function resolveWelcomeLogoMode(
+	mode: WelcomeBannerSettingMode,
+	env: Record<string, string | undefined> = Bun.env,
+	platform: NodeJS.Platform = process.platform,
+): WelcomeLogoMode {
+	void env;
+	void platform;
+	if (mode === "unicode") return "unicode";
+	if (mode === "square") return "square";
+	if (mode === "ascii") return "ascii";
+	return "unicode";
 }
 
 /** Options for creating an InteractiveMode instance (for future API use) */
@@ -479,6 +498,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		);
 
 		const startupQuiet = settings.get("startup.quiet");
+		const welcomeLogoMode = resolveWelcomeLogoMode(settings.get("startup.welcomeBannerMode"));
 		this.#welcomeComponent = undefined;
 
 		for (const warning of this.session.configWarnings) {
@@ -494,6 +514,7 @@ export class InteractiveMode implements InteractiveModeContext {
 				providerName,
 				recentSessions,
 				this.#getWelcomeLspServers(),
+				welcomeLogoMode,
 			);
 
 			// Setup UI layout

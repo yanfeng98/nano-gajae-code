@@ -129,6 +129,13 @@ gjc --tmux --worktree my-task-branch
 cd ../my-task-worktree && gjc --tmux
 ```
 
+### Image input
+
+GJC accepts images in two ways:
+
+- **CLI startup**: prefix a local image path with `@`, for example `gjc @screenshot.png "What should I change?"`.
+- **Interactive TUI**: copy an image to the system clipboard and use the configured **Paste image from clipboard** key (Ctrl+V on Linux/macOS, Alt+V on Windows), or type `#paste-image` and choose the prompt action. When the clipboard is unavailable, paste or pass the image file path with `@path/to/image.png` instead.
+
 Inside a GJC session, use the public workflow surface:
 
 ```text
@@ -169,6 +176,18 @@ And four bundled role agents:
 | `critic`    | Read-only plan critique and actionability review.  |
 
 No sprawling default skill zoo: GJC improves by making this small method better.
+
+### Skill migration and bundled skill inspection
+
+When moving a workflow into GJC, inspect the bundled defaults before installing or overwriting anything:
+
+```sh
+gjc skills list
+gjc skills read ralplan
+gjc setup defaults --check
+```
+
+`gjc setup defaults` installs the four bundled GJC workflow skills into your user `.gjc` directory and preserves existing local files by default. If `--check` reports missing or different files, compare the embedded copy with `gjc skills read <name>` first; use `gjc setup defaults --force` only when you intentionally want to replace local default workflow skill files.
 
 ## Works beside your existing agent or bot
 

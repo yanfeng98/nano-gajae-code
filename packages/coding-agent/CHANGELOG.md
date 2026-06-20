@@ -2,6 +2,32 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Added `startup.welcomeBannerMode = "square"` for a square-corner Unicode welcome-logo fallback, and stopped treating Windows Terminal (`WT_SESSION`) as an automatic ASCII downgrade; `auto` now preserves the rounded Unicode logo while `unicode`, `square`, and `ascii` remain explicit overrides.
+
+- Improved image input discoverability by adding an interactive `#paste-image` prompt action and clearer clipboard fallback guidance when no image is available.
+
+- Improved skill migration guidance for users moving custom skills onto the current skill system (#899).
+
+### Fixed
+
+- Fixed native Windows tmux launch and hardened Windows tmux root launch, and resolved follow-up Windows tmux launch and input regressions (#884, #895, #906).
+- Fixed `EXDEV` failures when moving session artifacts across filesystems (cross-device session artifact moves) (#886).
+- Excluded user context files from the project prompt so file-level context filtering no longer leaks user-scoped files into project context (#885).
+- Fixed a bash cancellation descendant-cleanup race so cancellation now waits for child-process cleanup within a bounded stall prompt (#893).
+- Fixed the TUI dropping the first `/goal set <objective>` command from input history: the typed command is now recorded whenever args are supplied, regardless of prior goal-mode state (#910).
+- Fixed Ctrl+Enter/Ctrl+Shift+Enter newline handling in the editor: idle Ctrl+Enter now falls through to newline insertion while keeping Ctrl+Enter as the busy-session follow-up shortcut, and Ctrl+Shift+Enter inserts a newline (#911).
+- Fixed parsing of psmux modified-enter key sequences in the TUI (#918).
+
+### Documentation
+
+- Documented Windows Terminal welcome-logo troubleshooting with Cascadia Mono / Cascadia Mono Nerd Font and the profile `fontFace` setting.
+- Documented CLI `@image` attachments and interactive TUI clipboard image paste fallbacks in the root README.
+
+- Documented lifecycle notification hooks (#903).
+- Added a routed GJC session guide for Clawhip/Hermes/OpenClaw visible routed sessions and linked it from the Hermes docs and operator instructions.
+
 ## [0.6.3] - 2026-06-19
 
 ### Fixed
