@@ -102,7 +102,6 @@
 		"./config/mcp-schema": null,
 		"./discovery/mcp-json": null,
 		"./internal-urls/mcp-protocol": null,
-		"./slash-commands/helpers/mcp": null,
 		"./*": {
 			"types": "./src/*.ts",
 			"import": "./src/*.ts"
