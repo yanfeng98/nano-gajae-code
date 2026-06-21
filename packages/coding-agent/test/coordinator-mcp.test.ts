@@ -9,7 +9,6 @@ import {
 	COORDINATOR_MCP_SERVER_NAME,
 	COORDINATOR_MCP_TOOL_NAMES,
 } from "../src/coordinator/contract";
-import { createCoordinatorSafetyPolicy } from "../src/coordinator-mcp/safety";
 import { createCoordinatorMcpServer, handleCoordinatorMcpRequest } from "../src/coordinator-mcp/server";
 
 const ORIGINAL_STDOUT_WRITE = process.stdout.write.bind(process.stdout);
@@ -190,25 +189,6 @@ describe("gjc mcp-serve coordinator", () => {
 		});
 	});
 
-	it("canonicalizes workdir roots and rejects traversal plus symlink escapes", async () => {
-		await withTempRoot(async root => {
-			const outside = await fs.mkdtemp(path.join(os.tmpdir(), "gjc-coordinator-outside-"));
-			try {
-				const link = path.join(root, "escape");
-				await fs.symlink(outside, link);
-				const policy = await createCoordinatorSafetyPolicy({
-					env: { ...process.env, GJC_COORDINATOR_MCP_WORKDIR_ROOTS: root },
-				});
-				expect(await policy.resolveWorkdir(path.join(root, "..", path.basename(root)))).toBe(root);
-				await expect(policy.resolveWorkdir(path.join(root, "..", path.basename(outside)))).rejects.toThrow(
-					"workdir_outside_allowed_roots",
-				);
-				await expect(policy.resolveWorkdir(link)).rejects.toThrow("workdir_outside_allowed_roots");
-			} finally {
-				await fs.rm(outside, { recursive: true, force: true });
-			}
-		});
-	});
 
 	it("bounds artifact reads and denies unsafe roots", async () => {
 		await withTempRoot(async root => {

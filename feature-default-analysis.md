@@ -2,7 +2,7 @@
 
 > 分析日期: 2026-06-21 | 分支: 260613-v0.5.0-dev | 代码基线: 0.5.0
 >
-> **已执行移除（23 轮）**:
+> **已执行移除（24 轮）**:
 > - 第一轮: macOS 电源管理 (~350 行)
 > - 第二轮: 全平台死代码清理 (~1,120 行)
 > - 第三轮: Hindsight 远程记忆系统 (~2,600 行)
@@ -26,7 +26,8 @@
 > - 第二十一轮: Codex Discovery 死代码清理（~330 行：未激活的 provider + 12 个 package.json 死条目）
 > - 第二十二轮: 死设置与死类型清理（~97 行：9 个死设置键 + 3 个死接口 + SOURCE_PATHS 条目）
 > - 第二十三轮: 未注册 CLI 命令链清理（~4,157 行：12 个死命令 + 11 个 helper + 2 个测试文件）
-> - 总计减少 ~89,300+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
+> - 第二十四轮: 死模块与死依赖链清理（~3,594 行：14 个死源文件 + 3 个死测试 + 1 个测试编辑 + 1 个 barrel 修复）
+> - 总计减少 ~92,900+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
 >
 > **生态激活**:
 > - Claude Code 配置发现：激活 `discovery/claude.ts` + `discovery/claude-plugins.ts`，支持从 `~/.claude/` 和项目 `.claude/` 导入技能/命令/钩子/工具/MCP/设置
@@ -51,8 +52,8 @@
 | AI Provider 数 | 14 个 (含 models.json 定义的) |
 | 已知 Provider 类型 | 19 个 |
 | 内置 Tool 数 | 31 个 (BUILTIN_TOOLS) + 3 个 (HIDDEN_TOOLS) |
-| Settings 配置项 | ~104 个 (已移除 4 power + 32 hindsight) |
-| 已移除代码行数 | ~85,000+ 行 (二十一轮) |
+| Settings 配置项 | ~95 个 (已移除 4 power + 32 hindsight + 9 dead keys) |
+| 已移除代码行数 | ~92,900+ 行 (二十四轮) |
 | 运行模式 | 3 种 (interactive, print, bridge) |
 | CLI 子命令 | 14 个 |
 
@@ -460,6 +461,70 @@ gjc config get skills.enabled                   # 验证
 
 ---
 
+### 1.30 ~~死模块与死依赖链~~（✅ 第二十四轮 — 零消费者死模块 + 级联清理）
+
+> **状态**: 已删除。14 个源文件 + 3 个测试文件 + 1 个测试编辑 + 1 个 barrel 修复 = 19 文件，3,594 行。每个文件用 `grep -rn` 在 `src/` 下验证零生产代码引用。
+
+**死源文件（14 文件，2,916 行）：**
+
+| 文件 | 行数 | 说明 | 死亡证据 |
+|------|------|------|---------|
+| `task/name-generator.ts` | 1,577 | 任务名生成器（1202 形容词 + 355 动物名词表） | `generateTaskName` / `resetTaskNames` — `src/` 下零引用 |
+| `runtime-mcp/smithery-registry.ts` | 477 | Smithery.dev 注册表搜索 API 客户端 | `searchSmitheryRegistry` / `SmitheryRegistryError` — 零引用 |
+| `runtime-mcp/smithery-auth.ts` | 104 | Smithery.dev CLI 登录/轮询/API Key 管理 | `getSmitheryApiKey` / `createSmitheryCliAuthSession` — 零引用 |
+| `commit/pipeline.ts` | 244 | Commit 命令主流水线 | `runCommitCommand` 入口函数 — 零引用，整个 commit 命令行无人调用 |
+| `commit/map-reduce/map-phase.ts` | 193 | Map-Reduce 分析 Map 阶段 | 仅被已删除的 `map-reduce/index.ts` 导入 |
+| `commit/map-reduce/index.ts` | 69 | Map-Reduce 分析入口 | 仅被已删除的 `pipeline.ts` 导入 |
+| `commit/map-reduce/reduce-phase.ts` | 49 | Map-Reduce Reduce 阶段 + 引用已删除 `shared-llm` | 仅被已删除的 `map-reduce/index.ts` 导入 |
+| `commit/analysis/conventional.ts` | 64 | 常规提交 LLM 分析 + 引用已删除 `shared-llm` | `src/` 下零引用 |
+| `commit/shared-llm.ts` | 77 | 共享 Zod schema + 分析工具函数 | 仅被已删除的 `conventional.ts` / `reduce-phase.ts` 导入 |
+| `commit/cli.ts` | 85 | `parseCommitArgs` / `printCommitHelp` | 零引用，CLI 从未注册 commit 子命令 |
+| `commit/index.ts` | 5 | Barrel re-export `runCommitCommand` | 仅导出已删除函数 |
+| `coordinator-mcp/safety.ts` | 80 | Coordinator MCP 安全策略包装器 | `createCoordinatorSafetyPolicy` — 零引用 |
+| `exec/idle-timeout-watchdog.ts` | 126 | 进程空闲超时看门狗 | `IdleTimeoutWatchdog` 类 — 零引用 |
+| `cli/classify-install-target.ts` | 50 | 插件市场安装目标分类器 | `classifyInstallTarget` — 零引用 |
+
+**死测试文件（3 文件，373 行）：**
+
+| 文件 | 行数 | 说明 |
+|------|------|------|
+| `test/auth-broker-import.test.ts` | 288 | R23 遗漏：导入已删除的 `auth-broker-cli`，无法运行 |
+| `test/marketplace/cli.test.ts` | 52 | 测试已删除的 `classifyInstallTarget` |
+| `test/commit-shared-llm.test.ts` | 33 | 测试已删除的 `shared-llm` |
+
+**部分编辑（1 文件，-20 行）：**
+
+| 文件 | 变更 | 说明 |
+|------|------|------|
+| `test/coordinator-mcp.test.ts` | -20 行 | 移除 `createCoordinatorSafetyPolicy` 导入和 1 个相关 it() 测试块 |
+
+**Barrel 修复（1 文件，-1 行）：**
+
+| 文件 | 变更 | 说明 |
+|------|------|------|
+| `commit/analysis/index.ts` | -1 行 | 移除 `export * from "./conventional"`，因 conventional.ts 已删除 |
+
+**级联删除链：**
+
+删除 `shared-llm.ts` 暴露了两个引用它的死文件，触发级联追溯：
+```
+shared-llm.ts (死)
+  ├── analysis/conventional.ts (死, 零引用)
+  └── map-reduce/reduce-phase.ts (死)
+        └── map-reduce/index.ts (死)
+              ├── map-phase.ts (死)
+              └── pipeline.ts (死, runCommitCommand 零调用)
+                    └── commit/index.ts (死 barrel)
+```
+
+**保留的活跃 commit 文件：** `types.ts`, `utils.ts`, `message.ts`, `model-selection.ts`, `git/diff.ts`, `changelog/` — 这些被 `utils/git.ts`, `tools/inspect-image.ts`, `utils/commit-message-generator.ts` 等活跃代码导入。
+
+**R24 验证方法：** 每个函数/模块用 `grep -rn <functionName>` 在 `src/` 下搜索。结果为空的即确认为死代码。级联删除时额外验证：B 仅被 A 导入 + A 是死代码 → B 也是死代码。
+
+验证: 构建零错误 ✅ | 4785 测试通过 (无新增失败) ✅ | `tsc --noEmit` 5 个预存错误与本次无关 | 核心命令全部存活
+
+---
+
 ## 二、内置默认 Tool 完整清单
 
 以下是从 `packages/coding-agent/src/tools/index.ts` 的 `BUILTIN_TOOLS` 和 `HIDDEN_TOOLS` 数组中提取的完整 tool 注册表。
@@ -806,7 +871,7 @@ svelte, swift, tlaplus, verilog, vue, xml, zig
 - `packages/coding-agent/src/sdk.ts` — `createTools()` 工厂 + image_gen 注入 + discovery 控制
 
 ### Settings 体系
-- `packages/coding-agent/src/config/settings-schema.ts` — 所有配置项定义 (3031 行)
+- `packages/coding-agent/src/config/settings-schema.ts` — 所有配置项定义 (2762 行)
 - `packages/coding-agent/src/config/settings.ts` — Settings 单例实现
 - `packages/coding-agent/src/config/skill-settings-defaults.ts` — 技能发现默认值
 
