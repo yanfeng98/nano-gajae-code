@@ -42,15 +42,15 @@ describe("issue #1022 — path-scoped enabledModels respected by default fallbac
 			path.join(agentDir, "config.yml"),
 			YAML.stringify({
 				enabledModels: [{ path: privatePath, models: ["openai"] }],
-				disabledProviders: [{ path: privatePath, providers: ["github-copilot"] }],
-				modelRoles: { default: "github-copilot/gpt-5.5" },
+				disabledProviders: [{ path: privatePath, providers: ["opencode-zen"] }],
+				modelRoles: { default: "opencode-zen/gpt-5.4" },
 			}),
 		);
 
 		const settings = await Settings.init({ cwd, agentDir });
 		// Sanity-check the path-scoped values resolved correctly for this cwd.
 		expect(settings.get("enabledModels")).toEqual(["openai"]);
-		expect(settings.get("disabledProviders")).toEqual(["github-copilot"]);
+		expect(settings.get("disabledProviders")).toEqual(["opencode-zen"]);
 
 		const authStorage = await AuthStorage.create(path.join(testDir, "auth.db"));
 		// Only anthropic has credentials. Per `enabledModels` the path allows
@@ -80,7 +80,7 @@ describe("issue #1022 — path-scoped enabledModels respected by default fallbac
 				// Bug: gjc falls back to anthropic Haiku here, ignoring the
 				// path-scoped enabledModels allow-list.
 				expect(session.model?.provider).not.toBe("anthropic");
-				expect(session.model?.provider).not.toBe("github-copilot");
+				expect(session.model?.provider).not.toBe("opencode-zen");
 				// No OpenAI code provider creds set → nothing in the allow-list is
 				// usable. Expect no model and a fallback message.
 				expect(session.model).toBeUndefined();

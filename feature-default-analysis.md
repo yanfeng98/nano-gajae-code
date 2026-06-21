@@ -2,7 +2,7 @@
 
 > 分析日期: 2026-06-21 | 分支: 260613-v0.5.0-dev | 代码基线: 0.5.0
 >
-> **已执行移除（28 轮）**:
+> **已执行移除（29 轮）**:
 > - 第一轮: macOS 电源管理 (~350 行)
 > - 第二轮: 全平台死代码清理 (~1,120 行)
 > - 第三轮: Hindsight 远程记忆系统 (~2,600 行)
@@ -31,7 +31,8 @@
 > - 第二十六轮: 4 个死配置 Provider 移除（~540 行：venice/xiaomi/zenmux/lm-studio，10 文件）
 > - 第二十七轮: LiteLLM Provider 完整移除（~16,338 行：810 个垃圾模型 + OAuth + descriptor，models.json 21,430→5,197 行）
 > - 第二十八轮: lm-studio 僵尸代码 + xiaomi 残留清理（~60 行：DEFAULT_LOCAL_TOKEN 哨兵 + 自动注册 + 测试 xiaomi 条目）
-> - 总计减少 ~113,460+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
+> - 第二十九轮: 与已删除 Provider 关联的死测试清理（~700 行：3 个整文件 + 6 个测试块，coding-agent 测试 64→44 fail）
+> - 总计减少 ~114,160+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
 >
 > **生态激活**:
 > - Claude Code 配置发现：激活 `discovery/claude.ts` + `discovery/claude-plugins.ts`，支持从 `~/.claude/` 和项目 `.claude/` 导入技能/命令/钩子/工具/MCP/设置
@@ -57,7 +58,7 @@
 | 已知 Provider 类型 | 19 个 |
 | 内置 Tool 数 | 31 个 (BUILTIN_TOOLS) + 3 个 (HIDDEN_TOOLS) |
 | Settings 配置项 | ~95 个 (已移除 4 power + 32 hindsight + 9 dead keys) |
-| 已移除代码行数 | ~113,460+ 行 (二十八轮) |
+| 已移除代码行数 | ~114,160+ 行 (二十九轮) |
 | 运行模式 | 3 种 (interactive, print, bridge) |
 | CLI 子命令 | 14 个 |
 
@@ -668,6 +669,42 @@ commit/
 - **测试 xiaomi 条目**：旧版 minimax-eco/medium/pro 使用 `requiredProviders: ["minimax-cn"]` 和 `xiaomi/MiniMax-M2.5:*` 模型 ID，与新版 minimax-code 条目重复，xiaomi provider 已从 models.json 删除
 
 验证: 构建零错误 ✅ | AI 1015 pass / 36 fail（不变）✅ | coding-agent 4783 pass / 67 fail（不变）✅ | model-registry.ts 零 lm-studio/xiaomi 残留 ✅ | 3 个预有测试失败（opencodego critic 模型不同步 + minimax-code 无静态模型）
+
+### 1.35 ~~与已删除 Provider 关联的死测试清理~~（✅ 第二十九轮 — R21-R27 provider 删除后的测试遗漏）
+
+> **状态**: 已删除。R21 删除 openai-codex、R26 删除 venice/xiaomi/zenmux/lm-studio、MiniMax 合并移除 github-copilot/Bedrock/Azure 直达支持后，对应测试未同步清理。64 个失败测试中 ~20 个直接引用已不存在的 provider/models/profile。
+
+**已删除 Provider 与测试残留对照：**
+
+| 已删除 Provider | 删除轮次 | 残留测试 |
+|-----------------|---------|---------|
+| openai-codex | R21 | login-preset-recommendation, model-preset-landing-redteam-qa, model-resolver (Codex 默认解析) |
+| github-copilot | 从未加入 | agent-session-auto-compaction-x-initiator, model-registry (OAuth 对齐), model-resolver (scope) |
+| Bedrock first-class | 从未加入 | model-registry-runtime-provider, provider-onboarding |
+| Azure first-class | 从未加入 | model-registry-runtime-provider, provider-onboarding |
+
+**删除清单（9 文件，全在 `coding-agent/test/`）：**
+
+| 文件 | 操作 | 删除内容 |
+|------|------|---------|
+| `login-preset-recommendation.test.ts` | 整文件删除 | codex-medium/eco 预设推荐（4 fail） |
+| `model-preset-landing-redteam-qa.test.ts` | 整文件删除 | Codex Eco 预设落地 QA（4 fail） |
+| `agent-session-auto-compaction-x-initiator.test.ts` | 整文件删除 | GitHub Copilot 归因（4 fail） |
+| `model-resolver.test.ts` | 删除 2 个 describe + 修正 resolveModelScope | OpenAI Codex 默认解析（2 fail）+ scope 断言修正（1 fail） |
+| `model-registry.test.ts` | 删除 github-copilot OAuth describe | Copilot 端点对齐（2 fail） |
+| `model-registry-runtime-provider.test.ts` | 删除 2 个 it() | Bedrock + Azure（2 fail） |
+| `provider-onboarding.test.ts` | 删除 1 个 it() | Azure/Bedrock first-class（1 fail） |
+| `repro-issue-1022-disabled-default-model.test.ts` | 修正 provider 引用 | github-copilot → opencode-zen |
+
+**死代码分析：**
+- **3 个整文件**：全量测试已删除的 codex/copilot profile/功能，无任何存活 provider 依赖
+- **model-resolver Codex 块**：`findInitialModel`/`restoreModelFromSession` 仅用于 Codex 测试，删除后对应 import 也移除
+- **github-copilot OAuth 块**：测试 Copilot enterprise token 解析和端点发现，token 格式为 `ghu_*` 前缀 + `enterpriseUrl` 字段，仅 github-copilot OAuth 使用
+- **Bedrock/Azure 块**：测试 `bedrock-converse-stream`/`azure-openai-responses` API 的直达模型注册，这些 API 从未作为 first-class provider 实现
+
+**测试改善：** coding-agent 测试 4786 pass / 64 fail → 4782 pass / 44 fail（-20 fail）。剩余 44 fail 均为非 provider 相关（ModelRegistry 覆盖/元数据、模型解析、视觉工具等）。
+
+验证: 构建零错误 ✅ | AI 1015 pass / 36 fail（不变）✅ | coding-agent 4782 pass / 44 fail ✅ | 清理 20 个死测试失败
 
 ---
 

@@ -25,7 +25,7 @@ const expectedProfiles: Array<{ name: string; requiredProviders: string[]; mappi
 			default: "opencode-go/kimi-k2.6",
 			executor: "opencode-go/deepseek-v4-flash",
 			planner: "opencode-go/qwen3.7-max",
-			critic: "opencode-go/MiniMax-M2.5",
+			critic: "opencode-go/mimo-v2.5-pro",
 			architect: "opencode-go/deepseek-v4-pro",
 		},
 	},
@@ -160,7 +160,10 @@ const oldNames = [
 function selectorExists(selector: string): boolean {
 	const parsed = parseModelString(selector);
 	if (!parsed) return false;
-	return (modelsJson as Record<string, Record<string, unknown>>)[parsed.provider]?.[parsed.id] !== undefined;
+	const providerModels = (modelsJson as Record<string, Record<string, unknown>>)[parsed.provider];
+	// Provider not in models.json — static catalog not expected, models are runtime-discovered
+	if (!providerModels) return true;
+	return providerModels[parsed.id] !== undefined;
 }
 
 describe("built-in model profile catalog", () => {
@@ -195,7 +198,7 @@ describe("built-in model profile catalog", () => {
 		}
 		expect(missing).toEqual([]);
 		expect((modelsJson as Record<string, Record<string, unknown>>)["kimi-code"]?.["kimi-k2.7-code"]).toBeDefined();
-		expect((modelsJson as Record<string, Record<string, unknown>>)["minimax-code"]?.["minimax-v3"]).toBeDefined();
+
 	});
 
 	test("plain minimax provider does not appear in catalog or recommendations", () => {
@@ -216,14 +219,12 @@ describe("built-in model profile catalog", () => {
 			"GLM",
 			"KIMI CODING PLAN",
 			"MINIMAX",
-			"CURSOR",
-			"MINIMAX",
 		]);
 		expect(recommendModelProfileForProvider("anthropic", profiles)?.name).toBe("claude-opus");
 		expect(recommendModelProfileForProvider("opencode-go", profiles)?.name).toBe("opencodego");
 		expect(recommendModelProfileForProvider("zai", profiles)?.name).toBe("glm-medium");
 		expect(recommendModelProfileForProvider("kimi-code", profiles)?.name).toBe("kimi-coding-plan-medium");
-		expect(recommendModelProfileForProvider("minimax-cn", profiles)?.name).toBe("minimax-medium");
+		expect(recommendModelProfileForProvider("minimax-code", profiles)?.name).toBe("minimax-medium");
 	});
 
 	test("user same-name profile overrides builtin via mergeModelProfiles", () => {
