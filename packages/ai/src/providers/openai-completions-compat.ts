@@ -20,8 +20,7 @@ export type ResolvedOpenAICompat = Required<
 function detectStrictModeSupport(provider: string, baseUrl: string): boolean {
 	if (
 		provider === "openai" ||
-		provider === "github-copilot" ||
-		provider === "zenmux"
+		provider === "github-copilot"
 	) {
 		return true;
 	}
@@ -100,8 +99,7 @@ export function detectOpenAICompat(model: Model<"openai-completions">, resolvedB
 		baseUrl.includes("models.inference.ai.azure.com") ||
 		baseUrl.includes("azure.com/openai");
 	const isCopilotHost = provider === "github-copilot";
-	const isZenmuxHost = provider === "zenmux";
-	// Endpoints that MUST receive a single system block. MiniMax's OpenAI
+// Endpoints that MUST receive a single system block. MiniMax's OpenAI
 	// endpoint returns error 2013 on multiple system messages.
 	const isMiniMaxHost =
 		provider === "minimax-code" ||
@@ -114,8 +112,7 @@ export function detectOpenAICompat(model: Model<"openai-completions">, resolvedB
 			isAzureHost ||
 			isDeepseekFamily ||
 			isZai ||
-			isCopilotHost ||
-			isZenmuxHost);
+			isCopilotHost);
 
 	const reasoningEffortMap: NonNullable<OpenAICompat["reasoningEffortMap"]> =
 		isDeepseekFamily && model.reasoning

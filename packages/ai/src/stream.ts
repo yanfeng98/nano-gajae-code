@@ -74,10 +74,7 @@ const serviceProviderMap: Record<string, KeyResolver> = {
 	ollama: "OLLAMA_API_KEY",
 	"ollama-cloud": "OLLAMA_CLOUD_API_KEY",
 	"llama.cpp": "LLAMA_CPP_API_KEY",
-	zenmux: "ZENMUX_API_KEY",
-	venice: "VENICE_API_KEY",
 	vllm: "VLLM_API_KEY",
-	xiaomi: "XIAOMI_API_KEY",
 };
 
 /**

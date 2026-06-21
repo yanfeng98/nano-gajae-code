@@ -2,7 +2,7 @@
 
 > 分析日期: 2026-06-21 | 分支: 260613-v0.5.0-dev | 代码基线: 0.5.0
 >
-> **已执行移除（24 轮）**:
+> **已执行移除（26 轮）**:
 > - 第一轮: macOS 电源管理 (~350 行)
 > - 第二轮: 全平台死代码清理 (~1,120 行)
 > - 第三轮: Hindsight 远程记忆系统 (~2,600 行)
@@ -27,7 +27,9 @@
 > - 第二十二轮: 死设置与死类型清理（~97 行：9 个死设置键 + 3 个死接口 + SOURCE_PATHS 条目）
 > - 第二十三轮: 未注册 CLI 命令链清理（~4,157 行：12 个死命令 + 11 个 helper + 2 个测试文件）
 > - 第二十四轮: 死模块与死依赖链清理（~3,594 行：14 个死源文件 + 3 个死测试 + 1 个测试编辑 + 1 个 barrel 修复）
-> - 总计减少 ~92,900+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
+> - 第二十五轮: 死 commit/ 子系统完整移除（~3,740 行：44 个死源文件 + 2 个死测试，commit/ 从 ~50 文件缩减到 3 文件）
+> - 第二十六轮: 4 个死配置 Provider 移除（~540 行：venice/xiaomi/zenmux/lm-studio，10 文件）
+> - 总计减少 ~97,100+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
 >
 > **生态激活**:
 > - Claude Code 配置发现：激活 `discovery/claude.ts` + `discovery/claude-plugins.ts`，支持从 `~/.claude/` 和项目 `.claude/` 导入技能/命令/钩子/工具/MCP/设置
@@ -53,7 +55,7 @@
 | 已知 Provider 类型 | 19 个 |
 | 内置 Tool 数 | 31 个 (BUILTIN_TOOLS) + 3 个 (HIDDEN_TOOLS) |
 | Settings 配置项 | ~95 个 (已移除 4 power + 32 hindsight + 9 dead keys) |
-| 已移除代码行数 | ~92,900+ 行 (二十四轮) |
+| 已移除代码行数 | ~97,100+ 行 (二十六轮) |
 | 运行模式 | 3 种 (interactive, print, bridge) |
 | CLI 子命令 | 14 个 |
 
@@ -522,6 +524,101 @@ shared-llm.ts (死)
 **R24 验证方法：** 每个函数/模块用 `grep -rn <functionName>` 在 `src/` 下搜索。结果为空的即确认为死代码。级联删除时额外验证：B 仅被 A 导入 + A 是死代码 → B 也是死代码。
 
 验证: 构建零错误 ✅ | 4785 测试通过 (无新增失败) ✅ | `tsc --noEmit` 5 个预存错误与本次无关 | 核心命令全部存活
+
+---
+
+### 1.31 ~~死 commit/ 子系统完整移除~~（✅ 第二十五轮 — CLI 入口 `a14c0cfb` 移除导致的全链死亡）
+
+> **状态**: 已删除。`a14c0cfb` 将 `commit` 从 CLI 移除 → `commands/commit.ts` 不可达（R23 删除）→ `runCommitCommand` 不可达（R24 删除 `pipeline.ts`）→ `runAgenticCommit` 不可达（本轮删除整个 agentic/ 子系统）。
+
+**git log 关键时间线：**
+- `19f8c1f4` — OMP 基线：`commit` 在 cli.ts 注册，`pipeline.ts:34` → `return runAgenticCommit(args)`
+- `a14c0cfb` — "Narrow GJC"：`commit` 刻意从 CLI 移除，入口消失
+- R23 → 删除 `commands/commit.ts`（死入口）
+- R24 → 删除 `pipeline.ts`/`map-reduce/`/`cli.ts`/`shared-llm.ts`（第一层依赖）
+- R25 → 删除 agentic/analysis/changelog/prompts（第二层依赖，本轮）
+
+**删除清单（44 源文件 + 2 测试文件，3,740 行）：**
+
+| 目录 | 文件数 | 行数 | 说明 |
+|------|--------|------|------|
+| `commit/agentic/` | 17 ts + 4 md | 2,290 | 完整 AI agent 会话 commit 工作流 |
+| `commit/analysis/` | 4 | 416 | scope/summary/validation 分析工具 |
+| `commit/changelog/` | 4 | 415 | CHANGELOG.md 自动检测/生成/写入 |
+| `commit/prompts/` | 12 | 409 | 所有 commit AI 提示词模板 |
+| `commit/message.ts` | 1 | 11 | `formatCommitMessage` 格式化 |
+| `commit/model-selection.ts` | 1 | 51 | commit 场景双模型选择策略 |
+| `commit/utils/exclusions.ts` | 1 | 42 | 文件排除过滤 |
+| `commit/map-reduce/utils.ts` | 1 | 9 | R24 遗漏 |
+| 死测试文件 | 2 | 97 | agentic + model-selection 测试 |
+
+**级联删除链（完整）：**
+```
+a14c0cfb: commit 从 CLI 移除
+  └── commands/commit.ts (R23)
+        └── runCommitCommand = pipeline.ts (R24)
+              ├── runAgenticCommit = agentic/index.ts (R25 本轮)
+              │     ├── agentic/agent.ts, tools/, prompts/
+              │     ├── changelog/ (4 文件)
+              │     ├── analysis/ (4 文件)
+              │     ├── message.ts
+              │     └── model-selection.ts
+              ├── map-reduce/ (R24)
+              ├── cli.ts (R24)
+              └── shared-llm.ts (R24)
+                    └── prompts/ (12 文件)
+```
+
+**保留的 3 个活跃文件（324 行）：**
+
+| 文件 | 行数 | 活跃引用 |
+|------|------|---------|
+| `commit/types.ts` | 118 | `utils/git.ts` → `FileDiff`, `NumstatEntry` 等类型 |
+| `commit/git/diff.ts` | 148 | `utils/git.ts` → `parseNumstat`, `parseFileDiffs` |
+| `commit/utils.ts` | 58 | `tools/inspect-image.ts` → `extractTextContent` |
+
+commit/ 最终结构：
+```
+commit/
+  types.ts       (活跃)
+  git/diff.ts    (活跃)
+  utils.ts       (活跃)
+```
+
+验证: 构建零错误 ✅ | 4783 测试通过 (-2 死测试) ✅ | 8 个关键词零残留引用 ✅ | 核心命令全部存活
+
+---
+
+### 1.32 ~~4 个死配置 Provider 移除~~（✅ 第二十六轮 — 从未完整接入的 Provider 配置）
+
+> **状态**: 已删除。venice / xiaomi / zenmux / lm-studio 四个 provider，特征一致：models.json 中零自有模型（xiaomi/venice 仅在 litellm 中有代理条目）、PROVIDER_DESCRIPTORS 中仅 lm-studio 有默认模型映射但无 catalog discovery、无独立 OAuth 登录文件。仅有 `openai-compat.ts` 中的 ModelManagerOptions 配置函数、`types.ts` 中的 KnownProvider 条目、`stream.ts` 中的 env var 映射——纯粹的死配置重量。
+
+**删除清单（10 文件，540 行）：**
+
+| 文件 | 变更 | 说明 |
+|------|------|------|
+| `ai/src/types.ts` | -5 行 | KnownProvider 中移除 4 个 provider |
+| `ai/src/stream.ts` | -3 行 | 移除 ZENMUX_API_KEY / VENICE_API_KEY / XIAOMI_API_KEY 映射 |
+| `ai/src/cli.ts` | -1 行 | 移除 zenmux CLI 帮助条目 |
+| `ai/src/models.json` | -236 行 | 移除 litellm 中的 venice (2) + xiaomi (9) 代理模型 |
+| `ai/src/provider-models/openai-compat.ts` | -262 行 | 移除 zenmuxModelManagerOptions / lmStudioModelManagerOptions / veniceModelManagerOptions / xiaomiModelManagerOptions + 辅助函数 + 接口 + models.dev 描述符 |
+| `ai/src/provider-models/descriptors.ts` | -1 行 | 移除 DEFAULT_MODEL_PER_PROVIDER 中 lm-studio 条目 |
+| `ai/src/providers/openai-completions-compat.ts` | -9 行 | 移除 zenmux strictMode 检测 + isZenmuxHost 逻辑 |
+| `coding-agent/src/config/model-profiles.ts` | -21 行 | 移除 3 个 mimo-* (xiaomi) 预设配置 |
+| `coding-agent/src/config/models-config-schema.ts` | -1 行 | 移除 ProviderDiscoverySchema 中 lm-studio 枚举值 |
+
+**各 Provider 分析：**
+
+| Provider | models.json | DESCRIPTOR | OAuth | 实际状态 |
+|----------|------------|------------|-------|---------|
+| venice | litellm 中 2 个代理模型 | 无 | 无 | Venice.ai 不可审查 AI，从未独立接入 |
+| xiaomi | litellm 中 9 个代理模型 | 无 (仅有 models.dev) | 无 | 小米 MIMO，仅通过 models.dev 描述符 + 预设配置 |
+| zenmux | 零模型 | 无 (仅有 models.dev) | 无 | ZenMux 聚合器，仅通过 models.dev 描述符 |
+| lm-studio | 零模型 | 仅有默认模型名 "llama-4" | 无 | 本地 LM Studio，仅 ProviderDiscoverySchema 枚举值 |
+
+**models.json 变化：** 1,030 → 1,019 模型（litellm 内 venice/xiaomi 代理条目移除）
+
+验证: 构建零错误 ✅ | 4783 测试通过 (无新增失败) ✅ | openai-compat.ts 零残留引用 ✅ | 核心命令全部存活
 
 ---
 

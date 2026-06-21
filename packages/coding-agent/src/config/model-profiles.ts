@@ -110,27 +110,6 @@ export const BUILTIN_MODEL_PROFILES: readonly ModelProfileDefinition[] = [
 		critic: "kimi-code/kimi-k2.7-code:xhigh",
 		architect: "kimi-code/kimi-k2.7-code:xhigh",
 	}),
-	profile("mimo-eco", ["xiaomi"], {
-		default: "xiaomi/mimo-v2.5-pro:low",
-		executor: "xiaomi/mimo-v2.5-pro:minimal",
-		planner: "xiaomi/mimo-v2.5-pro:low",
-		critic: "xiaomi/mimo-v2.5-pro:medium",
-		architect: "xiaomi/mimo-v2.5-pro:high",
-	}),
-	profile("mimo-medium", ["xiaomi"], {
-		default: "xiaomi/mimo-v2.5-pro:medium",
-		executor: "xiaomi/mimo-v2.5-pro:low",
-		planner: "xiaomi/mimo-v2.5-pro:medium",
-		critic: "xiaomi/mimo-v2.5-pro:high",
-		architect: "xiaomi/mimo-v2.5-pro:xhigh",
-	}),
-	profile("mimo-pro", ["xiaomi"], {
-		default: "xiaomi/mimo-v2.5-pro:xhigh",
-		executor: "xiaomi/mimo-v2.5-pro:medium",
-		planner: "xiaomi/mimo-v2.5-pro:high",
-		critic: "xiaomi/mimo-v2.5-pro:xhigh",
-		architect: "xiaomi/mimo-v2.5-pro:xhigh",
-	}),
 	profile("minimax-eco", ["minimax-code"], {
 		default: "minimax-code/minimax-v3:low",
 		executor: "minimax-code/minimax-v3:minimal",

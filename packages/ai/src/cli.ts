@@ -112,7 +112,6 @@ Providers:
   nanogpt           NanoGPT
   minimax-code      MiniMax Coding Plan (International)
   minimax-code-cn   MiniMax Coding Plan (China)
-  zenmux            ZenMux
   ollama-cloud      Ollama Cloud
 
 Examples:

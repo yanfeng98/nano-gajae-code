@@ -641,117 +641,6 @@ export function ollamaModelManagerOptions(config?: OllamaModelManagerConfig): Mo
 	};
 }
 
-const ZENMUX_OPENAI_BASE_URL = "https://zenmux.ai/api/v1";
-const ZENMUX_ANTHROPIC_BASE_URL = "https://zenmux.ai/api/anthropic";
-
-function normalizeZenMuxOpenAiBaseUrl(baseUrl?: string): string {
-	const value = baseUrl?.trim();
-	if (!value) {
-		return ZENMUX_OPENAI_BASE_URL;
-	}
-	return value.endsWith("/") ? value.slice(0, -1) : value;
-}
-
-function toZenMuxAnthropicBaseUrl(openAiBaseUrl: string): string {
-	try {
-		const parsed = new URL(openAiBaseUrl);
-		const trimmedPath = parsed.pathname.replace(/\/+$/g, "");
-		parsed.pathname = trimmedPath.endsWith("/api/v1")
-			? `${trimmedPath.slice(0, -"/api/v1".length)}/api/anthropic`
-			: "/api/anthropic";
-		return `${parsed.protocol}//${parsed.host}${parsed.pathname}`;
-	} catch {
-		return ZENMUX_ANTHROPIC_BASE_URL;
-	}
-}
-
-function isZenMuxAnthropicModel(entry: OpenAICompatibleModelRecord, modelId: string): boolean {
-	if (typeof entry.owned_by === "string" && entry.owned_by.toLowerCase() === "anthropic") {
-		return true;
-	}
-	return modelId.toLowerCase().startsWith("anthropic/");
-}
-
-function getZenMuxPricingValue(pricings: Record<string, unknown> | undefined, key: string): number {
-	const bucket = pricings?.[key];
-	if (!Array.isArray(bucket)) {
-		return 0;
-	}
-	for (const item of bucket) {
-		if (!isRecord(item)) {
-			continue;
-		}
-		const value = toNumber(item.value);
-		if (value !== undefined) {
-			return value;
-		}
-	}
-	return 0;
-}
-
-function getZenMuxCacheWritePrice(pricings: Record<string, unknown> | undefined): number {
-	const oneHour = getZenMuxPricingValue(pricings, "input_cache_write_1_h");
-	if (oneHour > 0) {
-		return oneHour;
-	}
-	const fiveMinute = getZenMuxPricingValue(pricings, "input_cache_write_5_min");
-	if (fiveMinute > 0) {
-		return fiveMinute;
-	}
-	return getZenMuxPricingValue(pricings, "input_cache_write");
-}
-
-// ---------------------------------------------------------------------------
-// 10.5 ZenMux
-// ---------------------------------------------------------------------------
-
-export interface ZenMuxModelManagerConfig {
-	apiKey?: string;
-	baseUrl?: string;
-}
-
-export function zenmuxModelManagerOptions(config?: ZenMuxModelManagerConfig): ModelManagerOptions<Api> {
-	const apiKey = config?.apiKey;
-	const openAiBaseUrl = normalizeZenMuxOpenAiBaseUrl(config?.baseUrl);
-	const anthropicBaseUrl = toZenMuxAnthropicBaseUrl(openAiBaseUrl);
-	return {
-		providerId: "zenmux",
-		...(apiKey && {
-			fetchDynamicModels: () =>
-				fetchOpenAICompatibleModels<Api>({
-					api: "openai-completions",
-					provider: "zenmux",
-					baseUrl: openAiBaseUrl,
-					apiKey,
-					mapModel: (entry, defaults) => {
-						const pricings = isRecord(entry.pricings) ? entry.pricings : undefined;
-						const capabilities = isRecord(entry.capabilities) ? entry.capabilities : undefined;
-						const isAnthropicModel = isZenMuxAnthropicModel(entry, defaults.id);
-						return {
-							...defaults,
-							name: toModelName(entry.display_name, defaults.name),
-							api: isAnthropicModel ? "anthropic-messages" : "openai-completions",
-							baseUrl: isAnthropicModel ? anthropicBaseUrl : openAiBaseUrl,
-							reasoning: capabilities?.reasoning === true || defaults.reasoning,
-							input: toInputCapabilities(entry.input_modalities),
-							cost: {
-								input: getZenMuxPricingValue(pricings, "prompt"),
-								output: getZenMuxPricingValue(pricings, "completion"),
-								cacheRead: getZenMuxPricingValue(pricings, "input_cache_read"),
-								cacheWrite: getZenMuxCacheWritePrice(pricings),
-							},
-							contextWindow: toPositiveNumber(entry.context_length, defaults.contextWindow),
-							maxTokens: toPositiveNumber(entry.max_completion_tokens, defaults.maxTokens),
-						};
-					},
-				}),
-		}),
-	};
-}
-
-
-
-
 // ---------------------------------------------------------------------------
 // 12. Kimi Code
 // ---------------------------------------------------------------------------
@@ -802,77 +691,7 @@ export function kimiCodeModelManagerOptions(
 				}),
 		}),
 	};
-}
-
-// ---------------------------------------------------------------------------
-// 12.5. LM Studio
-// ---------------------------------------------------------------------------
-
-export interface LmStudioModelManagerConfig {
-	apiKey?: string;
-	baseUrl?: string;
-}
-
-export function lmStudioModelManagerOptions(
-	config?: LmStudioModelManagerConfig,
-): ModelManagerOptions<"openai-completions"> {
-	const apiKey = config?.apiKey;
-	const baseUrl = config?.baseUrl ?? Bun.env.LM_STUDIO_BASE_URL ?? "http://127.0.0.1:1234/v1";
-	const references = createBundledReferenceMap<"openai-completions">("lm-studio" as any);
-	return {
-		providerId: "lm-studio",
-		fetchDynamicModels: () =>
-			fetchOpenAICompatibleModels({
-				api: "openai-completions",
-				provider: "lm-studio",
-				baseUrl,
-				apiKey,
-				mapModel: (entry, defaults) => {
-					const reference = references.get(defaults.id);
-					return mapWithBundledReference(entry, defaults, reference);
-				},
-			}),
-	};
-}
-
-
-// ---------------------------------------------------------------------------
-// 14. Venice
-// ---------------------------------------------------------------------------
-
-export interface VeniceModelManagerConfig {
-	apiKey?: string;
-	baseUrl?: string;
-}
-
-export function veniceModelManagerOptions(
-	config?: VeniceModelManagerConfig,
-): ModelManagerOptions<"openai-completions"> {
-	const apiKey = config?.apiKey;
-	const baseUrl = config?.baseUrl ?? "https://api.venice.ai/api/v1";
-	const references = createBundledReferenceMap<"openai-completions">("venice" as any);
-	return {
-		providerId: "venice",
-		fetchDynamicModels: () =>
-			fetchOpenAICompatibleModels({
-				api: "openai-completions",
-				provider: "venice",
-				baseUrl,
-				apiKey,
-				mapModel: (entry, defaults) => {
-					const reference = references.get(defaults.id);
-					const model = mapWithBundledReference(entry, defaults, reference);
-					return {
-						...model,
-						compat: { ...model.compat, supportsUsageInStreaming: false },
-					};
-				},
-			}),
-	};
-}
-
-
-// ---------------------------------------------------------------------------
+}// ---------------------------------------------------------------------------
 // 16. Moonshot
 // ---------------------------------------------------------------------------
 
@@ -914,73 +733,6 @@ export function moonshotModelManagerOptions(
 }
 
 
-
-
-// ---------------------------------------------------------------------------
-// 20. Xiaomi
-// ---------------------------------------------------------------------------
-
-export interface XiaomiModelManagerConfig {
-	apiKey?: string;
-	baseUrl?: string;
-}
-
-export function xiaomiModelManagerOptions(
-	config?: XiaomiModelManagerConfig,
-): ModelManagerOptions<"openai-completions"> {
-	const apiKey = config?.apiKey;
-	// Xiaomi splits API keys across two backends: standard `sk-` keys hit
-	// api.xiaomimimo.com; "token plan" `tp-` keys hit either the SG or EU
-	// token-plan host. Try SGP first; if discovery fails, retry AMS.
-	const TOKEN_PLAN_SGP_BASE_URL = "https://token-plan-sgp.xiaomimimo.com/v1";
-	const TOKEN_PLAN_AMS_BASE_URL = "https://token-plan-ams.xiaomimimo.com/v1";
-	const defaultBaseUrl = apiKey?.startsWith("tp-") ? TOKEN_PLAN_SGP_BASE_URL : "https://api.xiaomimimo.com/v1";
-	// Token-plan keys always use the TP baseUrl; config?.baseUrl (from catalog)
-	// would incorrectly pin to the standard endpoint (api.xiaomimimo.com).
-	const baseUrl = apiKey?.startsWith("tp-") ? defaultBaseUrl : (config?.baseUrl ?? defaultBaseUrl);
-	const references = createBundledReferenceMap<"openai-completions">("xiaomi" as any);
-	return {
-		providerId: "xiaomi",
-		...(apiKey && {
-			fetchDynamicModels: async () => {
-				const sgpResult = await fetchOpenAICompatibleModels({
-					api: "openai-completions",
-					provider: "xiaomi",
-					baseUrl,
-					apiKey,
-					filterModel: (_entry, model) => !model.id.includes("-tts"),
-					mapModel: (entry, defaults) => {
-						const reference = references.get(defaults.id);
-						const model = mapWithBundledReference(entry, defaults, reference);
-						return {
-							...model,
-							name: toModelName(entry.display_name, model.name),
-						};
-					},
-				});
-				if (sgpResult || !apiKey?.startsWith("tp-")) {
-					return sgpResult;
-				}
-				// Token-plan discovery failed with SGP; retry with AMS
-				return fetchOpenAICompatibleModels({
-					api: "openai-completions",
-					provider: "xiaomi",
-					baseUrl: TOKEN_PLAN_AMS_BASE_URL,
-					apiKey,
-					filterModel: (_entry, model) => !model.id.includes("-tts"),
-					mapModel: (entry, defaults) => {
-						const reference = references.get(defaults.id);
-						const model = mapWithBundledReference(entry, defaults, reference);
-						return {
-							...model,
-							name: toModelName(entry.display_name, model.name),
-						};
-					},
-				});
-			},
-		}),
-	};
-}
 
 // ---------------------------------------------------------------------------
 // 21. LiteLLM
@@ -1476,11 +1228,6 @@ const MODELS_DEV_PROVIDER_DESCRIPTORS_CORE: readonly ModelsDevProviderDescriptor
 const MODELS_DEV_PROVIDER_DESCRIPTORS_CODING_PLANS: readonly ModelsDevProviderDescriptor[] = [
 	// --- zAI ---
 	anthropicMessagesDescriptor("zai-coding-plan", "zai", "https://api.z.ai/api/anthropic"),
-	// --- Xiaomi ---
-	anthropicMessagesDescriptor("xiaomi", "xiaomi", "https://api.xiaomimimo.com/anthropic", {
-		defaultContextWindow: 262144,
-		defaultMaxTokens: 8192,
-	}),
 	// --- MiniMax Coding Plan ---
 	openAiCompletionsDescriptor("minimax-coding-plan", "minimax-code", "https://api.minimax.io/v1", {
 		compat: {
@@ -1532,16 +1279,6 @@ const MODELS_DEV_PROVIDER_DESCRIPTORS_SPECIALIZED: readonly ModelsDevProviderDes
 	// --- MiniMax (Anthropic) ---
 	anthropicMessagesDescriptor("minimax", "minimax", "https://api.minimax.io/anthropic"),
 	anthropicMessagesDescriptor("minimax-cn", "minimax-cn", "https://api.minimaxi.com/anthropic"),
-	// --- ZenMux ---
-	openAiCompletionsDescriptor("zenmux", "zenmux", ZENMUX_OPENAI_BASE_URL, {
-		filterModel: filterActiveToolCallModels,
-		resolveApi: modelId => {
-			if (modelId.startsWith("anthropic/")) {
-				return { api: "anthropic-messages" as const, baseUrl: ZENMUX_ANTHROPIC_BASE_URL };
-			}
-			return { api: "openai-completions" as const, baseUrl: ZENMUX_OPENAI_BASE_URL };
-		},
-	}),
 ];
 /** All provider descriptors for models.dev data mapping in generate-models.ts. */
 export const MODELS_DEV_PROVIDER_DESCRIPTORS: readonly ModelsDevProviderDescriptor[] = [

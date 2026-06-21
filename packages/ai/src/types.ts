@@ -69,9 +69,6 @@ export type KnownProvider =
 	| "kimi-code"
 	| "deepseek"
 	| "zai"
-	| "venice"
-	| "xiaomi"
-	| "zenmux"
 	| "opencode-go"
 	| "opencode-zen"
 	| "huggingface"
@@ -81,7 +78,7 @@ export type KnownProvider =
 	| "ollama"
 	| "ollama-cloud"
 	| "vllm"
-	| "lm-studio";
+;
 export type Provider = KnownProvider | string;
 
 import type { Effort } from "./model-thinking";
