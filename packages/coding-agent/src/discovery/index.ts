@@ -22,6 +22,8 @@ import "../capability/tool";
 // Import providers (each registers itself on import)
 import "./agents-md";
 import "./builtin";
+import "./claude";
+import "./claude-plugins";
 import "./cline";
 import "./agents";
 import "./gemini";

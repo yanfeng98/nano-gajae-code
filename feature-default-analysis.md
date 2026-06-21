@@ -1,6 +1,6 @@
 # Gajae-Code 功能默认状态完整分析
 
-> 分析日期: 2026-06-20 | 分支: 260613-v0.5.0-dev | 代码基线: 0.5.0
+> 分析日期: 2026-06-21 | 分支: 260613-v0.5.0-dev | 代码基线: 0.5.0
 >
 > **已执行移除（20 轮）**:
 > - 第一轮: macOS 电源管理 (~350 行)
@@ -24,6 +24,14 @@
 > - 第十九轮: Slash Command Helper 死代码清理（~800 行：未接入的 ACP 命令处理）
 > - 第二十轮: MCP Protocol 死代码清理（~500 行：未注册的 URL 协议处理器 + 残留 package.json 条目）
 > - 总计减少 ~84,700+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
+>
+> **生态激活**:
+> - Claude Code 配置发现：激活 `discovery/claude.ts` + `discovery/claude-plugins.ts`，支持从 `~/.claude/` 和项目 `.claude/` 导入技能/命令/钩子/工具/MCP/设置
+> - 用户级扫描：`claude.ts` 新增 `~/.claude/` 用户 home 目录扫描（原仅项目级）
+> - 技能过滤器修复：`extensibility/skills.ts` 的 `isSourceEnabled()` 从硬杀非 native provider 改为按 provider 分别判断（native/claude/claude-plugins 三分支，均支持 user/project 级别）
+> - 默认值修正：`enableClaudeUser`/`enableClaudeProject` 函数默认值 `false`（保守策略，需用户显式开启）
+> - 测试同步：2 个 skills.test.ts + default-gjc-definitions 测试已更新以反映新行为
+> - 配置方式：`gjc config set skills.enabled true` + `skills.enableClaudeUser true`
 
 本文档对 Gajae-Code 项目中所有功能的默认启用/关闭状态、代码体量、可选性和移除影响进行全面分析，为魔改裁剪提供决策依据。
 
@@ -131,8 +139,8 @@
 |--------|--------|------|
 | `skills.enabled` | `false` | **整个技能发现系统**的总开关 |
 | `skills.enableCodexUser` | `false` | 发现 Codex 用户级技能 |
-| `skills.enableClaudeUser` | `false` | 发现 Claude 用户级技能 |
-| `skills.enableClaudeProject` | `false` | 发现 Claude 项目级技能 |
+| `skills.enableClaudeUser` | `false` | 发现 Claude 用户级技能 ✅ 已接线（`isSourceEnabled()` 读取） |
+| `skills.enableClaudeProject` | `false` | 发现 Claude 项目级技能 ✅ 已接线（`isSourceEnabled()` 读取） |
 | `skills.enablePiUser` | `false` | 发现 GJC 用户级技能 |
 | `skills.enablePiProject` | `false` | 发现 GJC 项目级技能 |
 | `commands.enableClaudeUser` | `false` | Claude 用户级自定义命令 |
@@ -321,6 +329,37 @@
 - `runtime-mcp/manager.ts` + 其他 15 个 runtime-mcp 文件 — 被 `sdk.ts`, `agent-session.ts` 使用，支持 `.mcp.json` 配置和 MCP 工具发现
 
 验证: 构建零错误 ✅ | MCP 核心功能完好 ✅
+
+### 1.26 生态激活：Claude Code 配置发现
+
+> **状态**: 已激活。原本 `discovery/claude.ts` 和 `discovery/claude-plugins.ts` 是 OMP 迁移带入但从未注册的死 provider。现已在 `discovery/index.ts` 中注册，并修复了两道闸门使其真正可用。
+
+#### 1.26.1 激活的 Provider
+
+| Provider | 扫描目录 | 导入内容 |
+|----------|---------|---------|
+| `claude` (priority 80) | 项目 `.claude/` + `~/.claude/` | 技能、命令、钩子、工具、MCP 服务器、CLAUDE.md、SYSTEM.md、settings.json、扩展 |
+| `claude-plugins` (priority 70) | 项目 `.claude/plugins/` + 用户级 | GJC 市场插件（技能/命令/钩子/工具） |
+
+#### 1.26.2 修复的代码
+
+| 文件 | 修改 |
+|------|------|
+| `discovery/index.ts` | 新增 `import "./claude"` + `import "./claude-plugins"` |
+| `discovery/claude.ts` | 重写：新增 `getUserClaude()` 和所有 `load*` 函数的用户级扫描（原仅项目级） |
+| `extensibility/skills.ts` | `isSourceEnabled()` 从硬杀非 native → 按 provider 判断；`enableClaude*` 默认值改为 `false` |
+| `test/skills.test.ts` | 2 个测试更新："should ignore Codex skills but load Claude skills" + "registers the Claude skill provider by default" |
+
+#### 1.26.3 使用方式
+
+```sh
+gjc config set skills.enabled true              # 技能发现总开关
+gjc config set skills.enableClaudeUser true     # 允许 ~/.claude/skills/
+gjc config set skills.enableClaudeProject true  # 允许 项目/.claude/skills/
+gjc config get skills.enabled                   # 验证
+```
+
+> 注：`skills.enableClaudeUser` 和 `skills.enableClaudeProject` 原本是死旋钮（存在但从未被读取），本次修复后 `isSourceEnabled()` 真正读取它们。函数级默认值为 `false`（保守），需用户通过 `gjc config set` 显式开启。
 
 ---
 

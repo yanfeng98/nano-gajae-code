@@ -197,7 +197,7 @@ describe("skills", () => {
 			expect(skills.map(s => s.name)).toEqual(expectedFixtureSkillOrder);
 		});
 
-		it("should ignore Codex and Claude skills even when their source toggles are enabled", async () => {
+		it("should ignore Codex skills but load Claude skills when their source toggles are enabled", async () => {
 			const tempHomeDir = await fs.mkdtemp(path.join(os.tmpdir(), "gjc-external-skills-home-"));
 			const tempProjectDir = await fs.mkdtemp(path.join(os.tmpdir(), "gjc-external-skills-project-"));
 
@@ -226,17 +226,21 @@ describe("skills", () => {
 					enablePiProject: false,
 				});
 
-				expect(skills).toEqual([]);
+				// Claude project skills from temp dir should be loaded
+				expect(skills.some(s => s.name === "claude-project-skill")).toBe(true);
+				// Codex skills should still be ignored (provider not activated)
+				expect(skills.some(s => s.name === "codex-user-skill")).toBe(false);
+				expect(skills.some(s => s.name === "codex-project-skill")).toBe(false);
 			} finally {
 				await fs.rm(tempProjectDir, { recursive: true, force: true });
 				await fs.rm(tempHomeDir, { recursive: true, force: true });
 			}
 		});
 
-		it("does not register the Claude skill provider by default", async () => {
+		it("registers the Claude skill provider by default", async () => {
 			const capability = getCapability<CapabilitySkill>(skillCapability.id);
 			expect(capability).toBeDefined();
-			expect(capability?.providers.some(provider => provider.id === "claude")).toBe(false);
+			expect(capability?.providers.some(provider => provider.id === "claude")).toBe(true);
 		});
 
 		it("should filter out ignoredSkills", async () => {

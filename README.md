@@ -301,3 +301,29 @@ bun test packages/coding-agent/test/default-gjc-definitions.test.ts
 ```
 
 按包查看的项目地图请参见 [`docs/codebase-overview.md`](docs/codebase-overview.md)。
+
+### 使用 Claude Code 技能
+
+GJC 支持从 `~/.claude/skills/`（用户级）和项目 `.claude/skills/`（项目级）发现 Claude Code 技能。
+
+启用方式：
+
+```sh
+# 开启技能发现（总开关）
+gjc config set skills.enabled true
+
+# 允许 Claude 用户级技能（~/.claude/skills/）
+gjc config set skills.enableClaudeUser true
+
+# 允许 Claude 项目级技能（项目/.claude/skills/）
+gjc config set skills.enableClaudeProject true
+```
+
+同样支持从 `.claude/commands/`、`.claude/hooks/`、`.claude/tools/`、`.claude/CLAUDE.md`、`.claude/SYSTEM.md`、`.claude/mcp.json` 发现命令、钩子、工具和配置。
+
+验证设置：
+
+```sh
+gjc config get skills.enabled
+gjc config get skills.enableClaudeUser
+```

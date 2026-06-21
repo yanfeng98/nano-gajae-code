@@ -1,9 +1,9 @@
 /**
- * Anthropic Code project provider.
+ * Claude Code provider.
  *
- * Supports project-local `.Anthropic model/` compatibility only. User-home Anthropic model
- * directories are intentionally ignored so `~/.Anthropic model` content is never injected
- * into GJC sessions.
+ * Discovers Claude Code configuration from both project-local `.claude/` and
+ * user-home `~/.claude/` directories, importing settings, skills, commands,
+ * hooks, tools, MCP servers, and more into GJC sessions.
  */
 import * as path from "node:path";
 import { hasFsCode, tryParseJson } from "@gajae-code/utils";
@@ -38,43 +38,55 @@ function getProjectClaude(ctx: LoadContext): string {
 	return path.join(ctx.cwd, CONFIG_DIR);
 }
 
+function getUserClaude(ctx: LoadContext): string {
+	return path.join(ctx.home, CONFIG_DIR);
+}
+
 function isMissingDirectoryError(error: unknown): boolean {
 	return hasFsCode(error, "ENOENT") || hasFsCode(error, "ENOTDIR");
+}
+
+function parseMcpServers(content: string | null, filePath: string, level: "user" | "project"): MCPServer[] {
+	if (!content) return [];
+	const json = tryParseJson<{ mcpServers?: Record<string, unknown> }>(content);
+	if (!json?.mcpServers) return [];
+
+	const mcpServers = expandEnvVarsDeep(json.mcpServers);
+	return Object.entries(mcpServers).map(([name, config]) => {
+		const serverConfig = config as Record<string, unknown>;
+		return {
+			name,
+			timeout: typeof serverConfig.timeout === "number" ? serverConfig.timeout : undefined,
+			command: serverConfig.command as string | undefined,
+			args: serverConfig.args as string[] | undefined,
+			env: serverConfig.env as Record<string, string> | undefined,
+			url: serverConfig.url as string | undefined,
+			headers: serverConfig.headers as Record<string, string> | undefined,
+			transport: serverConfig.type as "stdio" | "sse" | "http" | undefined,
+			_source: createSourceMeta(PROVIDER_ID, filePath, level),
+		};
+	});
 }
 
 async function loadMCPServers(ctx: LoadContext): Promise<LoadResult<MCPServer>> {
 	const items: MCPServer[] = [];
 	const projectBase = getProjectClaude(ctx);
-	const projectPaths = [path.join(projectBase, ".mcp.json"), path.join(projectBase, "mcp.json")];
-	const contents = await Promise.all(projectPaths.map(filePath => readFile(filePath)));
+	const userBase = getUserClaude(ctx);
 
-	const parseMcpServers = (content: string | null, filePath: string): MCPServer[] => {
-		if (!content) return [];
-		const json = tryParseJson<{ mcpServers?: Record<string, unknown> }>(content);
-		if (!json?.mcpServers) return [];
+	const allPaths = [
+		{ base: projectBase, level: "project" as const },
+		{ base: userBase, level: "user" as const },
+	];
 
-		const mcpServers = expandEnvVarsDeep(json.mcpServers);
-		return Object.entries(mcpServers).map(([name, config]) => {
-			const serverConfig = config as Record<string, unknown>;
-			return {
-				name,
-				timeout: typeof serverConfig.timeout === "number" ? serverConfig.timeout : undefined,
-				command: serverConfig.command as string | undefined,
-				args: serverConfig.args as string[] | undefined,
-				env: serverConfig.env as Record<string, string> | undefined,
-				url: serverConfig.url as string | undefined,
-				headers: serverConfig.headers as Record<string, string> | undefined,
-				transport: serverConfig.type as "stdio" | "sse" | "http" | undefined,
-				_source: createSourceMeta(PROVIDER_ID, filePath, "project"),
-			};
-		});
-	};
-
-	for (let i = 0; i < projectPaths.length; i++) {
-		const servers = parseMcpServers(contents[i], projectPaths[i]);
-		if (servers.length > 0) {
-			items.push(...servers);
-			break;
+	for (const { base, level } of allPaths) {
+		const paths = [path.join(base, ".mcp.json"), path.join(base, "mcp.json")];
+		const contents = await Promise.all(paths.map(filePath => readFile(filePath)));
+		for (let i = 0; i < paths.length; i++) {
+			const servers = parseMcpServers(contents[i], paths[i], level);
+			if (servers.length > 0) {
+				items.push(...servers);
+				break;
+			}
 		}
 	}
 
@@ -84,18 +96,28 @@ async function loadMCPServers(ctx: LoadContext): Promise<LoadResult<MCPServer>> 
 async function loadContextFiles(ctx: LoadContext): Promise<LoadResult<ContextFile>> {
 	const items: ContextFile[] = [];
 	const projectBase = getProjectClaude(ctx);
-	const projectClaudeMd = path.join(projectBase, "CLAUDE.md");
-	const projectContent = await readFile(projectClaudeMd);
-	if (projectContent !== null) {
-		const depth = calculateDepth(ctx.cwd, path.dirname(projectBase), path.sep);
-		items.push({
-			path: projectClaudeMd,
-			content: projectContent,
-			level: "project",
-			depth,
-			_source: createSourceMeta(PROVIDER_ID, projectClaudeMd, "project"),
-		});
+	const userBase = getUserClaude(ctx);
+
+	const sources = [
+		{ base: projectBase, level: "project" as const },
+		{ base: userBase, level: "user" as const },
+	];
+
+	for (const { base, level } of sources) {
+		const claudeMd = path.join(base, "CLAUDE.md");
+		const content = await readFile(claudeMd);
+		if (content !== null) {
+			const depth = level === "project" ? calculateDepth(ctx.cwd, path.dirname(base), path.sep) : 0;
+			items.push({
+				path: claudeMd,
+				content,
+				level,
+				depth,
+				_source: createSourceMeta(PROVIDER_ID, claudeMd, level),
+			});
+		}
 	}
+
 	return { items, warnings: [] };
 }
 
@@ -116,7 +138,15 @@ async function loadSkills(ctx: LoadContext): Promise<LoadResult<Skill>> {
 		current = parent;
 	}
 
-	const results = await Promise.allSettled(projectScans);
+	// Also scan user-home .claude/skills/
+	const userScan = scanSkillsFromDir(ctx, {
+		dir: path.join(getUserClaude(ctx), "skills"),
+		providerId: PROVIDER_ID,
+		level: "user",
+	});
+	const allScans = [...projectScans, userScan];
+
+	const results = await Promise.allSettled(allScans);
 	const items: Skill[] = [];
 	const warnings: string[] = [];
 	for (const result of results) {
@@ -124,126 +154,185 @@ async function loadSkills(ctx: LoadContext): Promise<LoadResult<Skill>> {
 			items.push(...result.value.items);
 			warnings.push(...(result.value.warnings ?? []));
 		} else if (!isMissingDirectoryError(result.reason)) {
-			warnings.push(`Failed to scan Claude project skills: ${String(result.reason)}`);
+			warnings.push(`Failed to scan Claude skills: ${String(result.reason)}`);
 		}
 	}
 	return { items, warnings };
 }
 
 async function loadExtensionModules(ctx: LoadContext): Promise<LoadResult<ExtensionModule>> {
-	const projectExtensionsDir = path.join(getProjectClaude(ctx), "extensions");
-	const paths = await discoverExtensionModulePaths(ctx, projectExtensionsDir);
-	return {
-		items: paths.map(extPath => ({
-			name: getExtensionNameFromPath(extPath),
-			path: extPath,
-			level: "project" as const,
-			_source: createSourceMeta(PROVIDER_ID, extPath, "project"),
-		})),
-		warnings: [],
-	};
+	const items: ExtensionModule[] = [];
+
+	const sources = [
+		{ base: getProjectClaude(ctx), level: "project" as const },
+		{ base: getUserClaude(ctx), level: "user" as const },
+	];
+
+	for (const { base, level } of sources) {
+		const extensionsDir = path.join(base, "extensions");
+		const paths = await discoverExtensionModulePaths(ctx, extensionsDir);
+		for (const extPath of paths) {
+			items.push({
+				name: getExtensionNameFromPath(extPath),
+				path: extPath,
+				level,
+				_source: createSourceMeta(PROVIDER_ID, extPath, level),
+			});
+		}
+	}
+
+	return { items, warnings: [] };
 }
 
 async function loadSlashCommands(ctx: LoadContext): Promise<LoadResult<SlashCommand>> {
-	const projectCommandsDir = path.join(getProjectClaude(ctx), "commands");
-	return await loadFilesFromDir<SlashCommand>(ctx, projectCommandsDir, PROVIDER_ID, "project", {
-		extensions: ["md"],
-		transform: (name, content, filePath, source) => ({
-			name: name.replace(/\.md$/, ""),
-			path: filePath,
-			content,
-			level: "project",
-			_source: source,
-		}),
-	});
+	const items: SlashCommand[] = [];
+	const warnings: string[] = [];
+
+	const sources = [
+		{ dir: path.join(getProjectClaude(ctx), "commands"), level: "project" as const },
+		{ dir: path.join(getUserClaude(ctx), "commands"), level: "user" as const },
+	];
+
+	for (const { dir, level } of sources) {
+		const result = await loadFilesFromDir<SlashCommand>(ctx, dir, PROVIDER_ID, level, {
+			extensions: ["md"],
+			transform: (name, content, filePath, source) => ({
+				name: name.replace(/\.md$/, ""),
+				path: filePath,
+				content,
+				level,
+				_source: source,
+			}),
+		});
+		items.push(...result.items);
+		warnings.push(...(result.warnings ?? []));
+	}
+
+	return { items, warnings };
 }
 
 async function loadHooks(ctx: LoadContext): Promise<LoadResult<Hook>> {
 	const items: Hook[] = [];
 	const warnings: string[] = [];
-	const projectHooksDir = path.join(getProjectClaude(ctx), "hooks");
 	const hookTypes = ["pre", "post"] as const;
-	const results = await Promise.all(
-		hookTypes.map(hookType =>
-			loadFilesFromDir<Hook>(ctx, path.join(projectHooksDir, hookType), PROVIDER_ID, "project", {
-				transform: (name, _content, filePath, source) => ({
-					name,
-					path: filePath,
-					type: hookType,
-					tool: name.replace(/\.(sh|bash|zsh|fish)$/, ""),
-					level: "project",
-					_source: source,
+
+	const sources = [
+		{ base: getProjectClaude(ctx), level: "project" as const },
+		{ base: getUserClaude(ctx), level: "user" as const },
+	];
+
+	for (const { base, level } of sources) {
+		const hooksDir = path.join(base, "hooks");
+		const results = await Promise.all(
+			hookTypes.map(hookType =>
+				loadFilesFromDir<Hook>(ctx, path.join(hooksDir, hookType), PROVIDER_ID, level, {
+					transform: (name, _content, filePath, source) => ({
+						name,
+						path: filePath,
+						type: hookType,
+						tool: name.replace(/\.(sh|bash|zsh|fish)$/, ""),
+						level,
+						_source: source,
+					}),
 				}),
-			}),
-		),
-	);
-	for (const result of results) {
-		items.push(...result.items);
-		warnings.push(...(result.warnings ?? []));
+			),
+		);
+		for (const result of results) {
+			items.push(...result.items);
+			warnings.push(...(result.warnings ?? []));
+		}
 	}
+
 	return { items, warnings };
 }
 
 async function loadTools(ctx: LoadContext): Promise<LoadResult<CustomTool>> {
-	const projectToolsDir = path.join(getProjectClaude(ctx), "tools");
-	return await loadFilesFromDir<CustomTool>(ctx, projectToolsDir, PROVIDER_ID, "project", {
-		transform: (name, _content, filePath, source) => {
-			const toolName = name.replace(/\.(ts|js|sh|bash|py)$/, "");
-			return {
-				name: toolName,
-				path: filePath,
-				description: `${toolName} custom tool`,
-				level: "project",
-				_source: source,
-			};
-		},
-	});
+	const items: CustomTool[] = [];
+	const warnings: string[] = [];
+
+	const sources = [
+		{ dir: path.join(getProjectClaude(ctx), "tools"), level: "project" as const },
+		{ dir: path.join(getUserClaude(ctx), "tools"), level: "user" as const },
+	];
+
+	for (const { dir, level } of sources) {
+		const result = await loadFilesFromDir<CustomTool>(ctx, dir, PROVIDER_ID, level, {
+			transform: (name, _content, filePath, source) => {
+				const toolName = name.replace(/\.(ts|js|sh|bash|py)$/, "");
+				return {
+					name: toolName,
+					path: filePath,
+					description: `${toolName} custom tool`,
+					level,
+					_source: source,
+				};
+			},
+		});
+		items.push(...result.items);
+		warnings.push(...(result.warnings ?? []));
+	}
+
+	return { items, warnings };
 }
 
 async function loadSystemPrompts(ctx: LoadContext): Promise<LoadResult<SystemPrompt>> {
-	const projectSystemMd = path.join(getProjectClaude(ctx), "SYSTEM.md");
-	const content = await readFile(projectSystemMd);
-	return {
-		items:
-			content === null
-				? []
-				: [
-						{
-							path: projectSystemMd,
-							content,
-							level: "project",
-							_source: createSourceMeta(PROVIDER_ID, projectSystemMd, "project"),
-						},
-					],
-		warnings: [],
-	};
+	const items: SystemPrompt[] = [];
+
+	const sources = [
+		{ base: getProjectClaude(ctx), level: "project" as const },
+		{ base: getUserClaude(ctx), level: "user" as const },
+	];
+
+	for (const { base, level } of sources) {
+		const systemMd = path.join(base, "SYSTEM.md");
+		const content = await readFile(systemMd);
+		if (content !== null) {
+			items.push({
+				path: systemMd,
+				content,
+				level,
+				_source: createSourceMeta(PROVIDER_ID, systemMd, level),
+			});
+		}
+	}
+
+	return { items, warnings: [] };
 }
 
 async function loadSettings(ctx: LoadContext): Promise<LoadResult<Settings>> {
 	const items: Settings[] = [];
 	const warnings: string[] = [];
-	const projectSettingsJson = path.join(getProjectClaude(ctx), "settings.json");
-	const projectContent = await readFile(projectSettingsJson);
-	if (projectContent) {
-		const data = tryParseJson<Record<string, unknown>>(projectContent);
-		if (data) {
-			items.push({
-				path: projectSettingsJson,
-				data,
-				level: "project",
-				_source: createSourceMeta(PROVIDER_ID, projectSettingsJson, "project"),
-			} as Settings);
-		} else {
-			warnings.push(`Failed to parse JSON in ${projectSettingsJson}`);
+
+	const sources = [
+		{ base: getProjectClaude(ctx), level: "project" as const },
+		{ base: getUserClaude(ctx), level: "user" as const },
+	];
+
+	for (const { base, level } of sources) {
+		const settingsJson = path.join(base, "settings.json");
+		const content = await readFile(settingsJson);
+		if (content) {
+			const data = tryParseJson<Record<string, unknown>>(content);
+			if (data) {
+				items.push({
+					path: settingsJson,
+					data,
+					level,
+					_source: createSourceMeta(PROVIDER_ID, settingsJson, level),
+				} as Settings);
+			} else {
+				warnings.push(`Failed to parse JSON in ${settingsJson}`);
+			}
 		}
 	}
+
 	return { items, warnings };
 }
 
 registerProvider<MCPServer>(mcpCapability.id, {
 	id: PROVIDER_ID,
 	displayName: DISPLAY_NAME,
-	description: "Load MCP servers from project .claude/mcp.json",
+	description: "Load MCP servers from .claude/mcp.json (project and user)",
 	priority: PRIORITY,
 	load: loadMCPServers,
 });
@@ -251,7 +340,7 @@ registerProvider<MCPServer>(mcpCapability.id, {
 registerProvider<ContextFile>(contextFileCapability.id, {
 	id: PROVIDER_ID,
 	displayName: DISPLAY_NAME,
-	description: "Load CLAUDE.md files from project .claude/ directories",
+	description: "Load CLAUDE.md files from .claude/ directories (project and user)",
 	priority: PRIORITY,
 	load: loadContextFiles,
 });
@@ -259,7 +348,7 @@ registerProvider<ContextFile>(contextFileCapability.id, {
 registerProvider<Skill>(skillCapability.id, {
 	id: PROVIDER_ID,
 	displayName: DISPLAY_NAME,
-	description: "Load skills from project .claude/skills/",
+	description: "Load skills from .claude/skills/ (project and user)",
 	priority: PRIORITY,
 	load: loadSkills,
 });
@@ -267,7 +356,7 @@ registerProvider<Skill>(skillCapability.id, {
 registerProvider<ExtensionModule>(extensionModuleCapability.id, {
 	id: PROVIDER_ID,
 	displayName: DISPLAY_NAME,
-	description: "Load extension modules from project .claude/extensions",
+	description: "Load extension modules from .claude/extensions (project and user)",
 	priority: PRIORITY,
 	load: loadExtensionModules,
 });
@@ -275,7 +364,7 @@ registerProvider<ExtensionModule>(extensionModuleCapability.id, {
 registerProvider<SlashCommand>(slashCommandCapability.id, {
 	id: PROVIDER_ID,
 	displayName: DISPLAY_NAME,
-	description: "Load slash commands from project .claude/commands/*.md",
+	description: "Load slash commands from .claude/commands/*.md (project and user)",
 	priority: PRIORITY,
 	load: loadSlashCommands,
 });
@@ -283,7 +372,7 @@ registerProvider<SlashCommand>(slashCommandCapability.id, {
 registerProvider<Hook>(hookCapability.id, {
 	id: PROVIDER_ID,
 	displayName: DISPLAY_NAME,
-	description: "Load hooks from project .claude/hooks/pre/ and .claude/hooks/post/",
+	description: "Load hooks from .claude/hooks/pre/ and .claude/hooks/post/ (project and user)",
 	priority: PRIORITY,
 	load: loadHooks,
 });
@@ -291,7 +380,7 @@ registerProvider<Hook>(hookCapability.id, {
 registerProvider<CustomTool>(toolCapability.id, {
 	id: PROVIDER_ID,
 	displayName: DISPLAY_NAME,
-	description: "Load custom tools from project .claude/tools/",
+	description: "Load custom tools from .claude/tools/ (project and user)",
 	priority: PRIORITY,
 	load: loadTools,
 });
@@ -299,7 +388,7 @@ registerProvider<CustomTool>(toolCapability.id, {
 registerProvider<Settings>(settingsCapability.id, {
 	id: PROVIDER_ID,
 	displayName: DISPLAY_NAME,
-	description: "Load settings from project .claude/settings.json",
+	description: "Load settings from .claude/settings.json (project and user)",
 	priority: PRIORITY,
 	load: loadSettings,
 });
@@ -307,7 +396,7 @@ registerProvider<Settings>(settingsCapability.id, {
 registerProvider<SystemPrompt>(systemPromptCapability.id, {
 	id: PROVIDER_ID,
 	displayName: DISPLAY_NAME,
-	description: "Load system prompt from project .claude/SYSTEM.md",
+	description: "Load system prompt from .claude/SYSTEM.md (project and user)",
 	priority: PRIORITY,
 	load: loadSystemPrompts,
 });
