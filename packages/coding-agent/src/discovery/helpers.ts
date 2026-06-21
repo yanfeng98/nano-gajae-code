@@ -40,11 +40,6 @@ export const SOURCE_PATHS = {
 		userAgent: ".claude",
 		projectDir: ".claude",
 	},
-	codex: {
-		userBase: ".codex",
-		userAgent: ".codex",
-		projectDir: ".codex",
-	},
 	gemini: {
 		userBase: ".gemini",
 		userAgent: ".gemini",

@@ -2,7 +2,7 @@
 
 > 分析日期: 2026-06-21 | 分支: 260613-v0.5.0-dev | 代码基线: 0.5.0
 >
-> **已执行移除（21 轮）**:
+> **已执行移除（22 轮）**:
 > - 第一轮: macOS 电源管理 (~350 行)
 > - 第二轮: 全平台死代码清理 (~1,120 行)
 > - 第三轮: Hindsight 远程记忆系统 (~2,600 行)
@@ -24,7 +24,8 @@
 > - 第十九轮: Slash Command Helper 死代码清理（~800 行：未接入的 ACP 命令处理）
 > - 第二十轮: MCP Protocol 死代码清理（~500 行：未注册的 URL 协议处理器 + 残留 package.json 条目）
 > - 第二十一轮: Codex Discovery 死代码清理（~330 行：未激活的 provider + 12 个 package.json 死条目）
-> - 总计减少 ~85,000+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
+> - 第二十二轮: 死设置与死类型清理（~97 行：9 个死设置键 + 3 个死接口 + SOURCE_PATHS 条目）
+> - 总计减少 ~85,100+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
 >
 > **生态激活**:
 > - Claude Code 配置发现：激活 `discovery/claude.ts` + `discovery/claude-plugins.ts`，支持从 `~/.claude/` 和项目 `.claude/` 导入技能/命令/钩子/工具/MCP/设置
@@ -378,6 +379,48 @@ gjc config get skills.enabled                   # 验证
 - `discovery/index.ts` 中其他 12 个 provider — 均为存活状态
 
 验证: 构建零错误 ✅ | 全代码库零 `discovery/codex` 引用 ✅
+
+### 1.28 ~~死设置与死类型~~（✅ 第二十二轮 — 零消费者的 schema 残留）
+
+> **状态**: 已删除。9 个设置键在 `SETTINGS_SCHEMA` 中定义但全代码库零 `settings.get()` 调用，均为 OMP 迁移或已删功能残留。
+
+删除清单：
+
+**死设置键（`settings-schema.ts`，~56 行）：**
+
+| 设置键 | 说明 |
+|--------|------|
+| `tasks.todoClearDelay` | agent-session.ts 明确注释为 inert，带完整 TUI 面板（7 个选项） |
+| `extensions`（裸键） | 所有 `"extensions"` 引用均为目录路径，非设置读取 |
+| `marketplace.autoUpdate` | 无 UI，零消费者 |
+| `mcp.enableProjectConfig` | 零消费者（runtime-mcp 有同名局部属性，但通过函数参数传入） |
+| `mcp.discoveryDefaultServers` | 零消费者 |
+| `commands.enableClaudeUser` | 零消费者（对比：`commands.enableOpencodeUser` 由 opencode.ts 读取） |
+| `commands.enableClaudeProject` | 同上 |
+| `exa.enableResearcher` | exa/ 模块已在 R17 删除，该键成残留 |
+| `exa.enableWebsets` | 同上 |
+
+**死接口 + GroupTypeMap 条目（~33 行）：**
+
+| 接口 | 说明 |
+|------|------|
+| `MemoriesSettings` + `memories: MemoriesSettings` | `getGroup("memories")` 零调用，所有 `memories.*` 键通过 `settings.get()` 直接读取 |
+| `ExaSettings` + `exa: ExaSettings` | `getGroup("exa")` 零调用，含 2 个死字段 `enableResearcher`/`enableWebsets` |
+| `SttSettings` + `stt: SttSettings` | `getGroup("stt")` 零调用，含 2 个死字段 `whisperPath`/`modelPath`（schema 中无对应键） |
+
+**死 SOURCE_PATHS 条目（`helpers.ts`，~5 行）：**
+
+| 条目 | 说明 |
+|------|------|
+| `SOURCE_PATHS.codex` | `discovery/codex.ts` 已在 R21 删除，无 provider 以 `"codex"` 调用 `getUserPath`/`getProjectPath` |
+
+保留（活跃对照）：
+- `exa.enabled` / `exa.enableSearch` — `web/search/providers/exa.ts:177` 直接读取，保留
+- `stt.enabled` / `stt.language` / `stt.modelName` — `stt-controller.ts` 直接读取，保留
+- `memories.*` 全部 — `memories/index.ts` 直接读取，保留
+- `commands.enableOpencodeUser` / `commands.enableOpencodeProject` — `discovery/opencode.ts` 读取，保留
+
+验证: 构建零错误 ✅ | 4803 测试通过 ✅ | `settings.get()` 全代码库无对已删键的引用 ✅
 
 ---
 

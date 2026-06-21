@@ -263,14 +263,6 @@ export const SETTINGS_SCHEMA = {
 
 	shellPath: { type: "string", default: undefined },
 
-	extensions: { type: "array", default: EMPTY_STRING_ARRAY },
-
-	"marketplace.autoUpdate": {
-		type: "enum",
-		values: ["off", "notify", "auto"] as const,
-		default: "off",
-	},
-
 	enabledModels: { type: "array", default: EMPTY_STRING_ARRAY },
 
 	disabledProviders: { type: "array", default: EMPTY_STRING_ARRAY },
@@ -2019,20 +2011,9 @@ export const SETTINGS_SCHEMA = {
 		},
 	},
 
-	// MCP
-	"mcp.enableProjectConfig": {
-		type: "boolean",
-		default: false,
-	},
-
 	"mcp.discoveryMode": {
 		type: "boolean",
 		default: false,
-	},
-
-	"mcp.discoveryDefaultServers": {
-		type: "array",
-		default: [] as string[],
 	},
 
 	"mcp.notifications": {
@@ -2315,24 +2296,6 @@ export const SETTINGS_SCHEMA = {
 		default: {} as Record<string, string>,
 	},
 
-	"tasks.todoClearDelay": {
-		type: "number",
-		default: 60,
-		ui: {
-			tab: "tasks",
-			label: "Todo auto-clear delay",
-			description: "How long to wait before removing completed/abandoned tasks from the list",
-			options: [
-				{ value: "0", label: "Instant" },
-				{ value: "60", label: "1 minute", description: "Default" },
-				{ value: "300", label: "5 minutes" },
-				{ value: "900", label: "15 minutes" },
-				{ value: "1800", label: "30 minutes" },
-				{ value: "3600", label: "1 hour" },
-				{ value: "-1", label: "Never" },
-			],
-		},
-	},
 
 	// Skills
 	"skills.enabled": { type: "boolean", default: DEFAULT_SKILL_DISCOVERY_SETTINGS.enabled },
@@ -2359,16 +2322,6 @@ export const SETTINGS_SCHEMA = {
 	"skills.includeSkills": { type: "array", default: DEFAULT_SKILL_DISCOVERY_SETTINGS.includeSkills },
 
 	// Commands
-	"commands.enableClaudeUser": {
-		type: "boolean",
-		default: false,
-	},
-
-	"commands.enableClaudeProject": {
-		type: "boolean",
-		default: false,
-	},
-
 	"commands.enableOpencodeUser": {
 		type: "boolean",
 		default: false,
@@ -2549,17 +2502,7 @@ export const SETTINGS_SCHEMA = {
 		ui: { tab: "providers", label: "Exa Search", description: "Basic search, deep search, code search, crawl" },
 	},
 
-	"exa.enableResearcher": {
-		type: "boolean",
-		default: false,
-		ui: { tab: "providers", label: "Exa Researcher", description: "AI-powered deep research tasks" },
-	},
 
-	"exa.enableWebsets": {
-		type: "boolean",
-		default: false,
-		ui: { tab: "providers", label: "Exa Websets", description: "Webset management and enrichment tools" },
-	},
 
 	// SearXNG
 	"searxng.endpoint": {
@@ -2728,23 +2671,6 @@ export interface RetrySettings {
 	streamMaxRetries: number;
 }
 
-export interface MemoriesSettings {
-	enabled: boolean;
-	maxRolloutsPerStartup: number;
-	maxRolloutAgeDays: number;
-	minRolloutIdleHours: number;
-	threadScanLimit: number;
-	maxRawMemoriesForGlobal: number;
-	stage1Concurrency: number;
-	stage1LeaseSeconds: number;
-	stage1RetryDelaySeconds: number;
-	phase2LeaseSeconds: number;
-	phase2RetryDelaySeconds: number;
-	phase2HeartbeatSeconds: number;
-	rolloutPayloadPercent: number;
-	fallbackTokenLimit: number;
-	summaryInjectionTokenLimit: number;
-}
 
 export interface TodoCompletionSettings {
 	enabled: boolean;
@@ -2777,12 +2703,6 @@ export interface TtsrSettings {
 	repeatGap: number;
 }
 
-export interface ExaSettings {
-	enabled: boolean;
-	enableSearch: boolean;
-	enableResearcher: boolean;
-	enableWebsets: boolean;
-}
 
 export interface StatusLineSettings {
 	preset: StatusLinePreset;
@@ -2803,13 +2723,6 @@ export interface ThinkingBudgetsSettings {
 	max: number;
 }
 
-export interface SttSettings {
-	enabled: boolean;
-	language: string | undefined;
-	modelName: string;
-	whisperPath: string | undefined;
-	modelPath: string | undefined;
-}
 
 export interface BashInterceptorRule {
 	pattern: string;
@@ -2832,15 +2745,12 @@ export interface GroupTypeMap {
 	compaction: CompactionSettings;
 	contextPromotion: ContextPromotionSettings;
 	retry: RetrySettings;
-	memories: MemoriesSettings;
 	branchSummary: BranchSummarySettings;
 	skills: SkillsSettings;
 	commit: CommitSettings;
 	ttsr: TtsrSettings;
-	exa: ExaSettings;
 	statusLine: StatusLineSettings;
 	thinkingBudgets: ThinkingBudgetsSettings;
-	stt: SttSettings;
 	modelRoles: Record<string, string>;
 	modelTags: ModelTagsSettings;
 	cycleOrder: string[];

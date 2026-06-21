@@ -5096,8 +5096,8 @@ export class AgentSession {
 	// Auto-clear of completed/abandoned tasks was removed: the timer-driven
 	// splice mutated canonical `#todoPhases` between tool calls, so the model
 	// observed phase totals shrinking ("5 → 4") after marking tasks done. The
-	// `tasks.todoClearDelay` setting is now inert; completed tasks survive
-	// until the next explicit `todo_write` call removes them via `rm`/`drop`.
+	// Completed tasks survive until the next explicit `todo_write` call removes
+	// them via `rm`/`drop`.
 
 	/**
 	 * Abort current operation and wait for agent to become idle.
