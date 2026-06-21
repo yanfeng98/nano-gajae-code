@@ -93,11 +93,8 @@
 			"types": "./src/index.ts",
 			"import": "./src/index.ts"
 		},
-		"./mcp": null,
-		"./mcp/*": null,
 		"./runtime-mcp": null,
 		"./runtime-mcp/*": null,
-		"./commands/gjc-runtime-bridge": null,
 		"./capability/mcp": null,
 		"./config/mcp-schema": null,
 		"./discovery/mcp-json": null,
@@ -129,14 +126,6 @@
 			"types": "./src/cli/commands/*.ts",
 			"import": "./src/cli/commands/*.ts"
 		},
-		"./autoresearch": null,
-		"./autoresearch/*": null,
-		"./autoresearch/tools/*": null,
-		"./commands/autoresearch": null,
-		"./commands/ralph": null,
-		"./commands/ultraqa": null,
-		"./commands/ultrawork": null,
-		"./commands/performance-goal": null,
 		"./commands/*": {
 			"types": "./src/commands/*.ts",
 			"import": "./src/commands/*.ts"

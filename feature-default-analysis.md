@@ -2,7 +2,7 @@
 
 > 分析日期: 2026-06-21 | 分支: 260613-v0.5.0-dev | 代码基线: 0.5.0
 >
-> **已执行移除（20 轮）**:
+> **已执行移除（21 轮）**:
 > - 第一轮: macOS 电源管理 (~350 行)
 > - 第二轮: 全平台死代码清理 (~1,120 行)
 > - 第三轮: Hindsight 远程记忆系统 (~2,600 行)
@@ -23,7 +23,8 @@
 > - 第十八轮: MCP 交互式管理界面移除（~4,000 行：被隔离的 TUI 死代码链）
 > - 第十九轮: Slash Command Helper 死代码清理（~800 行：未接入的 ACP 命令处理）
 > - 第二十轮: MCP Protocol 死代码清理（~500 行：未注册的 URL 协议处理器 + 残留 package.json 条目）
-> - 总计减少 ~84,700+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
+> - 第二十一轮: Codex Discovery 死代码清理（~330 行：未激活的 provider + 12 个 package.json 死条目）
+> - 总计减少 ~85,000+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
 >
 > **生态激活**:
 > - Claude Code 配置发现：激活 `discovery/claude.ts` + `discovery/claude-plugins.ts`，支持从 `~/.claude/` 和项目 `.claude/` 导入技能/命令/钩子/工具/MCP/设置
@@ -49,7 +50,7 @@
 | 已知 Provider 类型 | 19 个 |
 | 内置 Tool 数 | 31 个 (BUILTIN_TOOLS) + 3 个 (HIDDEN_TOOLS) |
 | Settings 配置项 | ~104 个 (已移除 4 power + 32 hindsight) |
-| 已移除代码行数 | ~84,700+ 行 (二十轮) |
+| 已移除代码行数 | ~85,000+ 行 (二十一轮) |
 | 运行模式 | 3 种 (interactive, print, bridge) |
 | CLI 子命令 | 14 个 |
 
@@ -361,6 +362,23 @@ gjc config get skills.enabled                   # 验证
 
 > 注：`skills.enableClaudeUser` 和 `skills.enableClaudeProject` 原本是死旋钮（存在但从未被读取），本次修复后 `isSourceEnabled()` 真正读取它们。函数级默认值为 `false`（保守），需用户通过 `gjc config set` 显式开启。
 
+### 1.27 ~~Codex Discovery Provider~~（✅ 第二十一轮 — 未激活的 provider）
+
+> **状态**: 已删除。`discovery/codex.ts` 实现了 OpenAI Codex 配置发现（扫描 `.codex/` 目录），但从未在 `discovery/index.ts` 中注册，与其他 14 个 provider 不同（其中 claude 和 claude-plugins 已在本轮激活）。同时清理了 `package.json` 中 12 个指向已删除文件的 null 导出条目。
+
+删除清单：
+| 文件 | 操作 |
+|------|------|
+| `src/discovery/codex.ts` (~330 行) | 删除 — 零消费者，OMP 迁移带入但从未接线 |
+| `package.json` | 移除 12 行死 null 条目（`./mcp`, `./autoresearch`, `./commands/ralph` 等） |
+
+保留（已激活的 provider）：
+- `discovery/claude.ts` — 1.26 已激活，扫描 `.claude/` + `~/.claude/`
+- `discovery/claude-plugins.ts` — 1.26 已激活，GJC 市场插件
+- `discovery/index.ts` 中其他 12 个 provider — 均为存活状态
+
+验证: 构建零错误 ✅ | 全代码库零 `discovery/codex` 引用 ✅
+
 ---
 
 ## 二、内置默认 Tool 完整清单
@@ -641,7 +659,7 @@ svelte, swift, tlaplus, verilog, vue, xml, zig
 - `dap/`, `debug/`
 - `tools/puppeteer/`, `tools/browser/`
 
-> 注: `modes/acp/`、`hindsight/`、`autoresearch/`、两个 benchmark package、`modes/rpc/`、`bridge-client/`、`python/`、`harness-control-plane/`、`exa/`、MCP 管理界面、ACP helper、MCP protocol 等已在前二十轮移除。
+> 注: `modes/acp/`、`hindsight/`、`autoresearch/`、两个 benchmark package、`modes/rpc/`、`bridge-client/`、`python/`、`harness-control-plane/`、`exa/`、MCP 管理界面、ACP helper、MCP protocol、`discovery/codex.ts` 等已在前二十一轮移除。
 
 **Settings 清理**:
 - 删除所有 `default: false` 且对应代码已移除的配置项
