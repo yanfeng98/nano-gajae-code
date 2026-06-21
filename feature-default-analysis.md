@@ -2,7 +2,7 @@
 
 > 分析日期: 2026-06-21 | 分支: 260613-v0.5.0-dev | 代码基线: 0.5.0
 >
-> **已执行移除（22 轮）**:
+> **已执行移除（23 轮）**:
 > - 第一轮: macOS 电源管理 (~350 行)
 > - 第二轮: 全平台死代码清理 (~1,120 行)
 > - 第三轮: Hindsight 远程记忆系统 (~2,600 行)
@@ -25,7 +25,8 @@
 > - 第二十轮: MCP Protocol 死代码清理（~500 行：未注册的 URL 协议处理器 + 残留 package.json 条目）
 > - 第二十一轮: Codex Discovery 死代码清理（~330 行：未激活的 provider + 12 个 package.json 死条目）
 > - 第二十二轮: 死设置与死类型清理（~97 行：9 个死设置键 + 3 个死接口 + SOURCE_PATHS 条目）
-> - 总计减少 ~85,100+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
+> - 第二十三轮: 未注册 CLI 命令链清理（~4,157 行：12 个死命令 + 11 个 helper + 2 个测试文件）
+> - 总计减少 ~89,300+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
 >
 > **生态激活**:
 > - Claude Code 配置发现：激活 `discovery/claude.ts` + `discovery/claude-plugins.ts`，支持从 `~/.claude/` 和项目 `.claude/` 导入技能/命令/钩子/工具/MCP/设置
@@ -421,6 +422,41 @@ gjc config get skills.enabled                   # 验证
 - `commands.enableOpencodeUser` / `commands.enableOpencodeProject` — `discovery/opencode.ts` 读取，保留
 
 验证: 构建零错误 ✅ | 4803 测试通过 ✅ | `settings.get()` 全代码库无对已删键的引用 ✅
+
+### 1.29 ~~未注册 CLI 命令链~~（✅ 第二十三轮 — cli.ts 未注册的死命令）
+
+> **状态**: 已删除。12 个命令文件存在于 `commands/` 但从未在 `cli.ts` 注册，不可达。git log 追溯到 `a14c0cfb`（"Narrow GJC to the retained workflow utility surface"）——原始作者刻意将 gjc 命令表从 24 个收窄到 7 个核心工作流命令，但未同步删除源文件。
+
+删除清单：
+
+**死命令文件（`commands/`，12 文件，639 行）：**
+
+| 文件 | 功能 | 删除原因 |
+|------|------|---------|
+| `auth-broker.ts` | OAuth 凭证保险库（serve/login/logout/import/migrate） | 单人 WSL2 开发，环境变量即可 |
+| `auth-gateway.ts` | 凭证前置代理（依赖 broker） | 同上 |
+| `agents.ts` | 导出内置 agent 定义到 `.gjc/agents/` | 直接改 `prompts/agents/` 源码更方便 |
+| `commit.ts` | AI 生成 commit message + changelog | 与 `contribute-pr` 功能重叠 |
+| `grep.ts` | 测试 ripgrep 工具参数 | 调试工具，直接 `rg` 更快 |
+| `plugin.ts` | 插件市场（install/uninstall/discover/upgrade） | fork 已大量裁剪，插件生态无意义 |
+| `read.ts` | 预览 read 工具输出 | 调试工具 |
+| `shell.ts` | 交互式 shell 控制台 | tmux + bash 已覆盖 |
+| `ssh.ts` | SSH 主机配置管理 | `~/.ssh/config` 直接管理 |
+| `stats.ts` | 使用量统计 Web 仪表盘 | TUI 内已有实时统计 |
+| `web-search.ts` | 测试搜索提供商 | 搜索在 TUI 内正常工作 |
+| `worktree.ts` | 管理 `~/.gjc/wt/` 自动 worktree | 用户手动指定 worktree 路径 |
+
+**死 CLI 辅助文件（`cli/`，11 文件，3,467 行）：**
+`agents-cli.ts`(141), `auth-broker-cli.ts`(739), `auth-gateway-cli.ts`(411), `grep-cli.ts`(160), `plugin-cli.ts`(942), `read-cli.ts`(57), `shell-cli.ts`(176), `ssh-cli.ts`(179), `stats-cli.ts`(238), `web-search-cli.ts`(133), `worktree-cli.ts`(291)
+
+**死测试文件（2 文件，51 行）：**
+`commit-command-exit.test.ts`(35), `plugin-command.test.ts`(16)
+
+保留（共享模块）：
+- `session/auth-broker-config.ts` — `sdk.ts:82` 导入，保留
+- `commit/` 模块 — `runCommitCommand` 仅被死 `commands/commit.ts` 导入，但模块本身保留
+
+验证: 构建零错误 ✅ | 4795 测试通过 ✅ | cli.ts 注册表 15 命令完好 | 核心命令 deep-interview/ralplan/ultragoal/team 全部注册
 
 ---
 
