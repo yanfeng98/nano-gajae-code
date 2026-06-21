@@ -58,8 +58,8 @@ export default class Index extends Command {
 			description: "Allow starting in ~ without auto-switching to a temp dir",
 		}),
 		mode: Flags.string({
-			description: "Output mode: text (default), json, or bridge",
-			options: ["text", "json", "bridge"],
+			description: "Output mode: text (default) or json",
+			options: ["text", "json"],
 		}),
 		print: Flags.boolean({
 			char: "p",

@@ -2,7 +2,7 @@
 
 > 分析日期: 2026-06-21 | 分支: 260613-v0.5.0-dev | 代码基线: 0.5.0
 >
-> **已执行移除（29 轮）**:
+> **已执行移除（30 轮）**:
 > - 第一轮: macOS 电源管理 (~350 行)
 > - 第二轮: 全平台死代码清理 (~1,120 行)
 > - 第三轮: Hindsight 远程记忆系统 (~2,600 行)
@@ -32,7 +32,8 @@
 > - 第二十七轮: LiteLLM Provider 完整移除（~16,338 行：810 个垃圾模型 + OAuth + descriptor，models.json 21,430→5,197 行）
 > - 第二十八轮: lm-studio 僵尸代码 + xiaomi 残留清理（~60 行：DEFAULT_LOCAL_TOKEN 哨兵 + 自动注册 + 测试 xiaomi 条目）
 > - 第二十九轮: 与已删除 Provider 关联的死测试清理（~700 行：3 个整文件 + 6 个测试块，coding-agent 测试 64→44 fail）
-> - 总计减少 ~114,160+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
+> - 第三十轮: Bridge Mode 完整移除（~5,960 行：49 文件，含 bridge/agent-wire 目录 + 26 测试）
+> - 总计减少 ~120,120+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
 >
 > **生态激活**:
 > - Claude Code 配置发现：激活 `discovery/claude.ts` + `discovery/claude-plugins.ts`，支持从 `~/.claude/` 和项目 `.claude/` 导入技能/命令/钩子/工具/MCP/设置
@@ -58,7 +59,7 @@
 | 已知 Provider 类型 | 19 个 |
 | 内置 Tool 数 | 31 个 (BUILTIN_TOOLS) + 3 个 (HIDDEN_TOOLS) |
 | Settings 配置项 | ~95 个 (已移除 4 power + 32 hindsight + 9 dead keys) |
-| 已移除代码行数 | ~114,160+ 行 (二十九轮) |
+| 已移除代码行数 | ~120,120+ 行 (三十轮) |
 | 运行模式 | 3 种 (interactive, print, bridge) |
 | CLI 子命令 | 14 个 |
 
@@ -705,6 +706,30 @@ commit/
 **测试改善：** coding-agent 测试 4786 pass / 64 fail → 4782 pass / 44 fail（-20 fail）。剩余 44 fail 均为非 provider 相关（ModelRegistry 覆盖/元数据、模型解析、视觉工具等）。
 
 验证: 构建零错误 ✅ | AI 1015 pass / 36 fail（不变）✅ | coding-agent 4782 pass / 44 fail ✅ | 清理 20 个死测试失败
+
+### 1.36 ~~Bridge Mode 完整移除~~（✅ 第三十轮 — 永久 fail-closed 的 HTTPS 远程控制面）
+
+> **状态**: 已删除。Bridge mode 将 GJC 暴露为 HTTPS 远程控制面，允许外部程序通过网络控制 AgentSession。6 个核心端点默认 fail-closed，`GJC_BRIDGE_ENDPOINTS` escape hatch 从未合入当前分支。用户不需要远程多 agent 编排（推荐方案 `gjc --tmux` 已在用）。
+
+**删除清单（49 文件，5,963 行）：**
+
+| 类别 | 文件数 | 内容 |
+|------|--------|------|
+| `modes/bridge/` | 5 | bridge-mode.ts, auth.ts, event-stream.ts, bridge-client-bridge.ts, bridge-ui-context.ts |
+| agent-wire DELETE | 12 | command-contract, command-validation, event-contract, event-envelope, event-observation, handshake, host-tool-bridge, host-uri-bridge, protocol, ui-request-broker, ui-result, unattended-audit |
+| `test/bridge/` | 16 | 全目录删除 |
+| `test/agent-wire/` | 5 | 全目录删除（测试已删除的 agent-wire 文件） |
+| 其他死测试 | 4 | agent-wire-conformance, agent-wire-conformance-meta.redteam, unattended-audit, unattended-audit-export, unattended-audit-redteam |
+| CLI 集成 | 4 文件 | cli.ts（mode options）、args.ts（Mode 类型）、commands/launch.ts（mode options）、main.ts（~30 行：设置覆盖、@file 守卫、分发） |
+| 文档 | 2 | docs/bridge.md + docs-index 重生 |
+
+**核心能力保护：**
+- agent-wire 23 个文件中，**11 个保留**（被 `tools/ask.ts`、`tools/index.ts`、`session/agent-session.ts` 依赖）：rpc-types、workflow-gate-schema、workflow-gate-broker、deep-interview-gate、approval-gate、unattended-session、command-dispatch、scopes、unattended-run-controller、unattended-action-policy、responses
+- 4 个核心能力（deep-interview/ralplan/ultragoal/team）CLI 注册完整，workflow gate 审批链路不受影响
+
+**测试改善：** AI 1015 pass / 36 fail（不变）。coding-agent 4637 pass / 44 fail（-145 pass 来自删除的 bridge/agent-wire 测试，44 fail 全为预有）。
+
+验证: 构建零错误 ✅ | 源文件零 bridge 残留 ✅ | 核心能力完整 ✅
 
 ---
 

@@ -29,7 +29,7 @@ import { findConfigFile } from "./config";
 import { activateModelProfile } from "./config/model-profile-activation";
 import { ModelRegistry, ModelsConfigFile } from "./config/model-registry";
 import { resolveCliModel, resolveModelRoleValue, resolveModelScope, type ScopedModel } from "./config/model-resolver";
-import { getDefault, type SettingPath, Settings, settings } from "./config/settings";
+import { type SettingPath, Settings, settings } from "./config/settings";
 import { initializeWithSettings } from "./discovery";
 import { exportFromFile } from "./export/html";
 import type { ExtensionUIContext } from "./extensibility/extensions/types";
@@ -64,41 +64,9 @@ async function checkForNewVersion(currentVersion: string): Promise<string | unde
 		const data = (await response.json()) as { version?: string };
 		const latestVersion = data.version;
 
-		if (latestVersion && Bun.semver.order(latestVersion, currentVersion) > 0) {
-			return latestVersion;
-		}
-
 		return undefined;
 	} catch {
 		return undefined;
-	}
-}
-
-const BRIDGE_DEFAULTED_SETTING_PATHS: SettingPath[] = [
-	"todo.enabled",
-	"todo.reminders",
-	"todo.reminders.max",
-	"todo.eager",
-	"async.enabled",
-	"async.maxJobs",
-	"bash.autoBackground.enabled",
-	"bash.autoBackground.thresholdMs",
-	"task.isolation.mode",
-	"task.isolation.merge",
-	"task.isolation.commits",
-	"task.eager",
-	"task.simple",
-	"task.maxConcurrency",
-	"task.maxRecursionDepth",
-	"task.disabledAgents",
-	"task.agentModelOverrides",
-	"memory.backend",
-	"memories.enabled",
-];
-
-function applyBridgeDefaultSettingOverrides(targetSettings: Settings = settings): void {
-	for (const settingPath of BRIDGE_DEFAULTED_SETTING_PATHS) {
-		targetSettings.override(settingPath, getDefault(settingPath));
 	}
 }
 
@@ -707,27 +675,13 @@ export async function runRootCommand(
 		process.exit(0);
 	}
 
-	if (
-		parsedArgs.mode === "bridge" &&
-		parsedArgs.fileArgs.length > 0
-	) {
-		process.stderr.write(`${chalk.red("Error: @file arguments are not supported in bridge mode")}\n`);
-		process.exit(1);
-	}
-
 	const cwd = getProjectDir();
 	const settingsInstance = deps.settings ?? (await logger.time("settings:init", Settings.init, { cwd }));
-	if (
-		parsedArgs.mode === "bridge") {
-		applyBridgeDefaultSettingOverrides(settingsInstance);
-	}
 	modelRegistry.applyConfiguredModelBindings(settingsInstance);
 	if (parsedArgs.noPty) {
 		Bun.env.PI_NO_PTY = "1";
 	}
-	if (
-		parsedArgs.noTitle ||
-		parsedArgs.mode === "bridge") {
+		if (parsedArgs.noTitle) {
 		Bun.env.PI_NO_TITLE = "1";
 	}
 	const { pipedInput, fileText, fileImages } = await logger.time("prepareInitialMessage", async () => {
@@ -893,11 +847,6 @@ export async function runRootCommand(
 				`${chalk.yellow(`\nAdvanced manual config remains available at ${ModelsConfigFile.path()}`)}\n`,
 			);
 			process.exit(1);
-		}
-
-		if (mode === "bridge") {
-			const { runBridgeMode } = await import("./modes/bridge/bridge-mode");
-			await runBridgeMode(session, setToolUIContext);
 		} else if (isInteractive) {
 			const versionCheckPromise = checkForNewVersion(VERSION).catch(() => undefined);
 			const changelogMarkdown = await logger.time("main:getChangelogForDisplay", getChangelogForDisplay, parsedArgs);
@@ -910,7 +859,8 @@ export async function runRootCommand(
 						return `${scopedModel.model.id}${thinkingStr}`;
 					})
 					.join(", ");
-				process.stdout.write(`${chalk.dim(`Model scope: ${modelList} ${chalk.gray("(Ctrl+P to cycle)")}`)}\n`);
+				process.stdout.write(`${chalk.dim(`Model scope: ${modelList} ${chalk.gray("(Ctrl+P to cycle)")}`)}
+`);
 			}
 
 			if ($env.PI_TIMING) {

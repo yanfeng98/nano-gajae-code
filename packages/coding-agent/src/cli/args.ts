@@ -7,7 +7,7 @@ import chalk from "chalk";
 import { parseEffort } from "../thinking";
 import { BUILTIN_TOOLS } from "../tools";
 
-export type Mode = "text" | "json" | "bridge";
+export type Mode = "text" | "json";
 
 export interface Args {
 	cwd?: string;
@@ -100,8 +100,7 @@ export function parseArgs(args: string[]): Args {
 			const mode = args[++i];
 			if (
 				mode === "text" ||
-				mode === "json" ||
-				mode === "bridge"
+				mode === "json"
 			) {
 				result.mode = mode;
 			}
