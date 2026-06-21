@@ -1403,12 +1403,6 @@ export class AuthStorage {
 				await saveApiKeyCredential(apiKey);
 				return;
 			}
-			case "litellm": {
-				const { loginLiteLLM } = await import("./utils/oauth/litellm");
-				const apiKey = await loginLiteLLM(ctrl);
-				await saveApiKeyCredential(apiKey);
-				return;
-			}
 			case "moonshot": {
 				const { loginMoonshot } = await import("./utils/oauth/moonshot");
 				const apiKey = await loginMoonshot(ctrl);

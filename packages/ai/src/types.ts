@@ -72,7 +72,6 @@ export type KnownProvider =
 	| "opencode-go"
 	| "opencode-zen"
 	| "huggingface"
-	| "litellm"
 	| "minimax-cn"
 	| "moonshot"
 	| "ollama"

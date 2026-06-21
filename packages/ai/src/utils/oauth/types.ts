@@ -16,7 +16,6 @@ export type OAuthProvider =
 	| "huggingface"
 	| "kimi-code"
 	| "kagi"
-	| "litellm"
 	| "minimax-code"
 	| "minimax-code-cn"
 	| "moonshot"

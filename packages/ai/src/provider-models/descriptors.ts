@@ -13,7 +13,6 @@ import {
 	deepseekModelManagerOptions,
 	huggingfaceModelManagerOptions,
 	kimiCodeModelManagerOptions,
-	litellmModelManagerOptions,
 	moonshotModelManagerOptions,
 	ollamaModelManagerOptions,
 	openaiModelManagerOptions,
@@ -137,12 +136,6 @@ export const PROVIDER_DESCRIPTORS: readonly ProviderDescriptor[] = [
 		"kimi-k2.5",
 		config => kimiCodeModelManagerOptions(config),
 		catalog("Kimi Code", ["KIMI_API_KEY"]),
-	),
-	catalogDescriptor(
-		"litellm",
-		"claude-opus-4-6",
-		config => litellmModelManagerOptions(config),
-		catalog("LiteLLM", ["LITELLM_API_KEY"], { allowUnauthenticated: true }),
 	),
 	catalogDescriptor(
 		"vllm",

@@ -31,11 +31,6 @@ const builtInOAuthProviders: OAuthProviderInfo[] = [
 		available: true,
 	},
 	{
-		id: "litellm",
-		name: "LiteLLM",
-		available: true,
-	},
-	{
 		id: "ollama",
 		name: "Ollama (Local OpenAI-compatible)",
 		available: true,

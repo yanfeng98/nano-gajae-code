@@ -2,7 +2,7 @@
 
 > 分析日期: 2026-06-21 | 分支: 260613-v0.5.0-dev | 代码基线: 0.5.0
 >
-> **已执行移除（26 轮）**:
+> **已执行移除（27 轮）**:
 > - 第一轮: macOS 电源管理 (~350 行)
 > - 第二轮: 全平台死代码清理 (~1,120 行)
 > - 第三轮: Hindsight 远程记忆系统 (~2,600 行)
@@ -29,7 +29,8 @@
 > - 第二十四轮: 死模块与死依赖链清理（~3,594 行：14 个死源文件 + 3 个死测试 + 1 个测试编辑 + 1 个 barrel 修复）
 > - 第二十五轮: 死 commit/ 子系统完整移除（~3,740 行：44 个死源文件 + 2 个死测试，commit/ 从 ~50 文件缩减到 3 文件）
 > - 第二十六轮: 4 个死配置 Provider 移除（~540 行：venice/xiaomi/zenmux/lm-studio，10 文件）
-> - 总计减少 ~97,100+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
+> - 第二十七轮: LiteLLM Provider 完整移除（~16,338 行：810 个垃圾模型 + OAuth + descriptor，models.json 21,430→5,197 行）
+> - 总计减少 ~113,400+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
 >
 > **生态激活**:
 > - Claude Code 配置发现：激活 `discovery/claude.ts` + `discovery/claude-plugins.ts`，支持从 `~/.claude/` 和项目 `.claude/` 导入技能/命令/钩子/工具/MCP/设置
@@ -55,7 +56,7 @@
 | 已知 Provider 类型 | 19 个 |
 | 内置 Tool 数 | 31 个 (BUILTIN_TOOLS) + 3 个 (HIDDEN_TOOLS) |
 | Settings 配置项 | ~95 个 (已移除 4 power + 32 hindsight + 9 dead keys) |
-| 已移除代码行数 | ~97,100+ 行 (二十六轮) |
+| 已移除代码行数 | ~113,400+ 行 (二十七轮) |
 | 运行模式 | 3 种 (interactive, print, bridge) |
 | CLI 子命令 | 14 个 |
 
@@ -619,6 +620,34 @@ commit/
 **models.json 变化：** 1,030 → 1,019 模型（litellm 内 venice/xiaomi 代理条目移除）
 
 验证: 构建零错误 ✅ | 4783 测试通过 (无新增失败) ✅ | openai-compat.ts 零残留引用 ✅ | 核心命令全部存活
+
+---
+
+### 1.33 ~~LiteLLM Provider 完整移除~~（✅ 第二十七轮 — 用户不部署 LiteLLM 代理网关）
+
+> **状态**: 已删除。LiteLLM 是需要用户自行部署的代理网关（`pip install litellm; litellm --port 4000`），用户未部署。但代码中有完整集成：`models.json` 中 810 个静态模型（~16,000 行，全指向 `http://localhost:4000`，元数据为 sentinel 占位值）、OAuth 登录流程、Provider descriptor、KnownProvider 条目。
+
+**删除清单（11 文件，16,338 行）：**
+
+| 文件 | 变更 | 说明 |
+|------|------|------|
+| `ai/src/models.json` | -16,233 行 | 删除 litellm provider 及其 810 个模型 |
+| `ai/src/utils/oauth/litellm.ts` | -47 行 | 整文件删除 `loginLiteLLM` OAuth 登录 |
+| `ai/src/provider-models/openai-compat.ts` | -32 行 | 删除 `litellmModelManagerOptions` + `LiteLLMModelManagerConfig` |
+| `ai/test/kimi-tool-call-healing.test.ts` | +2/-12 行 | `getBundledModel("litellm", ...)` → 内联 model 对象 |
+| `ai/src/provider-models/descriptors.ts` | -7 行 | 删除 litellm catalogDescriptor + import |
+| `ai/src/auth-storage.ts` | -6 行 | 删除 `case "litellm"` OAuth 登录分支 |
+| `ai/src/utils/oauth/index.ts` | -5 行 | 删除 builtInOAuthProviders 中 litellm 条目 |
+| `ai/src/providers/openai-completions.ts` | -3 行 | 注释中 "LiteLLM/proxy" → "proxy" |
+| `ai/src/types.ts` | -1 行 | KnownProvider 移除 `"litellm"` |
+| `ai/src/stream.ts` | -1 行 | 移除 `LITELLM_API_KEY` env var 映射 |
+| `ai/src/utils/oauth/types.ts` | -1 行 | OAuthProvider 移除 `"litellm"` |
+
+**models.json 变化：** 21,430 行 → 5,197 行（-75%），1,019 模型 → 209 模型（-80%）
+
+**测试改善：** AI 包测试 1005→1015 pass (+10)，46→36 fail (-10)。原依赖 litellm 垃圾元数据的测试改用内联模型后恢复正常。
+
+验证: 构建零错误 ✅ | AI 1015 pass / coding-agent 4783 pass ✅ | litellm 源码零残留 ✅ | 核心命令全部存活
 
 ---
 

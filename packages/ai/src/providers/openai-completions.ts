@@ -1114,13 +1114,13 @@ function buildParams(
 		params.tools = builtTools.tools;
 		toolStrictMode = builtTools.toolStrictMode;
 	} else if (context.tools === undefined && hasToolHistory(context.messages)) {
-		// Anthropic (via LiteLLM/proxy) requires the `tools` param when the conversation
+		// Anthropic (via proxy) requires the `tools` param when the conversation
 		// contains tool_calls/tool_results, even when no tools are offered this turn.
 		// Only inject the sentinel when the caller passed `context.tools = undefined`
 		// (i.e. tools were not specified at all). An explicit `context.tools = []` means
 		// the caller opted out of tools for this turn (as /btw and IRC background replies
 		// do via AgentSession.runEphemeralTurn) — honour that intent and emit nothing,
-		// so LiteLLM → Bedrock never sees an empty `toolConfig` block.
+		// so proxy → Bedrock never sees an empty `toolConfig` block.
 		params.tools = [];
 	}
 
@@ -1141,7 +1141,7 @@ function buildParams(
 
 	if (params.tool_choice === "none" && (!Array.isArray(params.tools) || params.tools.length === 0)) {
 		// `tool_choice: "none"` with no tools to gate is redundant and also
-		// trips LiteLLM → Bedrock: the proxy serializes the directive into a
+		// trips proxy → Bedrock: the proxy serializes the directive into a
 		// `toolConfig` block, and Bedrock requires `toolConfig.tools` to be
 		// non-empty whenever the conversation already holds `toolUse`/`toolResult`
 		// content. Drop it whenever the resolved tools list is missing or empty.

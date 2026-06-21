@@ -733,38 +733,6 @@ export function moonshotModelManagerOptions(
 }
 
 
-
-// ---------------------------------------------------------------------------
-// 21. LiteLLM
-// ---------------------------------------------------------------------------
-
-export interface LiteLLMModelManagerConfig {
-	apiKey?: string;
-	baseUrl?: string;
-}
-
-export function litellmModelManagerOptions(
-	config?: LiteLLMModelManagerConfig,
-): ModelManagerOptions<"openai-completions"> {
-	const apiKey = config?.apiKey;
-	const baseUrl = config?.baseUrl ?? "http://localhost:4000/v1";
-	const references = createBundledReferenceMap<"openai-completions">("litellm");
-	return {
-		providerId: "litellm",
-		fetchDynamicModels: () =>
-			fetchOpenAICompatibleModels({
-				api: "openai-completions",
-				provider: "litellm",
-				baseUrl,
-				apiKey,
-				mapModel: (entry, defaults) => {
-					const reference = references.get(defaults.id);
-					return mapWithBundledReference(entry, defaults, reference);
-				},
-			}),
-	};
-}
-
 // ---------------------------------------------------------------------------
 // 22. vLLM
 // ---------------------------------------------------------------------------

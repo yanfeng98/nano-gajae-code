@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { getBundledModel } from "../src/models";
 import { streamOpenAICompletions } from "../src/providers/openai-completions";
 import type { Context, Model, ToolCall } from "../src/types";
 
@@ -57,7 +56,18 @@ function baseContext(): Context {
 function kimiModel(): Model<"openai-completions"> {
 	// OpenRouter-hosted Kimi K2 — the model-id gate engages without pulling
 	// in the kimi-code OAuth/device-id paths.
-	return getBundledModel("litellm", "moonshotai/kimi-k2") as Model<"openai-completions">;
+	return {
+		id: "moonshotai/kimi-k2",
+		name: "moonshotai/kimi-k2",
+		api: "openai-completions" as const,
+		provider: "moonshot",
+		baseUrl: "http://localhost:4000/v1",
+		reasoning: false,
+		input: ["text" as const],
+		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+		contextWindow: 222222,
+		maxTokens: 8888,
+	};
 }
 
 function chunk(model: string, delta: SseChoiceDelta, finish: SseChunk["choices"][0]["finish_reason"] = null): SseChunk {
