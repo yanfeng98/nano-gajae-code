@@ -108,39 +108,6 @@ const expectedProfiles: Array<{ name: string; requiredProviders: string[]; mappi
 	},
 	{
 		name: "minimax-eco",
-		requiredProviders: ["minimax-cn"],
-		mapping: {
-			default: "xiaomi/MiniMax-M2.5:low",
-			executor: "xiaomi/MiniMax-M2.5:minimal",
-			planner: "xiaomi/MiniMax-M2.5:low",
-			critic: "xiaomi/MiniMax-M2.5:medium",
-			architect: "xiaomi/MiniMax-M2.5:high",
-		},
-	},
-	{
-		name: "minimax-medium",
-		requiredProviders: ["minimax-cn"],
-		mapping: {
-			default: "xiaomi/MiniMax-M2.5:medium",
-			executor: "xiaomi/MiniMax-M2.5:low",
-			planner: "xiaomi/MiniMax-M2.5:medium",
-			critic: "xiaomi/MiniMax-M2.5:high",
-			architect: "xiaomi/MiniMax-M2.5:xhigh",
-		},
-	},
-	{
-		name: "minimax-pro",
-		requiredProviders: ["minimax-cn"],
-		mapping: {
-			default: "xiaomi/MiniMax-M2.5:xhigh",
-			executor: "xiaomi/MiniMax-M2.5:medium",
-			planner: "xiaomi/MiniMax-M2.5:high",
-			critic: "xiaomi/MiniMax-M2.5:xhigh",
-			architect: "xiaomi/MiniMax-M2.5:xhigh",
-		},
-	},
-	{
-		name: "minimax-eco",
 		requiredProviders: ["minimax-code"],
 		mapping: {
 			default: "minimax-code/minimax-v3:low",
@@ -197,7 +164,7 @@ function selectorExists(selector: string): boolean {
 }
 
 describe("built-in model profile catalog", () => {
-	test("contains exact 17-profile matrix cell-for-cell", () => {
+	test("contains exact 11-profile matrix cell-for-cell", () => {
 		expect(BUILTIN_MODEL_PROFILES.map(profile => profile.name)).toEqual(
 			expectedProfiles.map(profile => profile.name),
 		);

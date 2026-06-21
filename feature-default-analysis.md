@@ -2,7 +2,7 @@
 
 > 分析日期: 2026-06-21 | 分支: 260613-v0.5.0-dev | 代码基线: 0.5.0
 >
-> **已执行移除（27 轮）**:
+> **已执行移除（28 轮）**:
 > - 第一轮: macOS 电源管理 (~350 行)
 > - 第二轮: 全平台死代码清理 (~1,120 行)
 > - 第三轮: Hindsight 远程记忆系统 (~2,600 行)
@@ -30,7 +30,8 @@
 > - 第二十五轮: 死 commit/ 子系统完整移除（~3,740 行：44 个死源文件 + 2 个死测试，commit/ 从 ~50 文件缩减到 3 文件）
 > - 第二十六轮: 4 个死配置 Provider 移除（~540 行：venice/xiaomi/zenmux/lm-studio，10 文件）
 > - 第二十七轮: LiteLLM Provider 完整移除（~16,338 行：810 个垃圾模型 + OAuth + descriptor，models.json 21,430→5,197 行）
-> - 总计减少 ~113,400+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
+> - 第二十八轮: lm-studio 僵尸代码 + xiaomi 残留清理（~60 行：DEFAULT_LOCAL_TOKEN 哨兵 + 自动注册 + 测试 xiaomi 条目）
+> - 总计减少 ~113,460+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
 >
 > **生态激活**:
 > - Claude Code 配置发现：激活 `discovery/claude.ts` + `discovery/claude-plugins.ts`，支持从 `~/.claude/` 和项目 `.claude/` 导入技能/命令/钩子/工具/MCP/设置
@@ -56,7 +57,7 @@
 | 已知 Provider 类型 | 19 个 |
 | 内置 Tool 数 | 31 个 (BUILTIN_TOOLS) + 3 个 (HIDDEN_TOOLS) |
 | Settings 配置项 | ~95 个 (已移除 4 power + 32 hindsight + 9 dead keys) |
-| 已移除代码行数 | ~113,400+ 行 (二十七轮) |
+| 已移除代码行数 | ~113,460+ 行 (二十八轮) |
 | 运行模式 | 3 种 (interactive, print, bridge) |
 | CLI 子命令 | 14 个 |
 
@@ -648,6 +649,25 @@ commit/
 **测试改善：** AI 包测试 1005→1015 pass (+10)，46→36 fail (-10)。原依赖 litellm 垃圾元数据的测试改用内联模型后恢复正常。
 
 验证: 构建零错误 ✅ | AI 1015 pass / coding-agent 4783 pass ✅ | litellm 源码零残留 ✅ | 核心命令全部存活
+
+### 1.34 ~~lm-studio 僵尸代码 + xiaomi 残留清理~~（✅ 第二十八轮 — R26 删除 provider 后的遗漏）
+
+> **状态**: 已删除。R26 删除了 lm-studio/venice/xiaomi/zenmux 四个 provider 和 minimax xiaomi 依赖，但 `model-registry.ts` 中残留了 lm-studio 自动注册逻辑（每次启动执行但 OAuth 模块已删除，静默失败）、DEFAULT_LOCAL_TOKEN 哨兵、xiaomi JSDoc 引用，以及 `model-profiles-catalog.test.ts` 中重复的 xiaomi 模型条目（必然失败）。
+
+**删除清单（2 文件，57 行删除，6 行新增）：**
+
+| 文件 | 变更 | 说明 |
+|------|------|------|
+| `coding-agent/src/config/model-registry.ts` | -22/+6 | 删除 DEFAULT_LOCAL_TOKEN 哨兵（-3）、lm-studio 自动注册块（-10）、`case "lm-studio":`（-1）、简化 2 处 apiKey 检查（-2×2）、重写 xiaomi JSDoc |
+| `coding-agent/test/model-profiles-catalog.test.ts` | -35 | 删除 3 个旧 xiaomi 条目（`xiaomi/MiniMax-M2.5:*`，models.json 中无此 provider）、修正测试名 17→11 |
+
+**死代码分析：**
+- **DEFAULT_LOCAL_TOKEN 哨兵**（`"lm-studio-local"`）：注释引用已删除的 `oauth/lm-studio.ts`，无代码能再创建该哨兵值，`apiKey !== DEFAULT_LOCAL_TOKEN` 永远为 true
+- **lm-studio 自动注册块**：`!configuredProviders.has("lm-studio")` 永远为 true（provider 已从 PROVIDER_DESCRIPTORS 删除），OAuth 模块已删除导致 discovery 静默失败
+- **xiaomi JSDoc**：引用已删除的 `token-plan-sgp.xiaomimimo.com` 域名和 `xiaomi-tp-discovery-merge.test.ts`
+- **测试 xiaomi 条目**：旧版 minimax-eco/medium/pro 使用 `requiredProviders: ["minimax-cn"]` 和 `xiaomi/MiniMax-M2.5:*` 模型 ID，与新版 minimax-code 条目重复，xiaomi provider 已从 models.json 删除
+
+验证: 构建零错误 ✅ | AI 1015 pass / 36 fail（不变）✅ | coding-agent 4783 pass / 67 fail（不变）✅ | model-registry.ts 零 lm-studio/xiaomi 残留 ✅ | 3 个预有测试失败（opencodego critic 模型不同步 + minimax-code 无静态模型）
 
 ---
 

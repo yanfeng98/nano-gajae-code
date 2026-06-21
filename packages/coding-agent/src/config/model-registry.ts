@@ -22,9 +22,6 @@ import {
 	unregisterCustomApis,
 } from "@gajae-code/ai";
 
-// Sentinel for local-only OAuth token (LM Studio, vLLM) — declared inline to avoid loading
-// any provider module at startup. Must match `DEFAULT_LOCAL_TOKEN` in oauth/lm-studio.ts.
-const DEFAULT_LOCAL_TOKEN = "lm-studio-local";
 
 import { registerOAuthProvider, unregisterOAuthProviders } from "@gajae-code/ai/utils/oauth";
 import type { OAuthCredentials, OAuthLoginCallbacks } from "@gajae-code/ai/utils/oauth/types";
@@ -429,15 +426,10 @@ function resolveProviderBaseUrlFromEnv(provider: string): string | undefined {
  *
  * `baseUrl` resolution priority:
  *   1. User-set `providerOverride.baseUrl` (explicit override in models.json)
- *   2. Discovered baseUrl (xiaomi `tp-` token-plan keys resolve to
- *      `token-plan-sgp.xiaomimimo.com` at discovery time)
+ *   2. Discovered baseUrl (from endpoint-based model discovery)
  *   3. Existing bundled baseUrl (the host baked into `models.json`)
  *
- * Without (1), the user's override would lose to discovery; without (2)
- * preferred over (3), the bundled `api.xiaomimimo.com` would shadow the
- * tp- token-plan host and produce 401s on the first stream call.
- * See `xiaomi-tp-discovery-merge.test.ts` and the `refresh()` baseUrl-override
- * regression in `model-registry.test.ts`.
+ * See `model-registry.test.ts` for `refresh()` baseUrl-override regression coverage.
  */
 export function mergeDiscoveredModel<TApi extends Api>(
 	model: Model<TApi>,
@@ -1337,16 +1329,7 @@ export class ModelRegistry {
 				this.#keylessProviders.add("llama.cpp");
 			}
 		}
-		if (!configuredProviders.has("lm-studio") && !disabledProviders.has("lm-studio")) {
-			this.#discoverableProviders.push({
-				provider: "lm-studio",
-				api: "openai-completions",
-				baseUrl: Bun.env.LM_STUDIO_BASE_URL || "http://127.0.0.1:1234/v1",
-				discovery: { type: "lm-studio" },
-				optional: true,
-			});
-			this.#keylessProviders.add("lm-studio");
-		}
+
 	}
 
 	#loadCustomModels(): CustomModelsResult {
@@ -1675,7 +1658,6 @@ export class ModelRegistry {
 				return this.#discoverOllamaModels(providerConfig);
 			case "llama.cpp":
 				return this.#discoverLlamaCppModels(providerConfig);
-			case "lm-studio":
 			case "openai-models-list":
 				return this.#discoverOpenAIModelsList(providerConfig);
 		}
@@ -1905,7 +1887,7 @@ export class ModelRegistry {
 
 		const headers: Record<string, string> = { ...(providerConfig.headers ?? {}) };
 		const apiKey = await this.authStorage.getApiKey(providerConfig.provider);
-		if (apiKey && apiKey !== DEFAULT_LOCAL_TOKEN && apiKey !== kNoAuth) {
+		if (apiKey && apiKey !== kNoAuth) {
 			headers.Authorization = `Bearer ${apiKey}`;
 		}
 
@@ -1955,7 +1937,7 @@ export class ModelRegistry {
 
 		const headers: Record<string, string> = { ...(providerConfig.headers ?? {}) };
 		const apiKey = await this.authStorage.getApiKey(providerConfig.provider);
-		if (apiKey && apiKey !== DEFAULT_LOCAL_TOKEN && apiKey !== kNoAuth) {
+		if (apiKey && apiKey !== kNoAuth) {
 			headers.Authorization = `Bearer ${apiKey}`;
 		}
 
