@@ -53,6 +53,10 @@ export interface StateWriterReceiptContext {
 	sessionId?: string;
 	mutationId?: string;
 	nowIso?: string;
+	verb?: string;
+	fromPhase?: string;
+	toPhase?: string;
+	forced?: boolean;
 }
 
 export interface StateWriterAuditContext {
@@ -86,16 +90,42 @@ export interface WorkflowTransactionJournal {
 	steps: string[];
 }
 
+export type StateWritePolicy = "source" | "cache";
+
+export interface GuardedStateWriterOptions extends StateWriterOptions {
+	policy: StateWritePolicy;
+	expectedRevision?: number;
+	sourceRevision?: number;
+}
+
+export type GuardedWriteResult =
+	| { path: string; written: true }
+	| { path: string; written: false; reason: "stale-skip" };
+
 export interface StateWriterOptions {
 	cwd?: string;
 	receipt?: StateWriterReceiptContext;
 	audit?: StateWriterAuditContext;
+	sourceRevision?: number;
 	/**
 	 * Cross-process lock tuning for read-modify-write paths that route through
 	 * `withWorkflowStateLock` / `updateJsonAtomic`. Omit for the hardened
 	 * `withFileLock` defaults.
 	 */
 	lock?: FileLockOptions;
+}
+
+export class StateWriteConflictError extends Error {
+	constructor(
+		public readonly path: string,
+		public readonly expectedRevision: number,
+		public readonly persistedRevision: number,
+	) {
+		super(
+			`state write conflict at ${path}: expected revision ${expectedRevision}, persisted revision ${persistedRevision}`,
+		);
+		this.name = "StateWriteConflictError";
+	}
 }
 
 export interface DeleteIfOwnedOptions extends StateWriterOptions {
@@ -355,14 +385,56 @@ async function readJsonIfPresent(filePath: string): Promise<unknown | undefined>
 	}
 }
 
+export function persistedStateRevision(value: unknown): number {
+	if (!isPlainObject(value)) return 0;
+	const revision = value.state_revision;
+	return typeof revision === "number" && Number.isFinite(revision) ? revision : 0;
+}
+
+function persistedSourceRevision(value: unknown): number {
+	if (!isPlainObject(value)) return 0;
+	const revision = value.source_state_revision;
+	return typeof revision === "number" && Number.isFinite(revision) ? revision : persistedStateRevision(value);
+}
+
+function withoutCandidateRevision(value: unknown): unknown {
+	if (!isPlainObject(value)) return value;
+	const next = { ...value };
+	delete next.state_revision;
+	return next;
+}
+
+function stampStateRevision(value: unknown, stateRevision: number, sourceRevision?: number): unknown {
+	if (!isPlainObject(value)) return value;
+	const next = withoutCandidateRevision(value) as Record<string, unknown>;
+	return {
+		...next,
+		...(sourceRevision === undefined ? {} : { source_state_revision: sourceRevision }),
+		state_revision: stateRevision,
+	};
+}
+
 function withWorkflowReceipt(value: unknown, receipt: WorkflowStateReceipt | undefined): unknown {
 	if (!receipt || !value || typeof value !== "object" || Array.isArray(value)) return value;
 	return { ...(value as Record<string, unknown>), receipt };
 }
 
+function stampWorkflowEnvelopeRevisionAndChecksum(
+	value: unknown,
+	filePath: string,
+	stateRevision: number,
+	sourceRevision: number | undefined,
+	options: StateWriterOptions | undefined,
+): unknown {
+	return stampWorkflowEnvelopeChecksum(
+		stampStateRevision(withWorkflowReceipt(value, buildReceipt(options)), stateRevision, sourceRevision),
+		filePath,
+	);
+}
+
 function buildReceipt(options: StateWriterOptions | undefined): WorkflowStateReceipt | undefined {
 	if (!options?.receipt) return undefined;
-	return buildWorkflowStateReceipt({
+	const receipt = buildWorkflowStateReceipt({
 		cwd: path.resolve(options.receipt.cwd ?? options.cwd ?? process.cwd()),
 		skill: options.receipt.skill,
 		owner: options.receipt.owner,
@@ -371,6 +443,11 @@ function buildReceipt(options: StateWriterOptions | undefined): WorkflowStateRec
 		nowIso: options.receipt.nowIso,
 		mutationId: options.receipt.mutationId,
 	});
+	receipt.verb = options.receipt.verb;
+	receipt.from_phase = options.receipt.fromPhase;
+	receipt.to_phase = options.receipt.toPhase;
+	receipt.forced = options.receipt.forced;
+	return receipt;
 }
 
 async function maybeAudit(mutatedPath: string, options?: StateWriterOptions): Promise<void> {
@@ -402,6 +479,112 @@ async function atomicWrite(filePath: string, content: string): Promise<string> {
 		throw error;
 	}
 	return filePath;
+}
+
+async function writeGuardedResolvedJsonAtomic(
+	filePath: string,
+	value: unknown,
+	options: GuardedStateWriterOptions,
+): Promise<GuardedWriteResult> {
+	return lockResolvedWorkflowTarget(
+		filePath,
+		async () => {
+			const current = await readJsonIfPresent(filePath);
+			const currentRevision = persistedStateRevision(current);
+
+			if (options.policy === "source") {
+				if (options.expectedRevision !== undefined && options.expectedRevision !== currentRevision) {
+					throw new StateWriteConflictError(filePath, options.expectedRevision, currentRevision);
+				}
+				const next = stampStateRevision(withWorkflowReceipt(value, buildReceipt(options)), currentRevision + 1);
+				await atomicWrite(filePath, jsonText(next));
+				await maybeAudit(filePath, options);
+				return { path: filePath, written: true };
+			}
+
+			const incomingSourceRevision =
+				options.sourceRevision ?? (isPlainObject(value) ? persistedStateRevision(value) : 0);
+			if (current !== undefined && incomingSourceRevision <= persistedSourceRevision(current)) {
+				return { path: filePath, written: false, reason: "stale-skip" };
+			}
+			const next = stampStateRevision(
+				withWorkflowReceipt(value, buildReceipt(options)),
+				currentRevision + 1,
+				incomingSourceRevision,
+			);
+			await atomicWrite(filePath, jsonText(next));
+			await maybeAudit(filePath, options);
+			return { path: filePath, written: true };
+		},
+		options.lock,
+	);
+}
+
+export async function writeGuardedJsonAtomic(
+	targetPath: string,
+	value: unknown,
+	options: GuardedStateWriterOptions,
+): Promise<GuardedWriteResult> {
+	const filePath = resolveGjcTarget(targetPath, cwdForOptions(options));
+	return writeGuardedResolvedJsonAtomic(filePath, value, options);
+}
+
+export async function writeGuardedWorkflowEnvelopeAtomic(
+	targetPath: string,
+	value: unknown,
+	options: GuardedStateWriterOptions,
+): Promise<GuardedWriteResult> {
+	const filePath = resolveGjcTarget(targetPath, cwdForOptions(options));
+	return lockResolvedWorkflowTarget(
+		filePath,
+		async () => {
+			const current = await readJsonIfPresent(filePath);
+			const currentRevision = persistedStateRevision(current);
+
+			if (options.policy === "source") {
+				if (options.expectedRevision !== undefined && options.expectedRevision !== currentRevision) {
+					throw new StateWriteConflictError(filePath, options.expectedRevision, currentRevision);
+				}
+				const next = stampWorkflowEnvelopeRevisionAndChecksum(value, filePath, currentRevision + 1, undefined, options);
+				const parsed = RequiredOnWriteEnvelopeSchema.safeParse(next);
+				if (!parsed.success) {
+					throw new Error(
+						`Refusing to write invalid workflow state envelope to ${filePath}: ${parsed.error.issues
+							.map(issue => `${issue.path.join(".") || "<root>"}: ${issue.message}`)
+							.join("; ")}`,
+					);
+				}
+				await atomicWrite(filePath, jsonText(next));
+				await maybeAudit(filePath, options);
+				return { path: filePath, written: true };
+			}
+
+			const incomingSourceRevision =
+				options.sourceRevision ?? (isPlainObject(value) ? persistedStateRevision(value) : 0);
+			if (current !== undefined && incomingSourceRevision <= persistedSourceRevision(current)) {
+				return { path: filePath, written: false, reason: "stale-skip" };
+			}
+			const next = stampWorkflowEnvelopeRevisionAndChecksum(
+				value,
+				filePath,
+				currentRevision + 1,
+				incomingSourceRevision,
+				options,
+			);
+			const parsed = RequiredOnWriteEnvelopeSchema.safeParse(next);
+			if (!parsed.success) {
+				throw new Error(
+					`Refusing to write invalid workflow state envelope to ${filePath}: ${parsed.error.issues
+						.map(issue => `${issue.path.join(".") || "<root>"}: ${issue.message}`)
+						.join("; ")}`,
+				);
+			}
+			await atomicWrite(filePath, jsonText(next));
+			await maybeAudit(filePath, options);
+			return { path: filePath, written: true };
+		},
+		options.lock,
+	);
 }
 
 export async function writeJsonAtomic(
@@ -768,8 +951,11 @@ export async function writeActiveEntry(
 	options?: StateWriterOptions,
 ): Promise<string> {
 	const filePath = activeEntryPath(path.resolve(cwd), sessionScope, skill);
-	await atomicWrite(filePath, jsonText({ ...entry, skill }));
-	await maybeAudit(filePath, options);
+	await writeGuardedResolvedJsonAtomic(filePath, { ...entry, skill }, {
+		...options,
+		policy: "cache",
+		sourceRevision: persistedSourceRevision(entry) || persistedSourceRevision(await readJsonIfPresent(filePath)) + 1,
+	});
 	return filePath;
 }
 
@@ -780,9 +966,24 @@ export async function removeActiveEntry(
 	options?: StateWriterOptions,
 ): Promise<DeleteResult> {
 	const filePath = activeEntryPath(path.resolve(cwd), sessionScope, skill);
-	const deleted = await atomicRemove(filePath);
-	if (deleted) await maybeAudit(filePath, options);
-	return { path: filePath, deleted };
+	return lockResolvedWorkflowTarget(
+		filePath,
+		async () => {
+			const current = await readJsonIfPresent(filePath);
+			const incomingSourceRevision = options?.sourceRevision;
+			if (
+				current !== undefined &&
+				incomingSourceRevision !== undefined &&
+				incomingSourceRevision < persistedSourceRevision(current)
+			) {
+				return { path: filePath, deleted: false };
+			}
+			const deleted = await atomicRemove(filePath);
+			if (deleted) await maybeAudit(filePath, options);
+			return { path: filePath, deleted };
+		},
+		options?.lock,
+	);
 }
 
 export async function readActiveEntries(
@@ -817,8 +1018,11 @@ export async function rebuildActiveSnapshot(
 	const resolvedCwd = path.resolve(cwd);
 	const snapshotPath = activeSnapshotPath(resolvedCwd, sessionScope);
 	const entries = await readActiveEntries(resolvedCwd, sessionScope);
-	await atomicWrite(snapshotPath, jsonText(buildActiveSnapshot(entries)));
-	await maybeAudit(snapshotPath, options);
+	await writeGuardedResolvedJsonAtomic(snapshotPath, buildActiveSnapshot(entries), {
+		...options,
+		policy: "cache",
+		sourceRevision: Math.max(persistedSourceRevision(await readJsonIfPresent(snapshotPath)) + 1, ...entries.map(entry => persistedSourceRevision(entry))),
+	});
 	return snapshotPath;
 }
 

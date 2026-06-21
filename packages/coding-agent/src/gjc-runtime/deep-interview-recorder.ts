@@ -12,7 +12,7 @@ import {
 	questionHash,
 } from "./deep-interview-state";
 import { writeSessionActivityMarker } from "./session-resolution";
-import { readExistingStateForMutation, writeWorkflowEnvelopeAtomic } from "./state-writer";
+import { readExistingStateForMutation, writeGuardedWorkflowEnvelopeAtomic } from "./state-writer";
 
 export * from "./deep-interview-state";
 
@@ -299,6 +299,12 @@ async function readEnvelope(statePath: string): Promise<DeepInterviewStateEnvelo
 	return ensureDeepInterviewStateShape(undefined);
 }
 
+function existingStateRevision(value: unknown): number | undefined {
+	if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+	const revision = (value as Record<string, unknown>).state_revision;
+	return typeof revision === "number" && Number.isFinite(revision) ? revision : 0;
+}
+
 function interviewIdOf(envelope: DeepInterviewStateEnvelope): string | undefined {
 	const inner = (envelope.state ?? {}) as Record<string, unknown>;
 	return typeof inner.interview_id === "string" ? inner.interview_id : undefined;
@@ -320,8 +326,10 @@ async function persistEnvelope(
 	payload.version ??= WORKFLOW_STATE_VERSION;
 	payload.active ??= true;
 	payload.current_phase ??= "interviewing";
-	await writeWorkflowEnvelopeAtomic(statePath, payload, {
+	await writeGuardedWorkflowEnvelopeAtomic(statePath, payload, {
 		cwd,
+		policy: "source",
+		expectedRevision: existingStateRevision(envelope),
 		receipt: { cwd, skill: "deep-interview", owner: "gjc-runtime", command, sessionId, nowIso: now },
 		audit: { category: "state", verb: "write", owner: "gjc-runtime", skill: "deep-interview", sessionId },
 	});
@@ -338,20 +346,17 @@ async function syncRecorderHud(
 	envelope: DeepInterviewStateEnvelope,
 	sessionId: string | undefined,
 ): Promise<void> {
-	try {
-		const phase = typeof envelope.current_phase === "string" ? envelope.current_phase : "interviewing";
-		await syncSkillActiveState({
-			cwd,
-			skill: "deep-interview",
-			active: phase !== "complete",
-			phase,
-			sessionId,
-			source: "gjc-runtime-deep-interview-recorder",
-			hud: deriveDeepInterviewHud(envelope as Record<string, unknown>, { phase }),
-		});
-	} catch {
-		// HUD sync is best-effort cache maintenance and must not change record semantics.
-	}
+	const phase = typeof envelope.current_phase === "string" ? envelope.current_phase : "interviewing";
+	await syncSkillActiveState({
+		cwd,
+		skill: "deep-interview",
+		active: phase !== "complete",
+		phase,
+		sessionId,
+		source: "gjc-runtime-deep-interview-recorder",
+		hud: deriveDeepInterviewHud(envelope as Record<string, unknown>, { phase }),
+		sourceRevision: existingStateRevision(envelope),
+	});
 }
 
 /**
@@ -364,10 +369,24 @@ async function repairRecorderHudFromPersisted(
 	statePath: string,
 	sessionId: string | undefined,
 ): Promise<void> {
+	try {
+		await syncDeepInterviewRecorderHud(cwd, statePath, sessionId);
+	} catch {
+		// HUD sync is best-effort cache maintenance and must not change record semantics.
+	}
+}
+
+/** Refresh the best-effort HUD cache from persisted deep-interview state. */
+export async function syncDeepInterviewRecorderHud(
+	cwd: string,
+	statePath: string,
+	sessionId: string | undefined,
+): Promise<void> {
 	const read = await readExistingStateForMutation(statePath);
 	if (read.kind !== "valid") return;
 	await syncRecorderHud(cwd, normalizeDeepInterviewEnvelope(read.value), sessionId);
 }
+
 
 /** Record an `answered` shell for one round (append-or-merge by durable key). */
 export async function appendOrMergeDeepInterviewRound(
@@ -387,7 +406,11 @@ export async function appendOrMergeDeepInterviewRound(
 	}
 	(envelope.state as Record<string, unknown>).rounds = result.rounds;
 	await persistEnvelope(cwd, statePath, envelope, options.sessionId, "gjc deep-interview record-answer");
-	await syncRecorderHud(cwd, envelope, options.sessionId);
+	try {
+		await syncRecorderHud(cwd, envelope, options.sessionId);
+	} catch {
+		// HUD sync is best-effort cache maintenance and must not change record semantics.
+	}
 	return { action: result.action, record: result.record };
 }
 

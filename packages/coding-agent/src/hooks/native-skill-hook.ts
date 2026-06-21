@@ -7,8 +7,10 @@ import { DEFAULT_DISABLED_EXTENSIONS, DEFAULT_SKILL_DISCOVERY_SETTINGS } from ".
 import { sessionLogsDir } from "../gjc-runtime/session-layout";
 import {
 	buildActiveUltragoalPromptContext,
+	buildStateRecoveryDiagnosticsContext,
 	buildSkillActivationAdditionalContext,
 	buildSkillStopOutput,
+	collectUserPromptStateRecoveryDiagnostics,
 	type EffectiveSkillConfigInput,
 	recordSkillActivation,
 } from "./skill-state";
@@ -170,6 +172,15 @@ export async function dispatchGjcNativeSkillHook(
 	const hookEventName = readHookEventName(payload);
 	const cwd = (options.cwd ?? safeString(payload.cwd).trim()) || process.cwd();
 	if (hookEventName === "UserPromptSubmit") {
+		const recoveryDiagnostics = await collectUserPromptStateRecoveryDiagnostics({
+			cwd,
+			sessionId: readSessionId(payload),
+			threadId: readThreadId(payload),
+			stateDir: options.stateDir,
+			prompt: readPromptText(payload),
+			sessionFile: readSessionFile(payload),
+		});
+		const recoveryContext = buildStateRecoveryDiagnosticsContext(recoveryDiagnostics);
 		const prompt = readPromptText(payload);
 		const skillState = prompt
 			? await recordSkillActivation({
@@ -207,19 +218,22 @@ export async function dispatchGjcNativeSkillHook(
 				},
 			};
 		}
+		const additionalContext = [
+			skillState ? buildSkillActivationAdditionalContext(skillState, effectiveSkillConfig) : activeUltragoalContext,
+			recoveryContext,
+		]
+			.filter((value): value is string => Boolean(value))
+			.join(" ");
 		return {
 			hookEventName,
-			outputJson:
-				skillState || activeUltragoalContext
-					? {
-							hookSpecificOutput: {
-								hookEventName,
-								additionalContext: skillState
-									? buildSkillActivationAdditionalContext(skillState, effectiveSkillConfig)
-									: activeUltragoalContext,
-							},
-						}
-					: null,
+			outputJson: additionalContext
+				? {
+						hookSpecificOutput: {
+							hookEventName,
+							additionalContext,
+						},
+					}
+				: null,
 		};
 	}
 

@@ -331,6 +331,18 @@ export async function readUltragoalVerificationState(input: {
 	}
 	const receiptTarget = findReceiptGoal(plan, currentObjective);
 	if (!receiptTarget) {
+		// When earlier required goals are already complete but later ones remain, name the
+		// specific blocking goals (a final-aggregate receipt cannot exist yet anyway). Only
+		// fall back to the generic missing-receipt message when no progress has been verified.
+		const completedRequired = requiredGoals(plan).filter(goal => goal.status === "complete");
+		if (completedRequired.length > 0 && runState.incompleteGoals.length > 0) {
+			return {
+				state: "active_missing_final_receipt",
+				message: `Ultragoal still has incomplete required goals: ${runState.incompleteGoals
+					.map(goal => goal.id)
+					.join(", ")}. Run \`gjc ultragoal complete-goals\` to continue.`,
+			};
+		}
 		return {
 			state: "active_missing_final_receipt",
 			message: "Ultragoal aggregate completion requires a fresh final aggregate receipt.",

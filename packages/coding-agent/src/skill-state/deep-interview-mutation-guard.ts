@@ -371,6 +371,9 @@ function extractBashTargets(args: unknown): ExtractedTargets {
 			index++;
 			continue;
 		}
+		if (/^(?:>|\d+>)&\d+$/.test(token)) {
+			continue;
+		}
 		const redirectMatch = token.match(/^(?:\d*)>>?(.+)$/);
 		if (redirectMatch?.[1]) {
 			addPath(targets, redirectMatch[1]);

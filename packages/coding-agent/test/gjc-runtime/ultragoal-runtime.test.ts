@@ -3022,6 +3022,65 @@ describe("ultragoal mode-state + HUD reconciliation (#342)", () => {
 		});
 	});
 
+	it("latest ledger event appears in ultragoal HUD after successful reconcile", async () => {
+		const root = await tempDir();
+		await withSessionId(TEST_SESSION_ID, async () => {
+			await runNativeUltragoalCommand(["create-goals", "--brief", "Ship the HUD event"], root);
+			const result = await runNativeUltragoalCommand(
+				[
+					"steer",
+					"--kind",
+					"annotate_ledger",
+					"--evidence",
+					"operator accepted the durable HUD audit note",
+					"--rationale",
+					"latest ledger events must be visible in the ultragoal HUD",
+				],
+				root,
+			);
+
+			expect(result.status).toBe(0);
+			const active = await readVisibleSkillActiveState(root, TEST_SESSION_ID);
+			const entry = active?.active_skills?.find(e => e.skill === "ultragoal");
+			expect(JSON.stringify(entry?.hud)).toContain("steering_accepted:annotate_ledger");
+		});
+	});
+
+	it("derived HUD cache stale-skips an older reconcile source", async () => {
+		const root = await tempDir();
+		await withSessionId(TEST_SESSION_ID, async () => {
+			await runNativeUltragoalCommand(["create-goals", "--brief", "Ship exact HUD"], root);
+			await reconcileWorkflowSkillState({
+				cwd: root,
+				mode: "ultragoal",
+				sessionId: TEST_SESSION_ID,
+				active: true,
+				phase: "active",
+				payload: { skill: "ultragoal", status: "active", latestLedgerEvent: { event: "new_exact_event" } },
+			});
+			const exactBefore = (await readVisibleSkillActiveState(root, TEST_SESSION_ID))?.active_skills?.find(
+				entry => entry.skill === "ultragoal",
+			);
+			expect(JSON.stringify(exactBefore?.hud)).toContain("new_exact_event");
+
+			await reconcileWorkflowSkillState({
+				cwd: root,
+				mode: "ultragoal",
+				sessionId: TEST_SESSION_ID,
+				active: true,
+				phase: "active",
+				payload: { skill: "ultragoal", status: "active", latestLedgerEvent: { event: "older_sessionless_event" } },
+				sourceRevision: 1,
+			});
+
+			const exactAfter = (await readVisibleSkillActiveState(root, TEST_SESSION_ID))?.active_skills?.find(
+				entry => entry.skill === "ultragoal",
+			);
+			expect(JSON.stringify(exactAfter?.hud)).toContain("new_exact_event");
+			expect(JSON.stringify(exactAfter?.hud)).not.toContain("older_sessionless_event");
+		});
+	});
+
 	it("keeps the command receipt intact and is diagnosable when reconciliation fails (AC5)", async () => {
 		const root = await tempDir();
 		await withSessionId(TEST_SESSION_ID, async () => {

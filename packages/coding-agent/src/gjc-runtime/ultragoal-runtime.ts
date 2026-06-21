@@ -6,12 +6,11 @@ import type { WorkflowHudSummary } from "../skill-state/active-state";
 import { buildUltragoalHudSummary as buildWorkflowUltragoalHudSummary } from "../skill-state/workflow-hud";
 import { renderCliWriteReceipt } from "./cli-write-receipt";
 import { DEFAULT_ULTRAGOAL_OBJECTIVE } from "./goal-mode-request";
-import { latestUltragoalLedgerEventFromText } from "./ledger-event-renderer";
 import { gjcRoot, sessionUltragoalDir } from "./session-layout";
 import { resolveGjcSessionForRead, resolveGjcSessionForWrite, writeSessionActivityMarker } from "./session-resolution";
 import { renderUltragoalStatusMarkdown } from "./state-renderer";
 import { reconcileWorkflowSkillState } from "./state-runtime";
-import { appendJsonl, writeArtifact, writeJsonAtomic } from "./state-writer";
+import { appendJsonl, persistedStateRevision, writeArtifact, writeGuardedJsonAtomic } from "./state-writer";
 
 export type UltragoalGjcGoalMode = "aggregate" | "per-story";
 export type UltragoalGoalStatus =
@@ -46,6 +45,7 @@ export interface UltragoalPlan {
 	goals: UltragoalGoal[];
 	createdAt: string;
 	updatedAt: string;
+	[key: string]: unknown;
 }
 
 export type UltragoalReceiptKind = "per-goal" | "final-aggregate";
@@ -227,8 +227,10 @@ async function writePlan(cwd: string, plan: UltragoalPlan, sessionId?: string | 
 		cwd,
 		audit: { category: "artifact", verb: "write", owner: "gjc-runtime", sessionId: resolvedSessionId },
 	});
-	await writeJsonAtomic(paths.goalsPath, plan, {
+	await writeGuardedJsonAtomic(paths.goalsPath, plan, {
 		cwd,
+		policy: "source",
+		expectedRevision: typeof plan.state_revision === "number" ? persistedStateRevision(plan) : undefined,
 		audit: { category: "state", verb: "write", owner: "gjc-runtime", sessionId: resolvedSessionId },
 	});
 	await writeSessionActivityMarker(cwd, resolvedSessionId, { writer: "ultragoal-runtime", path: paths.goalsPath });
@@ -442,6 +444,7 @@ function normalizePlan(raw: unknown): UltragoalPlan {
 		const objective = nonEmptyString(goalRecord.objective) ?? title;
 		const goalCreatedAt = nonEmptyString(goalRecord.createdAt) ?? createdAt;
 		return {
+			...goalRecord,
 			id,
 			title,
 			objective,
@@ -475,6 +478,9 @@ function normalizePlan(raw: unknown): UltragoalPlan {
 		goals,
 		createdAt,
 		updatedAt,
+		...(typeof record.state_revision === "number" && Number.isFinite(record.state_revision)
+			? { state_revision: record.state_revision }
+			: {}),
 	};
 }
 
@@ -2377,6 +2383,8 @@ export async function checkpointUltragoalGoal(input: {
 	if (input.status === "complete") goal.completedAt = now;
 	plan.updatedAt = now;
 	await writePlan(input.cwd, plan);
+	const persistedPlan = await readUltragoalPlan(input.cwd);
+	if (persistedPlan?.state_revision !== undefined) plan.state_revision = persistedPlan.state_revision;
 	await appendLedger(input.cwd, {
 		eventId: pendingCheckpointEventId,
 		event: "goal_checkpointed",
@@ -2826,6 +2834,8 @@ export async function recordUltragoalReviewBlockers(input: {
 		evidence: input.evidence,
 		gjcGoalJson: input.gjcGoalJson,
 	});
+	const persistedPlan = await readUltragoalPlan(input.cwd);
+	if (persistedPlan?.state_revision !== undefined) plan.state_revision = persistedPlan.state_revision;
 	const now = new Date().toISOString();
 	const nextId = `G${String(plan.goals.length + 1).padStart(3, "0")}`;
 	plan.goals.push({
@@ -3694,15 +3704,43 @@ async function reconcileUltragoalState(cwd: string): Promise<void> {
 		const ledgerText = await Bun.file(summary.paths.ledgerPath)
 			.text()
 			.catch(() => "");
-		const latestLedger = latestUltragoalLedgerEventFromText(ledgerText);
+		const latestLedger = ledgerText
+			.split(/\r?\n/)
+			.map(line => line.trim())
+			.filter(Boolean)
+			.toReversed()
+			.map(line => {
+				try {
+					const row = JSON.parse(line) as Record<string, unknown>;
+					const event = typeof row.event === "string" ? row.event : typeof row.type === "string" ? row.type : undefined;
+					return event ? { ...row, event } : undefined;
+				} catch {
+					return undefined;
+				}
+			})
+			.find((row): row is Record<string, unknown> & { event: string } => Boolean(row));
 		if (latestLedger) {
 			payload.latestLedgerEvent = {
 				event: latestLedger.event,
 				...(latestLedger.goalId ? { goalId: latestLedger.goalId } : {}),
 				...(latestLedger.timestamp ? { timestamp: latestLedger.timestamp } : {}),
+				...(typeof latestLedger.kind === "string" ? { kind: latestLedger.kind } : {}),
+				...(typeof latestLedger.evidence === "string" ? { evidence: latestLedger.evidence } : {}),
 			};
 		}
-		await reconcileWorkflowSkillState({ cwd, mode: "ultragoal", sessionId, active, phase: status, payload });
+		const sourceRevision = Math.max(
+			persistedStateRevision(await readUltragoalPlan(cwd, sessionId)),
+			ledgerText.split(/\r?\n/).filter(line => line.trim().length > 0).length,
+		);
+		await reconcileWorkflowSkillState({
+			cwd,
+			mode: "ultragoal",
+			sessionId,
+			active,
+			phase: status,
+			payload,
+			...(sourceRevision > 0 ? { sourceRevision } : {}),
+		});
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
 		process.stderr.write(`ultragoal state reconciliation failed: ${message}\n`);

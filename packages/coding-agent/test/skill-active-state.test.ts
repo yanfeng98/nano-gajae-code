@@ -12,6 +12,7 @@ import {
 	syncSkillActiveState,
 } from "../src/skill-state/active-state";
 
+import { removeActiveEntry, writeActiveEntry, writeGuardedJsonAtomic } from "../src/gjc-runtime/state-writer";
 async function withTempCwd(fn: (cwd: string) => Promise<void>): Promise<void> {
 	const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "gjc-skill-active-"));
 	try {
@@ -429,6 +430,259 @@ describe("GJC skill-active state", () => {
 			);
 			expect(snapshot.skill).toBe("ultragoal");
 			expect(snapshot.phase).toBe("goal-planning");
+		});
+	});
+
+
+	it("derived active-state HUD stale-skips when incoming source revision is not newer", async () => {
+		await withTempCwd(async cwd => {
+			const { sessionPath } = getSkillActiveStatePaths(cwd, "sess-rev");
+			await writeGuardedJsonAtomic(
+				sessionPath,
+				{
+					version: 1,
+					active: true,
+					skill: "deep-interview",
+					phase: "newer",
+					active_skills: [
+						{
+							skill: "deep-interview",
+							phase: "newer",
+							active: true,
+							session_id: "sess-rev",
+							hud: { version: 1, summary: "newer hud", chips: [{ label: "rev", value: "5" }] },
+						},
+					],
+				},
+				{ cwd, policy: "cache", sourceRevision: 5 },
+			);
+
+			const skipped = await writeGuardedJsonAtomic(
+				sessionPath,
+				{
+					version: 1,
+					active: true,
+					skill: "deep-interview",
+					phase: "older",
+					active_skills: [
+						{
+							skill: "deep-interview",
+							phase: "older",
+							active: true,
+							session_id: "sess-rev",
+							hud: { version: 1, summary: "older hud", chips: [{ label: "rev", value: "4" }] },
+						},
+					],
+				},
+				{ cwd, policy: "cache", sourceRevision: 5 },
+			);
+
+			expect(skipped.written).toBe(false);
+			const persisted = JSON.parse(await fs.readFile(sessionPath, "utf-8"));
+			expect(persisted.source_state_revision).toBe(5);
+			expect(persisted.active_skills[0].hud.summary).toBe("newer hud");
+		});
+	});
+
+	it("derived active-state HUD overwrites when incoming source revision is newer", async () => {
+		await withTempCwd(async cwd => {
+			const { sessionPath } = getSkillActiveStatePaths(cwd, "sess-rev");
+			await writeGuardedJsonAtomic(
+				sessionPath,
+				{
+					version: 1,
+					active: true,
+					skill: "deep-interview",
+					phase: "old",
+					active_skills: [
+						{
+							skill: "deep-interview",
+							phase: "old",
+							active: true,
+							session_id: "sess-rev",
+							hud: { version: 1, summary: "old hud" },
+						},
+					],
+				},
+				{ cwd, policy: "cache", sourceRevision: 2 },
+			);
+
+			const written = await writeGuardedJsonAtomic(
+				sessionPath,
+				{
+					version: 1,
+					active: true,
+					skill: "deep-interview",
+					phase: "new",
+					active_skills: [
+						{
+							skill: "deep-interview",
+							phase: "new",
+							active: true,
+							session_id: "sess-rev",
+							hud: { version: 1, summary: "new hud", chips: [{ label: "rev", value: "3" }] },
+						},
+					],
+				},
+				{ cwd, policy: "cache", sourceRevision: 3 },
+			);
+
+			expect(written.written).toBe(true);
+			const persisted = JSON.parse(await fs.readFile(sessionPath, "utf-8"));
+			expect(persisted.source_state_revision).toBe(3);
+			expect(persisted.state_revision).toBe(2);
+			expect(persisted.active_skills[0].hud.summary).toBe("new hud");
+		});
+	});
+
+	it("keeps a newer active entry when a stale source-revision removal runs under the entry lock", async () => {
+		await withTempCwd(async cwd => {
+			await writeActiveEntry(
+				cwd,
+				"sess-remove-rev",
+				"deep-interview",
+				{
+					skill: "deep-interview",
+					phase: "newer",
+					active: true,
+					session_id: "sess-remove-rev",
+					source_state_revision: 5,
+					hud: { version: 1, summary: "newer hud" },
+				},
+				{ cwd },
+			);
+
+			const activePath = path.join(cwd, ".gjc", "_session-sess-remove-rev", "state", "active", "deep-interview.json");
+			const lockPath = `${activePath}.lock`;
+			await fs.mkdir(lockPath, { recursive: true });
+			await fs.writeFile(`${lockPath}/info`, JSON.stringify({ pid: process.pid, timestamp: Date.now() }));
+
+			let staleRemovalSettled = false;
+			const staleRemoval = removeActiveEntry(cwd, "sess-remove-rev", "deep-interview", {
+				cwd,
+				sourceRevision: 4,
+				lock: { retries: 20, retryDelayMs: 10, staleMs: 10_000 },
+			}).finally(() => {
+				staleRemovalSettled = true;
+			});
+
+			await Bun.sleep(20);
+			expect(staleRemovalSettled).toBe(false);
+			await fs.rm(lockPath, { recursive: true, force: true });
+
+			const result = await staleRemoval;
+			expect(result.deleted).toBe(false);
+			const persisted = JSON.parse(await fs.readFile(activePath, "utf8"));
+			expect(persisted.source_state_revision).toBe(5);
+			expect(persisted.phase).toBe("newer");
+			expect(persisted.hud.summary).toBe("newer hud");
+		});
+	});
+	it("exact-session HUD entry outranks newer session-less fallback and scoped reads exclude foreign sessions", async () => {
+		await withTempCwd(async cwd => {
+			await syncSkillActiveState({
+				cwd,
+				skill: "ultragoal",
+				phase: "active",
+				active: true,
+				sessionId: "sess-exact",
+				nowIso: "2026-01-01T00:00:00.000Z",
+				hud: { version: 1, summary: "exact hud" },
+				sourceRevision: 10,
+			});
+			await syncSkillActiveState({
+				cwd,
+				skill: "team",
+				phase: "running",
+				active: true,
+				sessionId: "foreign-session",
+				nowIso: "2026-01-01T00:05:00.000Z",
+				hud: { version: 1, summary: "foreign hud" },
+				sourceRevision: 11,
+			});
+
+			const activeDir = path.join(cwd, ".gjc", "_session-sess-exact", "state", "active");
+			await fs.writeFile(
+				path.join(activeDir, "ultragoal.json"),
+				JSON.stringify({
+					skill: "ultragoal",
+					phase: "active",
+					active: true,
+					updated_at: "2026-01-01T00:10:00.000Z",
+					hud: { version: 1, summary: "session-less fallback hud" },
+				}),
+			);
+
+			const visible = await readVisibleSkillActiveState(cwd, "sess-exact");
+			expect(visible?.active_skills?.map(entry => entry.skill)).toEqual(["ultragoal"]);
+			expect(visible?.active_skills?.[0]?.session_id).toBe("sess-exact");
+			expect(visible?.active_skills?.[0]?.hud?.summary).toBe("exact hud");
+		});
+	});
+
+	it("session-wide visible reads intentionally include same-session entries from every thread", async () => {
+		await withTempCwd(async cwd => {
+			await syncSkillActiveState({
+				cwd,
+				skill: "team",
+				phase: "running",
+				active: true,
+				sessionId: "sess-thread",
+				threadId: "thread-a",
+			});
+			await syncSkillActiveState({
+				cwd,
+				skill: "ultragoal",
+				phase: "active",
+				active: true,
+				sessionId: "sess-thread",
+				threadId: "thread-b",
+			});
+
+			const visible = await readVisibleSkillActiveState(cwd, "sess-thread");
+			expect(visible?.active_skills?.map(entry => [entry.skill, entry.thread_id])).toEqual([
+				["ultragoal", "thread-b"],
+				["team", "thread-a"],
+			]);
+		});
+	});
+
+	it("planning pipeline collapse keeps downstream planning skill while preserving team alongside ultragoal", async () => {
+		await withTempCwd(async cwd => {
+			await syncSkillActiveState({ cwd, skill: "ralplan", phase: "planner", active: true, sessionId: "sess-pipe" });
+			await syncSkillActiveState({ cwd, skill: "team", phase: "running", active: true, sessionId: "sess-pipe" });
+			await syncSkillActiveState({ cwd, skill: "ultragoal", phase: "active", active: true, sessionId: "sess-pipe" });
+
+			const visible = await readVisibleSkillActiveState(cwd, "sess-pipe");
+			expect(visible?.active_skills?.map(entry => entry.skill)).toEqual(["ultragoal", "team"]);
+		});
+	});
+
+	it("clear demotion removes stale HUD chips from visible state after cache rebuild", async () => {
+		await withTempCwd(async cwd => {
+			await syncSkillActiveState({
+				cwd,
+				skill: "ultragoal",
+				phase: "active",
+				active: true,
+				sessionId: "sess-clear",
+				hud: { version: 1, summary: "active hud", chips: [{ label: "goal", value: "G001" }] },
+			});
+			await syncSkillActiveState({
+				cwd,
+				skill: "ultragoal",
+				phase: "complete",
+				active: false,
+				sessionId: "sess-clear",
+				hud: { version: 1, summary: "stale clear hud", chips: [{ label: "stale", value: "yes" }] },
+			});
+
+			const visible = await readVisibleSkillActiveState(cwd, "sess-clear");
+			expect(visible).toBeNull();
+			const { sessionPath } = getSkillActiveStatePaths(cwd, "sess-clear");
+			const snapshot = JSON.parse(await fs.readFile(sessionPath, "utf-8"));
+			expect(snapshot.active).toBe(false);
+			expect(snapshot.active_skills).toEqual([]);
 		});
 	});
 

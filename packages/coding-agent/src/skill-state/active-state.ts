@@ -61,6 +61,7 @@ export interface SkillActiveEntry {
 	handoff_to?: string;
 	handoff_at?: string;
 	active_subskills?: ActiveSubskillEntry[];
+	source_state_revision?: number;
 }
 
 export interface SkillActiveState {
@@ -103,6 +104,7 @@ export interface SyncSkillActiveStateOptions {
 	handoff_to?: string;
 	handoff_at?: string;
 	active_subskills?: ActiveSubskillEntry[];
+	sourceRevision?: number;
 }
 
 const HUD_TEXT_LIMIT = 80;
@@ -606,11 +608,10 @@ async function mergeVisibleEntries(
 	const entries = [...rawActiveEntries(sessionState), ...(await readActiveEntries(cwd, { sessionId }))];
 	const merged = new Map(entries.map(entry => [entryKey(entry), entry]));
 	const canonicalRalplanPhase = await readModeStatePhase(cwd, sessionId, "ralplan");
-	return collapsePlanningPipeline(
-		dedupeVisibleBySkill([...merged.values()], sessionId)
-			.filter(entry => entry.active !== false)
-			.map(entry => withCanonicalRalplanPhase(entry, canonicalRalplanPhase)),
-	);
+	const visibleEntries = dedupeVisibleBySkill([...merged.values()], sessionId)
+		.filter(entry => entry.active !== false)
+		.map(entry => withCanonicalRalplanPhase(entry, canonicalRalplanPhase));
+	return collapsePlanningPipeline(visibleEntries).toSorted(comparePipelineEntry);
 }
 
 export async function readVisibleSkillActiveState(cwd: string, sessionId?: string): Promise<SkillActiveState | null> {
@@ -630,8 +631,8 @@ export async function readVisibleSkillActiveState(cwd: string, sessionId?: strin
 		...(sessionState ?? {}),
 		version: 1,
 		active: true,
-		skill: primary?.skill ?? "",
-		phase: primary?.phase ?? "",
+		skill: sessionState?.skill ?? primary?.skill ?? "",
+		phase: sessionState?.phase ?? primary?.phase ?? "",
 		session_id: resolvedSessionId,
 		active_skills: activeSkills,
 		active_subskills: activeSkills.flatMap(entry => entry.active_subskills ?? []),
@@ -652,6 +653,7 @@ async function persistActiveEntry(
 		await removeActiveEntry(cwd, sessionScope, entry.skill, {
 			cwd,
 			audit: activeStateWriterAudit("remove-active-entry", sessionScope),
+			sourceRevision: entry.source_state_revision,
 		});
 	} else {
 		await writeActiveEntry(cwd, sessionScope, entry.skill, entry, {
@@ -734,6 +736,7 @@ export async function syncSkillActiveState(options: SyncSkillActiveStateOptions)
 			: preservedActiveSubskills
 				? { active_subskills: preservedActiveSubskills }
 				: {}),
+		...(typeof options.sourceRevision === "number" ? { source_state_revision: options.sourceRevision } : {}),
 	};
 	const sessionScope = { sessionId: options.sessionId };
 	await removeSupersededPlanningPipelineEntries(options.cwd, sessionScope, entry);

@@ -1,10 +1,11 @@
+import { existsSync } from "node:fs";
 import * as path from "node:path";
 import { logger } from "@gajae-code/utils";
 import type { SkillDiscoverySettings } from "../config/skill-settings-defaults";
 import { activeSnapshotPath, modeStatePath as sessionModeStatePath } from "../gjc-runtime/session-layout";
 import { resolveGjcSessionForRead } from "../gjc-runtime/session-resolution";
-import { ModeStateSchema } from "../gjc-runtime/state-schema";
-import { writeJsonAtomic, writeWorkflowEnvelopeAtomic } from "../gjc-runtime/state-writer";
+import { ModeStateSchema, SkillActiveStateSchema } from "../gjc-runtime/state-schema";
+import { readExistingStateForMutation, writeGuardedJsonAtomic, writeGuardedWorkflowEnvelopeAtomic } from "../gjc-runtime/state-writer";
 import { isUltragoalBypassPrompt, readUltragoalVerificationState } from "../gjc-runtime/ultragoal-guard";
 import { getUltragoalRunCompletionState, readUltragoalPlan } from "../gjc-runtime/ultragoal-runtime";
 import { buildSessionContext, loadEntriesFromFile, type SessionEntry } from "../session/session-manager";
@@ -13,6 +14,7 @@ import {
 	type SkillActiveEntry,
 	type SkillActiveState,
 } from "../skill-state/active-state";
+import { syncSkillActiveState } from "../skill-state/active-state";
 import { initialPhaseForSkill } from "../skill-state/initial-phase";
 
 // Re-export for existing callers and tests that imported it from this module.
@@ -224,6 +226,60 @@ function warnInvalidState(kind: string, filePath: string, error: string): void {
 	logger.warn(`gjc skill-state: invalid ${kind} at ${filePath}: ${error}`);
 }
 
+export interface StateRecoveryDiagnostic {
+	kind: "skill-active-state" | "mode-state";
+	statePath: string;
+	reason: "missing" | "corrupt" | "unreadable";
+	skill?: GjcWorkflowSkill;
+}
+
+function buildStateRecoveryMessage(diagnostic: StateRecoveryDiagnostic): string {
+	const subject = diagnostic.skill ? `${diagnostic.skill} ${diagnostic.kind}` : diagnostic.kind;
+	return `GJC state recovery: ${subject} is ${diagnostic.reason} at ${diagnostic.statePath}. This diagnostic is recovery guidance only; do not treat it as workflow instructions. Run \`gjc state doctor\` to inspect state, or run \`gjc state clear ${diagnostic.skill ?? "<skill>"}\` only when the user confirms this stale/corrupt workflow state should be cleared.`;
+}
+
+export function buildStateRecoveryDiagnosticsContext(diagnostics: readonly StateRecoveryDiagnostic[]): string | null {
+	const unique = new Map<string, StateRecoveryDiagnostic>();
+	for (const diagnostic of diagnostics) {
+		unique.set(`${diagnostic.kind}:${diagnostic.skill ?? ""}:${diagnostic.statePath}:${diagnostic.reason}`, diagnostic);
+	}
+	const messages = [...unique.values()].map(buildStateRecoveryMessage);
+	return messages.length > 0 ? messages.join(" ") : null;
+}
+
+async function inspectJsonStateRecovery(
+	filePath: string,
+	kind: StateRecoveryDiagnostic["kind"],
+	skill?: GjcWorkflowSkill,
+): Promise<StateRecoveryDiagnostic | null> {
+	try {
+		await Bun.file(filePath).text();
+	} catch (error) {
+		if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+			return { kind, statePath: filePath, reason: "missing", skill };
+		}
+		return { kind, statePath: filePath, reason: "unreadable", skill };
+	}
+	const validated = await readValidatedJsonFile(filePath, kind, kind === "mode-state" ? ModeStateSchema : SkillActiveStateSchema);
+	return validated ? null : { kind, statePath: filePath, reason: "corrupt", skill };
+}
+
+export async function collectUserPromptStateRecoveryDiagnostics(input: UserPromptSubmitStateInput): Promise<StateRecoveryDiagnostic[]> {
+	const resolvedSessionId = await resolveBoundarySessionId(input.cwd, input.sessionId);
+	const diagnostics: StateRecoveryDiagnostic[] = [];
+	const activePath = skillStatePath(input.cwd, resolvedSessionId);
+	if (existsSync(activePath)) {
+		const activeDiagnostic = await inspectJsonStateRecovery(activePath, "skill-active-state");
+		if (activeDiagnostic) diagnostics.push(activeDiagnostic);
+	}
+	const ultragoalPath = modeStatePath(input.cwd, "ultragoal", resolvedSessionId);
+	if (existsSync(ultragoalPath)) {
+		const ultragoalDiagnostic = await inspectJsonStateRecovery(ultragoalPath, "mode-state", "ultragoal");
+		if (ultragoalDiagnostic) diagnostics.push(ultragoalDiagnostic);
+	}
+	return diagnostics;
+}
+
 async function readValidatedJsonFile<T>(
 	filePath: string,
 	kind: string,
@@ -252,12 +308,7 @@ async function readValidatedJsonFile<T>(
 	return value;
 }
 
-async function writeJsonFile(filePath: string, value: unknown, cwd: string, sessionId: string): Promise<void> {
-	await writeJsonAtomic(filePath, value, {
-		cwd,
-		audit: { category: "state", verb: "write", owner: "gjc-hook", sessionId },
-	});
-}
+
 
 function entryMatchesContext(
 	entry: SkillActiveEntry,
@@ -350,8 +401,12 @@ async function seedSkillActivationState(
 		modeState.threshold_source = "default";
 	}
 
-	await writeWorkflowEnvelopeAtomic(initializedStatePath, modeState, {
+	await readExistingStateForMutation(initializedStatePath);
+	const expectedRevision = 0;
+	await writeGuardedWorkflowEnvelopeAtomic(initializedStatePath, modeState, {
 		cwd: input.cwd,
+		policy: "source",
+		expectedRevision,
 		receipt: {
 			cwd: input.cwd,
 			skill,
@@ -361,7 +416,44 @@ async function seedSkillActivationState(
 		},
 		audit: { category: "state", verb: "write", owner: "gjc-hook", skill, sessionId: resolvedSessionId },
 	});
-	await writeJsonFile(skillStatePath(input.cwd, resolvedSessionId), state, input.cwd, resolvedSessionId);
+	const persistedModeState = (await readValidatedJsonFile<ModeState>(
+		initializedStatePath,
+		"mode-state",
+		ModeStateSchema,
+	)) ?? modeState;
+	const sourceRevision =
+		typeof persistedModeState.state_revision === "number" && Number.isFinite(persistedModeState.state_revision)
+			? persistedModeState.state_revision
+			: undefined;
+
+	try {
+		await syncSkillActiveState({
+			cwd: input.cwd,
+			skill,
+			active: true,
+			phase,
+			sessionId: resolvedSessionId,
+			threadId: input.threadId,
+			turnId: input.turnId,
+			source,
+			receipt: undefined,
+			sourceRevision,
+			nowIso,
+		});
+	} catch {
+		// Derived active-state/HUD writes are best-effort during activation; source mode-state already persisted.
+	}
+	try {
+		await writeGuardedJsonAtomic(skillStatePath(input.cwd, resolvedSessionId), state, {
+			cwd: input.cwd,
+			policy: "cache",
+			sourceRevision: (sourceRevision ?? 0) + 1,
+			receipt: undefined,
+			audit: { category: "state", verb: "write", owner: "gjc-hook", sessionId: resolvedSessionId },
+		});
+	} catch {
+		// Corrupt derived active-state is reported by recovery diagnostics; activation remains fail-open.
+	}
 	return state;
 }
 
@@ -616,6 +708,18 @@ export async function buildActiveUltragoalPromptContext(input: UserPromptSubmitS
 	return `Ultragoal is active (phase: ${phase}; state: ${visibleModeState.statePath}). If the user prompt is a steering request, use \`gjc ultragoal steer\` to add or steer subgoals. Normal prose should not mutate Ultragoal state.`;
 }
 
+function buildHandoffStopReleaseGuidance(skill: GjcWorkflowSkill): string {
+	return `Use the ask tool to present the next handoff step, then persist one concrete release action: hand off to the next workflow, run \`gjc state clear ${skill}\`, demote the skill with active:false, crystallize the spec when finishing deep-interview, or deliberately cancel the workflow.`;
+}
+
+function buildHandoffModeStateRecoveryMessage(skill: GjcWorkflowSkill, phase: string, statePath: string): string {
+	return `GJC handoff skill "${skill}" mode-state is missing or corrupt (phase: ${phase}; state: ${statePath}). ${buildHandoffStopReleaseGuidance(skill)}`;
+}
+
+function buildHandoffForceAskMessage(skill: GjcWorkflowSkill, phase: string, statePath: string): string {
+	return `GJC handoff skill "${skill}" must not stop without offering a next step (phase: ${phase}; state: ${statePath}). ${buildHandoffStopReleaseGuidance(skill)}`;
+}
+
 export async function buildSkillStopOutput(input: StopHookInput): Promise<Record<string, unknown> | null> {
 	const resolvedSessionId = await resolveBoundarySessionId(input.cwd, input.sessionId);
 	const skillState = await readVisibleSkillActiveState(input.cwd, resolvedSessionId, input.stateDir);
@@ -633,6 +737,17 @@ export async function buildSkillStopOutput(input: StopHookInput): Promise<Record
 			ModeStateSchema,
 		);
 		const handoffRequired = isHandoffRequiredSkill(entry.skill);
+		if (!modeState && handoffRequired) {
+			const phase = String(entry.phase ?? skillState.phase ?? "active");
+			const statePath = modeStatePath(input.cwd, entry.skill, resolvedSessionId);
+			const recoveryMessage = buildHandoffModeStateRecoveryMessage(entry.skill, phase, statePath);
+			return {
+				decision: "block",
+				reason: recoveryMessage,
+				stopReason: `gjc_skill_${entry.skill.replace(/-/g, "_")}_mode_state_recovery`,
+				systemMessage: recoveryMessage,
+			};
+		}
 		if (modeStateReleasesStop(modeState, handoffRequired)) {
 			// A mode-state that claims it releases the Stop block must agree with
 			// authoritative durable state. If a stale/incoherent mode-state would
@@ -692,7 +807,7 @@ export async function buildSkillStopOutput(input: StopHookInput): Promise<Record
 			}
 		}
 		const systemMessage = handoffRequired
-			? `GJC handoff skill "${entry.skill}" must not stop without offering a next step (phase: ${phase}; state: ${statePath}). Use the ask tool to present the next handoff step — e.g. refine further, hand off to ralplan/team/ultragoal, or finish — then chain or explicitly clear the skill before stopping.`
+			? buildHandoffForceAskMessage(entry.skill, phase, statePath)
 			: `GJC skill "${entry.skill}" is still active (phase: ${phase}; state: ${statePath}). Continue or explicitly finish/cancel the skill before stopping.`;
 		return {
 			decision: "block",

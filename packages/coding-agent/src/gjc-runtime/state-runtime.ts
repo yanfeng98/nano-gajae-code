@@ -60,7 +60,7 @@ import {
 	softDelete,
 	updateWorkflowTransactionJournal,
 	type WorkflowEnvelopeIntegrityMismatch,
-	writeWorkflowEnvelopeAtomic,
+	writeGuardedWorkflowEnvelopeAtomic,
 } from "./state-writer";
 import { getSkillManifest, isKnownWorkflowState, isValidTransition, typedArgsFor } from "./workflow-manifest";
 
@@ -798,6 +798,12 @@ async function warnAndAuditOutOfBandIfNeeded(
 	return message;
 }
 
+function existingStateRevision(value: unknown): number | undefined {
+	if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+	const revision = (value as Record<string, unknown>).state_revision;
+	return typeof revision === "number" && Number.isFinite(revision) ? revision : 0;
+}
+
 async function writeJsonAtomic(
 	cwd: string,
 	filePath: string,
@@ -822,20 +828,40 @@ async function writeJsonAtomic(
 	if (warning && !options?.force) {
 		throw new StateCommandError(2, `${warning}; use --force to overwrite tampered mode-state`);
 	}
-	await writeWorkflowEnvelopeAtomic(filePath, value, {
-		cwd,
-		audit: {
-			sessionId: options?.sessionId ?? "",
-			category: "state",
-			verb,
-			owner: options?.owner ?? "gjc-state-cli",
-			skill: options?.skill,
-			mutationId: options?.mutationId,
-			fromPhase: options?.fromPhase,
-			toPhase: options?.toPhase,
-			forced: options?.force ?? false,
-		},
-	});
+	if (verb === "reconcile") {
+		await writeGuardedWorkflowEnvelopeAtomic(filePath, value, {
+			cwd,
+			policy: "source",
+			audit: {
+				sessionId: options?.sessionId ?? "",
+				category: "state",
+				verb,
+				owner: options?.owner ?? "gjc-state-cli",
+				skill: options?.skill,
+				mutationId: options?.mutationId,
+				fromPhase: options?.fromPhase,
+				toPhase: options?.toPhase,
+				forced: options?.force ?? false,
+			},
+		});
+	} else {
+		await writeGuardedWorkflowEnvelopeAtomic(filePath, value, {
+			cwd,
+			policy: "source",
+			expectedRevision: existingStateRevision(value),
+			audit: {
+				sessionId: options?.sessionId ?? "",
+				category: "state",
+				verb,
+				owner: options?.owner ?? "gjc-state-cli",
+				skill: options?.skill,
+				mutationId: options?.mutationId,
+				fromPhase: options?.fromPhase,
+				toPhase: options?.toPhase,
+				forced: options?.force ?? false,
+			},
+		});
+	}
 	return { warning, stamped: (await readJsonFile(filePath)) ?? {} };
 }
 
@@ -1000,6 +1026,14 @@ function buildHudForMode(
 								typeof (rawLedger as Record<string, unknown>).timestamp === "string"
 									? ((rawLedger as Record<string, unknown>).timestamp as string)
 									: undefined,
+							kind:
+								typeof (rawLedger as Record<string, unknown>).kind === "string"
+									? ((rawLedger as Record<string, unknown>).kind as string)
+									: undefined,
+							evidence:
+								typeof (rawLedger as Record<string, unknown>).evidence === "string"
+									? ((rawLedger as Record<string, unknown>).evidence as string)
+									: undefined,
 						}
 					: undefined;
 			const status = typeof payload.status === "string" ? (payload.status as string) : (phase ?? "pending");
@@ -1069,6 +1103,7 @@ async function syncWorkflowSkillState(options: {
 			source: "gjc-state-cli",
 			hud: buildHudForMode(options.mode, options.payload),
 			...(options.receipt ? { receipt: options.receipt } : {}),
+			sourceRevision: existingStateRevision(options.payload),
 		});
 	} catch {
 		// HUD sync is best-effort and must not change command semantics.
@@ -1094,6 +1129,7 @@ export async function reconcileWorkflowSkillState(options: {
 	active: boolean;
 	phase: string;
 	payload: Record<string, unknown>;
+	sourceRevision?: number;
 }): Promise<{ stateFile: string }> {
 	const { cwd, mode, threadId, turnId, active, payload } = options;
 	const { gjcSessionId: sessionId } = resolveGjcSessionForWrite(cwd, {
@@ -1143,15 +1179,37 @@ export async function reconcileWorkflowSkillState(options: {
 	const validation = validateWorkflowStateEnvelope(mode, merged);
 	if (!validation.valid) throw new StateCommandError(2, validation.error ?? `invalid ${mode} state envelope`);
 
-	await writeJsonAtomic(cwd, filePath, merged, "reconcile", {
-		sessionId,
-		skill: mode,
-		mutationId,
-		force: true,
-		fromPhase,
-		toPhase: trimmedPhase,
-		owner: "gjc-runtime",
+	if (existingRead.kind === "corrupt") await fs.rm(filePath, { force: true });
+	await writeGuardedWorkflowEnvelopeAtomic(filePath, merged, {
+		cwd,
+		policy: "source",
+		receipt: {
+			cwd,
+			skill: mode,
+			owner: "gjc-runtime",
+			command: `gjc ${mode} (reconcile)`,
+			sessionId,
+			nowIso: nowIsoStr,
+			mutationId,
+			verb: "reconcile",
+			forced: true,
+			fromPhase,
+			toPhase: trimmedPhase,
+		},
+		audit: {
+			category: "state",
+			verb: "reconcile",
+			owner: "gjc-runtime",
+			sessionId,
+			skill: mode,
+			mutationId,
+			forced: true,
+			fromPhase,
+			toPhase: trimmedPhase,
+		},
 	});
+	const persisted = (await readJsonFile(filePath)) ?? {};
+	const sourceRevision = options.sourceRevision ?? existingStateRevision(persisted);
 
 	// Reconciliation drives the active-state/HUD update directly (not via the
 	// best-effort syncWorkflowSkillState wrapper) so a failed HUD/active-state write
@@ -1168,6 +1226,7 @@ export async function reconcileWorkflowSkillState(options: {
 		source: "gjc-runtime-reconcile",
 		hud: buildHudForMode(mode, merged),
 		receipt,
+		sourceRevision,
 	});
 	await touchStateActivityMarker(cwd, sessionId, filePath);
 	return { stateFile: filePath };
