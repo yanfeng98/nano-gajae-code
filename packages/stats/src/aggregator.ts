@@ -97,6 +97,10 @@ interface WorkerHandle {
  * by callers.
  */
 function createSyncWorker(): Worker {
+	const bundleDir = process.env.PI_DECRYPTED_BUNDLE_DIR;
+	if (bundleDir) {
+		return new Worker(`${bundleDir}/worker-sync.mjs`, { type: "module" });
+	}
 	return isCompiledBinary()
 		? new Worker("./packages/stats/src/sync-worker.ts", { type: "module" })
 		: new Worker(new URL("./sync-worker.ts", import.meta.url).href, { type: "module" });

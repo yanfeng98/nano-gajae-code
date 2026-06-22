@@ -462,9 +462,12 @@ async function raceWithTimeout<T>(
 
 async function spawnTabWorker(): Promise<WorkerHandle> {
 	try {
-		const worker = isCompiledBinary()
-			? new Worker("./packages/coding-agent/src/tools/browser/tab-worker-entry.ts", { type: "module" })
-			: new Worker(new URL("./tab-worker-entry.ts", import.meta.url).href, { type: "module" });
+		const bundleDir = process.env.PI_DECRYPTED_BUNDLE_DIR;
+		const worker = bundleDir
+			? new Worker(`${bundleDir}/worker-tab.mjs`, { type: "module" })
+			: isCompiledBinary()
+				? new Worker("./packages/coding-agent/src/tools/browser/tab-worker-entry.ts", { type: "module" })
+				: new Worker(new URL("./tab-worker-entry.ts", import.meta.url).href, { type: "module" });
 		return wrapBunWorker(worker);
 	} catch (err) {
 		logger.warn("Bun Worker spawn failed; using inline tab worker (no sync-loop guard)", {

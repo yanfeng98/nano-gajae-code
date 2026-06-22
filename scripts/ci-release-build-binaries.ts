@@ -14,6 +14,8 @@ interface BinaryTarget {
 const repoRoot = path.join(import.meta.dir, "..");
 const binariesDir = path.join(repoRoot, "packages", "coding-agent", "binaries");
 const entrypoint = "./packages/coding-agent/src/cli.ts";
+// Encrypted-build launcher entry point
+const encryptedEntrypoint = "./packages/coding-agent/src/cli-launcher.ts";
 // Worker entrypoints. Bun's `--compile` static analyzer discovers the
 // literal in `new Worker("…", …)` at each spawn site, but only actually
 // emits the worker into the bunfs root when it is also listed here as an
@@ -29,6 +31,8 @@ const workerEntrypoints = [
 	"./packages/coding-agent/src/eval/js/worker-entry.ts",
 ];
 const isDryRun = process.argv.includes("--dry-run");
+const isEncrypt = process.argv.includes("--encrypt");
+
 const targets: BinaryTarget[] = [
 	{
 		id: "linux-x64",
@@ -66,12 +70,6 @@ function parseRequestedTargets(): Set<string> | null {
 }
 
 function hostDefaultTargets(): BinaryTarget[] {
-	// A bare invocation (no --targets / RELEASE_TARGETS) is a single-host
-	// dogfood build, not a full release. Only the host's platform/arch can be
-	// built here because `embed:native` requires a matching prebuilt addon, and
-	// cross-arch addons are produced per-runner in CI. Default to the host
-	// target instead of every release target so we never demand native addons
-	// for architectures this machine cannot produce.
 	return targets.filter(target => target.platform === process.platform && target.arch === process.arch);
 }
 
@@ -137,6 +135,128 @@ async function buildBinary(target: BinaryTarget): Promise<void> {
 	);
 }
 
+// ── Encrypted build steps ─────────────────────────────────────────────────
+
+async function generateKey(): Promise<void> {
+	if (isDryRun) {
+		console.log("DRY RUN bun scripts/generate-key.ts");
+		return;
+	}
+	console.log("Generating AES-256 encryption key...");
+	await runCommand(["bun", "scripts/generate-key.ts"], repoRoot);
+}
+
+async function buildNativeWithKey(target: BinaryTarget): Promise<void> {
+	if (isDryRun) {
+		console.log(`DRY RUN bun run build:native [${target.platform}/${target.arch}]`);
+		return;
+	}
+	console.log("Building native addon with embedded decryption key...");
+	await runCommand(["bun", "run", "build:native"], repoRoot, {
+		...Bun.env,
+		TARGET_PLATFORM: target.platform,
+		TARGET_ARCH: target.arch,
+	});
+}
+
+/** Bundle definitions: output filename → entry point */
+const ENCRYPTED_BUNDLES: Record<string, string> = {
+	"enc-main.bin": "./packages/coding-agent/src/cli.ts",
+	"enc-sync-worker.bin": "./packages/stats/src/sync-worker.ts",
+	"enc-tab-worker.bin": "./packages/coding-agent/src/tools/browser/tab-worker-entry.ts",
+	"enc-eval-worker.bin": "./packages/coding-agent/src/eval/js/worker-entry.ts",
+};
+
+async function buildAndEncryptBundles(): Promise<void> {
+	const distDir = path.join(repoRoot, "packages", "coding-agent", "dist");
+	await fs.mkdir(distDir, { recursive: true });
+
+	for (const [encName, entry] of Object.entries(ENCRYPTED_BUNDLES)) {
+		const bundlePath = path.join(distDir, `${encName}.mjs`);
+		const encPath = path.join(distDir, encName);
+
+		if (isDryRun) {
+			console.log(`DRY RUN bun build ${entry} --outfile ${bundlePath}`);
+			console.log(`DRY RUN bun scripts/encrypt-bundle.ts ${bundlePath} ${encPath}`);
+			continue;
+		}
+
+		console.log(`Bundling ${entry} → ${bundlePath}...`);
+		await runCommand(
+			[
+				"bun",
+				"build",
+				"--minify",
+				"--target",
+				"bun",
+				"--format",
+				"esm",
+				"--root",
+				".",
+				"--external",
+				"mupdf",
+				entry,
+				"--outfile",
+				bundlePath,
+			],
+			repoRoot,
+			Bun.env,
+		);
+
+		console.log(`Encrypting ${bundlePath} → ${encPath}...`);
+		await runCommand(
+			["bun", "scripts/encrypt-bundle.ts", bundlePath, encPath],
+			repoRoot,
+		);
+
+		// Remove the intermediate plaintext bundle
+		await fs.rm(bundlePath, { force: true });
+	}
+}
+
+async function buildEncryptedBinary(target: BinaryTarget): Promise<void> {
+	console.log(`Building encrypted ${target.outfile}...`);
+
+	// Embed native addon (contains decrypt logic)
+	await embedNative(target);
+
+	if (isDryRun) {
+		console.log(
+			`DRY RUN bun build --compile --minify --no-compile-autoload-bunfig --no-compile-autoload-dotenv --no-compile-autoload-tsconfig --no-compile-autoload-package-json --keep-names --define process.env.PI_COMPILED="true" --define process.env.PI_ENCRYPTED="true" --root . --external mupdf --target=${target.target} ${encryptedEntrypoint} --outfile ${target.outfile}`,
+		);
+		return;
+	}
+
+	await runCommand(
+		[
+			"bun",
+			"build",
+			"--compile",
+			"--minify",
+			"--no-compile-autoload-bunfig",
+			"--no-compile-autoload-dotenv",
+			"--no-compile-autoload-tsconfig",
+			"--no-compile-autoload-package-json",
+			"--keep-names",
+			"--define",
+			'process.env.PI_COMPILED="true"',
+			"--define",
+			'process.env.PI_ENCRYPTED="true"',
+			"--root",
+			".",
+			"--external",
+			"mupdf",
+			"--target",
+			target.target,
+			encryptedEntrypoint,
+			"--outfile",
+			target.outfile,
+		],
+		repoRoot,
+		Bun.env,
+	);
+}
+
 async function generateBundle(): Promise<void> {
 	if (isDryRun) {
 		console.log("DRY RUN bun --cwd=packages/stats scripts/generate-client-bundle.ts --generate");
@@ -155,7 +275,37 @@ async function resetArtifacts(): Promise<void> {
 	await runCommand(["bun", "--cwd=packages/stats", "scripts/generate-client-bundle.ts", "--reset"], repoRoot);
 }
 
+async function cleanupEncryptArtifacts(): Promise<void> {
+	const keyTmp = path.join(repoRoot, "crates", "pi-natives", "key.tmp");
+	const distDir = path.join(repoRoot, "packages", "coding-agent", "dist");
+	const encryptedFiles = Object.keys(ENCRYPTED_BUNDLES).map(f => path.join(distDir, f));
+	// Also clean up any stray plaintext .mjs bundles
+	const mjsFiles = Object.keys(ENCRYPTED_BUNDLES).map(f => path.join(distDir, `${f}.mjs`));
+
+	if (isDryRun) {
+		console.log(`DRY RUN rm ${keyTmp}`);
+		for (const f of [...encryptedFiles, ...mjsFiles]) {
+			console.log(`DRY RUN rm ${f}`);
+		}
+		return;
+	}
+	await fs.rm(keyTmp, { force: true });
+	for (const f of [...encryptedFiles, ...mjsFiles]) {
+		await fs.rm(f, { force: true });
+	}
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────
+
 async function main(): Promise<void> {
+	// --list-targets: print target IDs and exit
+	if (process.argv.includes("--list-targets")) {
+		for (const t of targets) {
+			console.log(`${t.id} (${t.platform}-${t.arch}, ${t.target}) -> ${t.outfile}`);
+		}
+		return;
+	}
+
 	const requestedTargets = parseRequestedTargets();
 	const selectedTargets = requestedTargets
 		? targets.filter(target => requestedTargets.has(target.id))
@@ -182,9 +332,29 @@ async function main(): Promise<void> {
 
 	await fs.mkdir(binariesDir, { recursive: true });
 	await generateBundle();
+
 	try {
-		for (const target of selectedTargets) {
-			await buildBinary(target);
+		if (isEncrypt) {
+			// ── Encrypted build pipeline ─────────────────────────────────
+			await generateKey();
+
+			// Bundle + encrypt happens once (same JS bundles for all targets)
+			await buildAndEncryptBundles();
+
+			for (const target of selectedTargets) {
+				// Build native addon with key baked in (per-target arch/variant)
+				await buildNativeWithKey(target);
+
+				// Compile with launcher entry point (encrypted files embedded as assets)
+				await buildEncryptedBinary(target);
+			}
+
+			await cleanupEncryptArtifacts();
+		} else {
+			// ── Standard (non-encrypted) build pipeline ──────────────────
+			for (const target of selectedTargets) {
+				await buildBinary(target);
+			}
 		}
 	} finally {
 		await resetArtifacts();

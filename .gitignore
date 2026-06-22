@@ -31,6 +31,11 @@ target/
 *.tmp
 .DS_Store
 
+# Encryption build artifacts
+crates/pi-natives/key.tmp
+packages/coding-agent/dist/enc-*.bin
+packages/coding-agent/dist/*.mjs
+
 # Logs & profiling
 *.log
 tui-debug.log

@@ -347,9 +347,12 @@ async function raceWithTimeout<T>(promise: Promise<T>, timeoutMs: number, reason
 
 async function spawnJsWorker(): Promise<WorkerHandle> {
 	try {
-		const worker = isCompiledBinary()
-			? new Worker("./packages/coding-agent/src/eval/js/worker-entry.ts", { type: "module" })
-			: new Worker(new URL("./worker-entry.ts", import.meta.url).href, { type: "module" });
+		const bundleDir = process.env.PI_DECRYPTED_BUNDLE_DIR;
+		const worker = bundleDir
+			? new Worker(`${bundleDir}/worker-eval.mjs`, { type: "module" })
+			: isCompiledBinary()
+				? new Worker("./packages/coding-agent/src/eval/js/worker-entry.ts", { type: "module" })
+				: new Worker(new URL("./worker-entry.ts", import.meta.url).href, { type: "module" });
 		return wrapBunWorker(worker);
 	} catch (err) {
 		logger.warn("Bun Worker spawn failed; using inline JS eval worker (no sync-loop guard)", {
