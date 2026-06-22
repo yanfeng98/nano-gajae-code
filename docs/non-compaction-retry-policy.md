@@ -9,9 +9,6 @@ It explicitly excludes context-overflow recovery via auto-compaction. Overflow i
 - [`../src/session/agent-session.ts`](../packages/coding-agent/src/session/agent-session.ts)
 - [`../src/config/settings-schema.ts`](../packages/coding-agent/src/config/settings-schema.ts)
 - [`../src/modes/controllers/event-controller.ts`](../packages/coding-agent/src/modes/controllers/event-controller.ts)
-- [`../src/modes/rpc/rpc-mode.ts`](../packages/coding-agent/src/modes/rpc/rpc-mode.ts)
-- [`../src/modes/rpc/rpc-client.ts`](../packages/coding-agent/src/modes/rpc/rpc-client.ts)
-- [`../src/modes/rpc/rpc-types.ts`](../packages/coding-agent/src/modes/rpc/rpc-types.ts)
 
 ## Scope boundary vs compaction
 
@@ -196,7 +193,6 @@ Final failure surfacing:
 - On max-exceeded or cancellation, `auto_retry_end.success === false`
 - TUI shows: `Retry failed after N attempts: <finalError>`
 - Extensions/hooks receive `auto_retry_end` with same fields
-- RPC consumers receive same event object on stdout stream
 
 ## Permanent stop conditions
 

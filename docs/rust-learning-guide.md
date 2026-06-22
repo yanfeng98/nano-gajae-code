@@ -352,10 +352,10 @@ impl Shell {
 
 ```rust
 enum BackendKind {
-    Apfs,              // 无数据变体
+                  // 无数据变体
     Btrfs,
     Overlayfs,
-    Projfs,
+    
 }
 
 enum IsoError {
@@ -368,7 +368,6 @@ enum IsoError {
 ```rust
 pub const fn as_str(self) -> &'static str {
     match self {
-        Self::Apfs => "apfs",
         Self::Btrfs => "btrfs",
         Self::Overlayfs => "overlayfs",
         Self::Projfs => "projfs",
@@ -382,7 +381,6 @@ pub const fn as_str(self) -> &'static str {
 **本项目示例** — `#[repr(C)]` 匹配 C 结构体布局 (`crates/pi-shell/src/process.rs:673`)：
 ```rust
 #[repr(C)]
-#[allow(non_snake_case, reason = "Windows PROCESSENTRY32W field names must match Win32 ABI")]
 struct PROCESSENTRY32W {
     dwSize:              u32,
     cntUsage:            u32,
@@ -1230,7 +1228,6 @@ if let Some(signal) = signal.and_then(|value| AbortSignal::from_unknown(value).o
 #[cfg(unix)]        // 所有 Unix-like (Linux, macOS)
 #[cfg(windows)]     // Windows
 #[cfg(target_os = "linux")]    // 仅 Linux
-#[cfg(target_os = "macos")]    // 仅 macOS
 ```
 
 **本项目示例** — 跨平台函数 (`crates/pi-shell/src/shell.rs:416-428`)：
@@ -1301,7 +1298,6 @@ fn clamp_tab_width_for_ops(width: u32) -> usize {
 ```rust
 pub const fn as_str(self) -> &'static str {
     match self {
-        Self::Apfs => "apfs",
         Self::Overlayfs => "overlayfs",
         // ...
     }

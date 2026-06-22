@@ -55,8 +55,6 @@ Failure behavior:
 7. On execute, `SshTool.execute()` rejects any `host` not in the discovered host-name set.
 8. `ensureHostInfo()` in `packages/coding-agent/src/ssh/connection-manager.ts` ensures an SSH master connection exists, loads cached host info from disk if present, and probes remote OS/shell when cache is missing or stale.
 9. `buildRemoteCommand()` in `packages/coding-agent/src/tools/ssh.ts` prepends a cwd change when `cwd` is provided:
-   - Unix-like or Windows compat shells: `cd -- '<cwd>' && <command>`
-   - Windows PowerShell: `Set-Location -Path '<cwd>'; <command>`
    - Windows cmd: `cd /d "<cwd>" && <command>`
 10. `clampTimeout("ssh", rawTimeout)` applies the `1..3600` second clamp from `packages/coding-agent/src/tools/tool-timeouts.ts`.
 11. `executeSSH()` in `packages/coding-agent/src/ssh/ssh-executor.ts` calls `ensureConnection(host)` again, opportunistically mounts the remote host root with `sshfs` if available, optionally wraps the command in `bash -c` or `sh -c` for Windows compat mode, then spawns `ssh` with `ptree.spawn`.
@@ -67,8 +65,6 @@ Failure behavior:
 ## Modes / Variants
 - **Tool unavailable**: `loadSshTool()` returns `null` when discovery finds no hosts, so the tool is not registered for that session.
 - **Unix-like target**: remote command is passed through directly, with optional `cd -- ... &&` prefix.
-- **Windows native shell**: cwd wrapper uses PowerShell `Set-Location` or cmd `cd /d`; command otherwise runs in the remote default Windows shell.
-- **Windows compat shell**: if host probing finds `bash` or `sh` on Windows, `executeSSH()` wraps the remote command as `bash -c '...'` or `sh -c '...'`. Host config can force compat on/off with `compat`.
 - **Cached vs probed host info**: shell/OS detection comes from in-memory cache, persisted JSON under the remote-host dir, or a fresh probe over SSH.
 - **Truncated vs untruncated output**: small output stays in memory; large output keeps only the last 50 KiB in memory and may spill full output to an artifact file.
 

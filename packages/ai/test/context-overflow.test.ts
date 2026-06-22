@@ -325,42 +325,6 @@ describe("Context overflow error handling", () => {
 		}, 300000); // 5 min timeout for local model
 	});
 
-	// =============================================================================
-	// LM Studio (local) - Skip if not running or local LLM tests disabled
-	// =============================================================================
-
-	let lmStudioRunning = false;
-	if (!Bun.env.PI_NO_LOCAL_LLM) {
-		try {
-			execSync("curl -s --max-time 1 http://localhost:1234/v1/models > /dev/null", { stdio: "ignore" });
-			lmStudioRunning = true;
-		} catch {
-			lmStudioRunning = false;
-		}
-	}
-
-	describe.skipIf(!lmStudioRunning)("LM Studio (local)", () => {
-		it("should detect overflow via isContextOverflow", async () => {
-			const model: Model<"openai-completions"> = {
-				id: "local-model",
-				api: "openai-completions",
-				provider: "lm-studio",
-				baseUrl: "http://localhost:1234/v1",
-				reasoning: false,
-				input: ["text"],
-				contextWindow: 8192,
-				maxTokens: 2048,
-				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-				name: "LM Studio Local Model",
-			};
-
-			const result = await testContextOverflow(model, "lm-studio");
-			logResult(result);
-
-			expect(result.stopReason).toBe("error");
-			expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
-		}, 120000);
-	});
 
 	// =============================================================================
 	// llama.cpp server (local) - Skip if not running

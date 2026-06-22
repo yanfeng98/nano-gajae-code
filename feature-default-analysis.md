@@ -2,7 +2,7 @@
 
 > 分析日期: 2026-06-22 | 分支: 260613-v0.5.0-dev | 代码基线: 0.5.0
 >
-> **已执行移除（31 轮）**:
+> **已执行移除（33 轮）**:
 > - 第一轮: macOS 电源管理 (~350 行)
 > - 第二轮: 全平台死代码清理 (~1,120 行)
 > - 第三轮: Hindsight 远程记忆系统 (~2,600 行)
@@ -34,7 +34,9 @@
 > - 第二十九轮: 与已删除 Provider 关联的死测试清理（~700 行：3 个整文件 + 6 个测试块，coding-agent 测试 64→44 fail）
 > - 第三十轮: Bridge Mode 完整移除（~5,960 行：49 文件，含 bridge/agent-wire 目录 + 26 测试）
 > - **第三十一轮: macOS + Windows 平台代码移除（~4,822 行：27 文件删除 + 29 文件简化，移除 windows-sys 依赖）**
-> - 总计减少 ~124,940+ 行，纯 Linux/WSL2 专用，零跨平台死代码。
+> - **第三十二轮: 关键残留紧急修复（~417 行净减少：package.json 死导出 + Schema 同步 + README + format-prompts）**
+> - **第三十三轮: 全面过时文档和源码残留清理（~5,300+ 行变更：41 文件，含 docs/auth-broker-gateway.md 完整删除、25+ 文档清理、NAPI 枚举同步、Provider 注释清理、测试清理）**
+> - 总计减少 ~125,000+ 行，纯 Linux/WSL2 专用，零跨平台死代码，零过时文档引用。
 >
 > **生态激活**:
 > - Claude Code 配置发现：激活 `discovery/claude.ts` + `discovery/claude-plugins.ts`，支持从 `~/.claude/` 和项目 `.claude/` 导入技能/命令/钩子/工具/MCP/设置
@@ -60,7 +62,7 @@
 | 已知 Provider 类型 | 19 个 |
 | 内置 Tool 数 | 31 个 (BUILTIN_TOOLS) + 3 个 (HIDDEN_TOOLS) |
 | Settings 配置项 | ~95 个 (已移除 4 power + 32 hindsight + 9 dead keys) |
-| 已移除代码行数 | ~124,940+ 行 (三十一轮) |
+| 已移除代码行数 | ~125,000+ 行 (三十三轮) |
 | 运行模式 | 2 种 (interactive, print) |
 | CLI 子命令 | 14 个 |
 | 目标平台 | Linux x64 / Linux arm64 (仅 WSL2 + Ubuntu/CentOS) |
@@ -825,6 +827,111 @@ native() = overlayfs（默认内核 overlay 文件系统）
 - `windows-sys` 零残留 ✅（全代码库 `grep -rn 'windows.sys\|windows-sys' Cargo.toml crates/` 无结果）
 - `process.platform` darwin/win32 分支在 critical path 中全部移除 ✅
 - 27 个文件删除 + 29 个文件简化 ✅
+
+---
+
+### 1.38 ~~关键残留紧急修复~~（✅ 第三十二轮 — 阻塞性 bug + Schema 同步）
+
+> **状态**: 已修复。R31 macOS/Windows 平台代码移除后，3 个 Explore agent 并行审计发现 20+ 处残留。本轮优先修复会导致编译/运行错误的阻塞性问题。
+
+**修复清单（5 文件，~417 行净减少）：**
+
+**🔴 阻塞性修复：**
+
+| 文件 | 变更 | 说明 |
+|------|------|------|
+| `packages/coding-agent/package.json` | -48 行 | 删除 7 组死导出：`./commit`（指向已删 index.ts）、`./commit/agentic`、`./commit/agentic/tools`、`./commit/analysis`、`./commit/changelog`、`./commit/map-reduce`、`./modes/rpc/*` |
+| `packages/coding-agent/scripts/format-prompts.ts` | -2 行 | 删除 `COMMIT_PROMPTS_DIR` 和 `AGENTIC_PROMPTS_DIR`（R25 已删目录） |
+| `README.md` | -9 行 | 删除死链 `docs/bridge.md`（R30 已删）、`robogjc:install`（R15 已删）、`test:py`（R15 已删） |
+
+**🟡 Schema 同步：**
+
+| 文件 | 变更 | 说明 |
+|------|------|------|
+| `schemas/config.schema.json` | -9 死键 | 删除 R22 已删的 9 个 Settings 键：`extensions`、`marketplace.autoUpdate`、`mcp.enableProjectConfig`、`mcp.discoveryDefaultServers`、`tasks.todoClearDelay`、`commands.enableClaudeUser`/`enableClaudeProject`、`exa.enableResearcher`/`enableWebsets` |
+| `schemas/models.schema.json` | -1 死枚举 | 删除 `lm-studio` from `discovery.type` enum |
+
+**验证:** Rust 编译零错误 ✅ | JSON Schema 有效 ✅ | package.json 有效 ✅
+
+---
+
+### 1.39 ~~全面过时文档和源码残留清理~~（✅ 第三十三轮 — 零容忍残留审计）
+
+> **状态**: 已完成。在第三十二轮修复阻塞性问题后，对全代码库（文档、源码、测试、NAPI 生成文件）进行零容忍残留清理。
+
+**删除（1 文件）：**
+
+| 文件 | 说明 |
+|------|------|
+| `docs/auth-broker-gateway.md` (~179 行) | 整文件记录 R23 已删的 `gjc auth-broker/gateway` CLI 命令 + R15 已删 robogjc + R31 已删 macOS widget |
+
+**文档清理（23 文件）：**
+
+| 文件 | 清理内容 |
+|------|---------|
+| `packages/ai/README.md` | 删除 Venice/Xiaomi/ZenMux/LiteLLM/LM Studio 全部引用（API key 表行、LiteLLM 代码示例、base URL、OAuth 导出函数名） |
+| `docs/codebase-overview.md` | RPC/RPC-UI/ACP → interactive/print modes |
+| `docs/bash-tool-runtime.md` | 删除 RPC mode + rpc-mode.ts 引用 |
+| `docs/non-compaction-retry-policy.md` | 删除 RPC mode + rpc-mode.ts/rpc-client.ts/rpc-types.ts 引用 |
+| `docs/sdk.md` | 删除 "use RPC mode" 建议 + RPC/ACP 模式引用 |
+| `docs/natives-media-system-utils.md` | 删除整个 "macOS appearance and power helpers" 章节 + "Windows ProjFS helpers" 章节 |
+| `docs/natives-architecture.md` | 删除 darwin/win32 平台标签、macOS sysctl/Windows PowerShell CPU 检测、ProjFS 模块 |
+| `docs/natives-addon-loader-runtime.md` | 删除 darwin/win32 平台标签 + CPU 检测方法 |
+| `docs/natives-shell-pty-process.md` | 删除 macOS libproc + Windows Toolhelp 进程管理 |
+| `docs/natives-binding-contract.md` | 删除 macOS appearance/power/ProjFS 绑定清单 |
+| `docs/natives-build-release-debugging.md` | 删除 darwin-arm64 示例 + macOS/ProjFS 模块引用 |
+| `docs/rust-learning-guide.md` | 删除 Apfs/ProjFS 枚举示例、Windows PROCESSENTRY32W、macOS libproc、Windows kernel32 FFI、`#[cfg(target_os = "macos")]` 等 10+ 处过时示例 |
+| `docs/onboarding-packet.md` | 删除 benchmarks + Python RPC 引用、auth broker/gateway |
+| `docs/porting-from-pi-mono.md` | 删除 macOS NFD + MCP/Exa 引用 |
+| `docs/theme.md` | 删除 macOS 外观回退 3 处 |
+| `docs/tools/ssh.md` | 删除 Windows PowerShell/cmd 包装 |
+| `docs/tools/task.md` | 删除 ProjFS 引用 4 处 |
+| `docs/tools/read.md` | 删除 macOS NFD 路径解析 |
+| `docs/tools/debug.md` | 删除 macOS TCP socket |
+| `docs/tools/inspect_image.md` | 删除 macOS 路径变体 |
+| `docs/tools/lsp.md` | 删除 RPC/ACP 会话引用 |
+| `docs/secrets.md` | 删除交叉引用已删 auth-broker-gateway.md |
+| `AGENTS.md` | 删除 `gjc stats` CLI 引用 |
+
+**源码清理（6 文件）：**
+
+| 文件 | 变更 | 说明 |
+|------|------|------|
+| `packages/ai/src/types.ts` | -1 行 | 注释中删除 Zenmux |
+| `packages/ai/src/providers/openai-completions-compat.ts` | -1 行 | 注释中删除 Zenmux |
+| `packages/ai/src/utils/oauth/api-key-login.ts` | -1 行 | 注释中删除 ZenMux |
+| `packages/coding-agent/src/config/model-resolver.ts` | -1 行 | 注释中删除 lm-studio |
+| `packages/coding-agent/src/config/settings-schema.ts` | -12 行 | 删除 `apfs`/`projfs`/`block-clone` 枚举值及 UI options |
+| `packages/coding-agent/src/config/settings.ts` | -6 行 | 删除 `fuse-projfs` → `projfs` 遗留映射，更新注释 |
+
+**NAPI 生成文件同步（2 文件）：**
+
+| 文件 | 变更 | 说明 |
+|------|------|------|
+| `packages/natives/native/index.js` | -3 行 | 删除 `Apfs: 0,` / `WindowsBlockClone: 5,` / `Projfs: 6,` |
+| `packages/natives/native/index.d.ts` | -3 行 | 删除 `Apfs = 0,` / `WindowsBlockClone = 5,` / `Projfs = 6,` |
+
+**测试清理（4 文件）：**
+
+| 文件 | 变更 | 说明 |
+|------|------|------|
+| `packages/ai/test/context-overflow.test.ts` | -36 行 | 删除整块 `LM Studio (local)` describe（已 skip） |
+| `packages/coding-agent/test/model-registry.test.ts` | -1 行 | `disabledProviders` 中删除 `lm-studio` |
+| `packages/coding-agent/test/issue-985-subagent-auth-fallback.test.ts` | -1 行 | 注释中删除 lm-studio |
+| `packages/ai/test/claude-opus-vision.test.ts` | -1 行 | 注释中删除 venice |
+
+**方法重命名：**
+
+| 文件 | 变更 | 说明 |
+|------|------|------|
+| `packages/coding-agent/src/session/agent-session.ts` | 6 处 | `#closeCodexProviderSessionsForHistoryRewrite` → `#closeProviderSessionsForHistoryRewrite`（Codex 已于 R21 删除） |
+
+**验证:**
+- Rust 编译零错误 ✅ | Rust 测试编译全部通过 ✅
+- JSON Schema 全部有效 ✅ | package.json 全部有效 ✅
+- 零 Broken doc links ✅ | 零 Dead package.json exports ✅
+- 零删除 Provider 源码残留 ✅ | 零 apfs/projfs/block-clone 残留 ✅
+- 41 文件修改 + 1 文件删除 ✅
 
 ---
 

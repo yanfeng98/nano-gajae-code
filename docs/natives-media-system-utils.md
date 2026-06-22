@@ -1,6 +1,5 @@
 # Natives media + system utilities
 
-This document covers the media/system/conversion exports in `@gajae-code/natives`: image processing, HTML conversion, clipboard access, token counting, macOS appearance/power helpers, ProjFS helpers, and work profiling.
 
 ## Implementation files
 
@@ -29,10 +28,6 @@ This document covers the media/system/conversion exports in `@gajae-code/natives
 | `copyToClipboard(text)`                             | `copy_to_clipboard`            | `clipboard.rs`      |
 | `readImageFromClipboard()`                          | `read_image_from_clipboard`    | `clipboard.rs`      |
 | `countTokens(input, encoding?)`                     | `count_tokens`                 | `tokens.rs`         |
-| `detectMacOSAppearance()`                           | `detect_mac_os_appearance`     | `appearance.rs`     |
-| `MacAppearanceObserver.start(callback)`             | `MacAppearanceObserver::start` | `appearance.rs`     |
-| `MacOSPowerAssertion.start(options?)`               | `MacOSPowerAssertion::start`   | `power.rs`          |
-| `projfsOverlayProbe/start/stop`                     | ProjFS exports                 | `projfs_overlay.rs` |
 | `getWorkProfile(lastSeconds)`                       | `get_work_profile`             | `prof.rs`           |
 
 ## Data format boundaries and conversions
@@ -89,17 +84,7 @@ There is no current `packages/natives` TS wrapper that emits OSC52, handles Term
 - Default encoding is `O200kBase`; `Cl100kBase` remains exported as a compatibility alias that routes to `o200k_base` (the cl100k BPE table is not embedded in default builds).
 - The implementation uses ordinary encoding, not special-token handling.
 
-### macOS appearance and power helpers
 
-- `detectMacOSAppearance()` returns `"dark"`, `"light"`, or `null` on non-macOS.
-- `MacAppearanceObserver.start(callback)` returns a handle with `stop()`; on macOS it uses distributed notifications plus a 2-second polling fallback, and on non-macOS it is a no-op observer.
-- `MacOSPowerAssertion.start(options?)` returns a handle with `stop()`; on macOS it acquires an IOKit assertion, and on other platforms it is a no-op handle.
-
-### Windows ProjFS helpers
-
-- `projfsOverlayProbe()` reports whether ProjFS APIs are available.
-- `projfsOverlayStart(lowerRoot, projectionRoot)` starts an overlay.
-- `projfsOverlayStop(projectionRoot)` stops an overlay session.
 
 These helpers are platform-specific; availability must be checked before relying on overlay behavior.
 
@@ -179,5 +164,3 @@ Failure transitions:
 ## Platform caveats
 
 - Clipboard access depends on OS/session support exposed through `arboard`.
-- macOS appearance and power helpers intentionally return no-op/null behavior on unsupported platforms.
-- ProjFS helpers are Windows-specific and should be gated by `projfsOverlayProbe()`.

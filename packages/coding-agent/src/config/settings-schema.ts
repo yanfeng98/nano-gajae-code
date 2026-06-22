@@ -2077,13 +2077,10 @@ export const SETTINGS_SCHEMA = {
 		values: [
 			"none",
 			"auto",
-			"apfs",
 			"btrfs",
 			"zfs",
 			"reflink",
 			"overlayfs",
-			"projfs",
-			"block-clone",
 			"rcopy",
 		] as const,
 		default: "none",
@@ -2091,11 +2088,10 @@ export const SETTINGS_SCHEMA = {
 			tab: "tasks",
 			label: "Isolation Mode",
 			description:
-				'Isolation backend for subagents. "auto" lets the native PAL pick the best available backend (CoW-aware filesystems, then overlayfs/ProjFS, then a git worktree / recursive-copy fallback).',
+				'Isolation backend for subagents. "auto" lets the native PAL pick the best available backend (CoW-aware filesystems, then overlayfs, then a git worktree / recursive-copy fallback).',
 			options: [
 				{ value: "none", label: "None", description: "No isolation" },
 				{ value: "auto", label: "Auto", description: "Let the PAL pick the best available backend" },
-				{ value: "apfs", label: "APFS", description: "macOS clonefile reflink (APFS)" },
 				{ value: "btrfs", label: "btrfs", description: "btrfs subvolume snapshot" },
 				{ value: "zfs", label: "ZFS", description: "ZFS snapshot + clone" },
 				{ value: "reflink", label: "Reflink", description: "Linux FICLONE per-file reflink" },
@@ -2103,12 +2099,6 @@ export const SETTINGS_SCHEMA = {
 					value: "overlayfs",
 					label: "Overlayfs",
 					description: "Linux kernel overlay (or fuse-overlayfs fallback)",
-				},
-				{ value: "projfs", label: "ProjFS", description: "Windows Projected File System" },
-				{
-					value: "block-clone",
-					label: "Block clone",
-					description: "Windows FSCTL_DUPLICATE_EXTENTS_TO_FILE (NTFS/ReFS)",
 				},
 				{
 					value: "rcopy",

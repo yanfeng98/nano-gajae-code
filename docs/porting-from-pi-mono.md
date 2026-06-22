@@ -283,7 +283,7 @@ packages/tui:
 
 packages/coding-agent:
 - fix: preserve external config.yml edits on save (#1046 by @nicobailonMD)
-- fix: resolve macOS NFD and curly quote variants in file paths
+- fix: resolve file path variants
 ```
 
 **Rules:**
@@ -374,7 +374,7 @@ These exist in our fork but not upstream. **Never overwrite:**
 - `StatusLineComponent` in interactive mode
 - Multi-credential auth with session affinity
 - Capability-based discovery system (`defineCapability`, `registerProvider`, `loadCapability`, `skillCapability`, etc.)
-- MCP/Exa/SSH integrations
+- SSH integration
 - LSP writethrough for format-on-save
 - Bash interception (`checkBashInterception`)
 - Fuzzy path suggestions in read tool

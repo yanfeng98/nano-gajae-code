@@ -25,7 +25,6 @@ The current loader does **not** run a separate `validateNative(...)` export-pres
 
 At module initialization, `native/index.js` computes:
 
-- **Platform tag**: `${process.platform}-${process.arch}` (for example `darwin-arm64`).
 - **Package version**: from `packages/natives/package.json`.
 - **Core directories**:
   - `nativeDir`: package-local `packages/natives/native`.
@@ -50,9 +49,6 @@ At module initialization, `native/index.js` computes:
 
 - `linux-x64`
 - `linux-arm64`
-- `darwin-x64`
-- `darwin-arm64`
-- `win32-x64`
 
 Unsupported platforms are not rejected before probing. The loader first tries the computed candidate paths. If all fail and `platformTag` is unsupported, it throws an unsupported-platform error listing supported tags.
 
@@ -63,7 +59,6 @@ Unsupported platforms are not rejected before probing. The loader first tries th
 1. `GJC_NATIVE_VARIANT=modern|baseline` wins when valid.
 2. Otherwise AVX2 support is detected:
    - Linux: scan `/proc/cpuinfo` for `avx2`.
-   - macOS: `sysctl -n machdep.cpu.leaf7_features`, then `machdep.cpu.features`.
    - Windows: PowerShell `[System.Runtime.Intrinsics.X86.Avx2]::IsSupported`.
 3. AVX2 selects `modern`; unavailable or undetectable AVX2 selects `baseline`.
 

@@ -3,7 +3,7 @@ import { getBundledModels, getBundledProviders } from "../src/models";
 
 /**
  * Every Claude Opus 4.8 variant is vision-capable. Some upstream catalogs omit
- * image input (e.g. kilo/venice "-fast" entries); generate-models.ts corrects
+ * image input (e.g. kilo "-fast" entries); generate-models.ts corrects
  * these via applyClaudeOpusVisionCorrections so capability advertising stays
  * consistent across providers.
  */

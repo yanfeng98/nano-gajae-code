@@ -63,7 +63,7 @@ export function detectOpenAICompat(model: Model<"openai-completions">, resolvedB
 	// DeepSeek V4 (and other reasoning-capable DeepSeek models) reject follow-up requests in
 	// thinking mode unless prior assistant tool-call turns include `reasoning_content`. The
 	// upstream model is reachable through many OpenAI-compat hosts (api.deepseek.com, Deepinfra,
-	// Kilo, NVIDIA NIM, Zenmux, OpenRouter, …), so we match by model id/name as well as by
+	// Kilo, NVIDIA NIM, OpenRouter, …), so we match by model id/name as well as by
 	// provider/baseUrl. The flag is gated by `model.reasoning` because the invariant only
 	// applies when thinking mode is actually engaged.
 	const lowerId = model.id.toLowerCase();

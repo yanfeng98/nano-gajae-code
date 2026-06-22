@@ -62,7 +62,6 @@ Windows locked-DLL replacement failures are reported with an explicit close-runn
 
 Both build and runtime use platform tag:
 
-`<platform>-<arch>` (example: `darwin-arm64`, `linux-x64`).
 
 ## Variant model (x64 only)
 
@@ -167,7 +166,6 @@ Generated declarations currently include exports from these Rust modules:
 | AST                    | `astGrep`, `astEdit`                                                                              | `ast.rs`                                                                                |
 | Text/highlight/tokens  | `visibleWidth`, `truncateToWidth`, `highlightCode`, `countTokens`                                 | `text.rs`, `highlight.rs`, `tokens.rs`                                                  |
 | Shell/PTY/process/keys | `executeShell`, `Shell`, `PtySession`, `killTree`, `parseKey`                                     | `shell.rs`, `pty.rs`, `ps.rs`, `keys.rs`                                                |
-| Media/system           | `PhotonImage`, `encodeSixel`, clipboard, macOS appearance/power, `getWorkProfile`, ProjFS helpers | `image.rs`, `clipboard.rs`, `appearance.rs`, `power.rs`, `prof.rs`, `projfs_overlay.rs` |
 
 ## Failure behavior and diagnostics
 

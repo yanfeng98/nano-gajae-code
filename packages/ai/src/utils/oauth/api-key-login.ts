@@ -1,7 +1,7 @@
 /**
  * Shared factory for API-key-paste "login" flows.
  *
- * Several providers (Cerebras, Synthetic, Moonshot, Together, NanoGPT, ZenMux)
+ * Several providers (Cerebras, Synthetic, Moonshot, Together, NanoGPT)
  * don't actually implement OAuth — they just ask the user to paste an API key,
  * optionally validate it, and return the trimmed key.
  */

@@ -175,7 +175,6 @@ Control call failures when not running:
 ### Platform-specific implementation
 
 - **Linux**: recursively reads `/proc/<pid>/task/<pid>/children`.
-- **macOS**: uses `libproc` `proc_listchildpids`.
 - **Windows**: snapshots process table with `CreateToolhelp32Snapshot`, builds parent->children map, terminates with `OpenProcess(PROCESS_TERMINATE)` + `TerminateProcess`.
 
 ### Kill-tree behavior

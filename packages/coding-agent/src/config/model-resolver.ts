@@ -752,7 +752,7 @@ export function resolveModelOverride(
  * `modelRoles.task` pointing at an unqualified id whose only available
  * provider variant has no configured credentials — see #985).
  *
- * Keyless-by-design providers (llama.cpp, ollama, lm-studio) advertise the
+ * Keyless-by-design providers (llama.cpp, ollama) advertise the
  * `kNoAuth` sentinel from `getApiKey` to signal that they do not require
  * credentials. Those are treated as authenticated here so an explicitly
  * configured local model is never silently rerouted to the parent's remote

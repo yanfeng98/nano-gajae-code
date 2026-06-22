@@ -109,4 +109,3 @@ Environment variables are collected first, then file-defined entries are appende
 
 ## See also
 
-- [`auth-broker-gateway.md`](./auth-broker-gateway.md) -- remote credential vault and forward-proxy that keep provider OAuth refresh tokens and access tokens off developer hosts entirely (complementary to in-process obfuscation).

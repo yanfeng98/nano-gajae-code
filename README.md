@@ -90,8 +90,6 @@ Gajae-Code 内置四个默认工作流技能：
 | OpenCode    | `gjc` 或 `gjc --tmux`                          | 目前仅支持外部运行器工作流。                            |
 | Claw Code   | `gjc --tmux --worktree <path>`                 | GJC 不会安装到 Claw Code 中或替代 Claw Code。           |
 
-远程控制协议的详细信息请参见 [`docs/bridge.md`](docs/bridge.md)。
-
 ## 配置
 
 提供方的重试配置位于 `~/.gjc/config.yml`：
@@ -178,19 +176,12 @@ bun run dev          # 等价于 bun --cwd=packages/coding-agent src/cli.ts
 
 TypeScript 源码直接运行，改完即生效，最接近 `pip install -e .` 的体验。
 
-**Python 包的可编辑安装：**
-
-```sh
-bun run robogjc:install   # 等价于 pip install -e 'python/robogjc[dev]'
-```
-
 ### 运行测试
 
 ```sh
 bun run test                                    # 全部测试（TS + Rust）
 bun --cwd=packages/coding-agent test             # 只测 coding-agent
 bun --cwd=packages/coding-agent test -- --only-failures  # 只重跑失败用例
-bun run test:py                                  # Python 测试
 bun run ci:test:smoke                            # CI 冒烟测试
 ```
 

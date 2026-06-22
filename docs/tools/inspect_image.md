@@ -114,7 +114,6 @@ Failures surface as thrown `ToolError`s from `execute(...)`; the normal success 
 ## Notes
 - The model-facing prompt path on disk is `packages/coding-agent/src/prompts/tools/inspect-image.md`; the assignment's underscore form does not exist.
 - Format support is based on file content, not filename extension. Renaming a non-image file to `.png` does not make it valid.
-- `resolveReadPath(...)` tries macOS-specific path variants: shell-unescaped spaces, AM/PM narrow no-break-space filenames, NFD normalization, and curly-quote variants.
 - `loadImageInput(...)` also computes `textNote`, `dimensionNote`, and final `bytes`, but `inspect_image` does not include those in tool output.
 - Auto-resize can change the MIME type sent to the model. A JPEG or GIF input may be uploaded as PNG, JPEG, or WebP depending on which encoder output is smallest.
 - If `resizeImage(...)` throws or cannot decode the image, `loadImageInput(...)` silently keeps the original base64 payload instead of failing.

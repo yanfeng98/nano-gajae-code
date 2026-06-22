@@ -4,7 +4,7 @@ This packet is a docs-only, public-safe context seed for the `gajae-code` reposi
 
 ## Purpose in one paragraph
 
-Gajae-Code is the `gjc` coding-agent CLI and supporting monorepo. The product centers on a small public workflow loop: clarify with `deep-interview`, plan with `ralplan`, execute and verify through `ultragoal`, and use `team` only when parallel tmux workers are useful. The main product package is `packages/coding-agent/`; supporting packages provide LLM/provider access, agent runtime, TUI rendering, native helpers, stats, utilities, benchmarks, and Python RPC/bot integrations.
+Gajae-Code is the `gjc` coding-agent CLI and supporting monorepo. The product centers on a small public workflow loop: clarify with `deep-interview`, plan with `ralplan`, execute and verify through `ultragoal`, and use `team` only when parallel tmux workers are useful. The main product package is `packages/coding-agent/`; supporting packages provide LLM/provider access, agent runtime, TUI rendering, native helpers, stats, utilities.
 
 ## Fixed public surface
 

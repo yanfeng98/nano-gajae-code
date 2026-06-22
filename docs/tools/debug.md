@@ -120,7 +120,7 @@ Side-channel artifacts outside the model tool result:
 2. `DebugTool.execute()` clamps `params.timeout` through `clampTimeout("debug", params.timeout)` and composes the caller `AbortSignal` with `AbortSignal.timeout(...)`.
 3. `launch` and `attach` resolve cwd/program paths, select an adapter in `packages/coding-agent/src/dap/config.ts`, then delegate to `dapSessionManager.launch()` / `.attach()`.
 4. `DapSessionManager.launch()` / `.attach()` enforce the single-session rule with `#ensureLaunchSlot()`, spawn the adapter through `DapClient.spawn()`, register listeners, send `initialize`, cache capabilities, start listening for an initial stop event before sending `launch`/`attach`, then complete the `initialized` → `configurationDone` handshake in `#completeConfigurationHandshake()`.
-5. `DapClient.spawn()` starts the adapter detached with `NON_INTERACTIVE_ENV`. Most adapters use stdio; socket-mode adapters (`dlv`) use `#spawnSocketUnix()` on Linux or `#spawnSocketClientAddr()` on macOS/other.
+5. `DapClient.spawn()` starts the adapter detached with `NON_INTERACTIVE_ENV`. Most adapters use stdio; socket-mode adapters (`dlv`) use `#spawnSocketUnix()` on Linux.
 6. `#registerSession()` in `packages/coding-agent/src/dap/session.ts` installs reverse-request handlers:
    - `runInTerminal`: spawns the requested debuggee command detached via `ptree.spawn()` and returns `{ processId }`
    - `startDebugging`: logs the child-session request and returns `{}`; it does not create nested sessions
@@ -152,7 +152,7 @@ Side-channel artifacts outside the model tool result:
   - `attach`: explicit `adapter` wins; otherwise remote `port` prefers `debugpy`, then native debuggers, then first available adapter.
 - **Transport**
   - stdio adapters: direct `stdin`/`stdout` framing.
-  - socket adapters: Unix domain socket on Linux; TCP callback on macOS/other.
+  - socket adapters: Unix domain socket on Linux.
 - **DAP agent-tool actions**
   - `launch` — spawn adapter, initialize session, maybe stop on entry; returns formatted session snapshot and `details.adapter`.
   - `attach` — connect to a live process or remote port; same output shape as `launch`.

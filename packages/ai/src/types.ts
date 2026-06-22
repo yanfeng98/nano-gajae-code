@@ -616,7 +616,7 @@ export interface OpenAICompat extends ToolChoiceCompat {
 	 * strict chat templates (e.g. Qwen-served via vLLM, MiniMax) accept
 	 * the request. Default: detected per provider/baseUrl. Canonical
 	 * OpenAI/Azure/OpenRouter/Cerebras/Together/Fireworks/Groq/DeepSeek/
-	 * Mistral/xAI/Z.ai/GitHub Copilot/Zenmux are treated as `true`;
+	 * Mistral/xAI/Z.ai/GitHub Copilot are treated as `true`;
 	 * unknown or strict-template hosts default to `false`. Setting this
 	 * to `true` preserves separate blocks, which is preferred for
 	 * KV-cache reuse when the trailing prompt changes between calls.

@@ -12,7 +12,7 @@
   - `packages/coding-agent/src/task/executor.ts` — create child sessions, run subagents, collect output.
   - `packages/coding-agent/src/task/parallel.ts` — concurrency-limited scheduling and async semaphore.
   - `packages/coding-agent/src/task/isolation-backend.ts` — isolation backend resolution and platform fallback.
-  - `packages/coding-agent/src/task/worktree.ts` — worktree / FUSE / ProjFS setup, patch capture, branch merge.
+  - `packages/coding-agent/src/task/worktree.ts` — worktree / overlayfs setup, patch capture, branch merge.
   - `packages/coding-agent/src/task/output-manager.ts` — session-scoped `agent://` id allocation.
   - `packages/coding-agent/src/task/simple-mode.ts` — `default` / `schema-free` / `independent` field gating.
   - `packages/coding-agent/src/internal-urls/agent-protocol.ts` — resolve `agent://<id>` to saved subagent output.
@@ -162,7 +162,7 @@ Artifacts and side channels:
   - Child sessions may use whichever networked tools/models their active tool set permits.
 - Subprocesses / native bindings
   - `fuse-overlayfs` and `fusermount`/`fusermount3` for FUSE isolation.
-  - ProjFS native bindings via `@gajae-code/natives` on Windows.
+  - .
   - Git operations for baseline capture, patch apply, worktrees, branches, stash, cherry-pick, commits.
 - Session state (transcript, memory, jobs, checkpoints, registries)
   - Creates child `AgentSession` instances with isolated settings snapshots.
@@ -201,7 +201,7 @@ Artifacts and side channels:
   - spawn-policy denial
   - requesting `isolated` while isolation mode is `none`
 - Isolated execution without a git repo returns `Isolated task execution requires a git repository. ...`.
-- Backend resolution can return a hard error (`ProjFS isolation initialization failed...`) or a non-fatal warning with fallback to `worktree`.
+- Backend resolution can return a hard error (`overlayfs isolation initialization failed...`) or a non-fatal warning with fallback to `worktree`.
 - `mapWithConcurrencyLimit(...)` fails fast on non-abort worker exceptions; already completed results are preserved only in the thrown path’s local state, not surfaced unless the caller catches and converts them.
 - Child-session failures surface as `SingleResult.exitCode = 1` with `stderr`/`error` populated.
 - If the child omits `yield`, `finalizeSubprocessOutput(...)` injects warnings such as `SYSTEM WARNING: Subagent exited without calling yield tool after 3 reminders.`

@@ -158,9 +158,7 @@ Conversion behavior:
 
 Auto theme slot selection uses terminal appearance in this order:
 
-1. terminal-reported OSC 11 background luminance, unless the macOS/Zellij fallback path is active
 2. `COLORFGBG` background index (`< 8` => dark, `>= 8` => light)
-3. macOS appearance fallback only for the known-broken macOS/Zellij OSC 11 path
 4. dark slot fallback
 
 Built-in theme note: `red-claw` is the default dark GJC theme, and `blue-crab` is the default light-slot theme. Both are crustacean brand themes with separate semantic error/warning/diff-removal tokens and crab-oriented symbol overrides.
@@ -201,7 +199,6 @@ When watcher is enabled (`setTheme(..., true)` / interactive init):
 - matching file changes schedule a debounced reload; reload errors or temporary file absence keep the last successfully loaded theme
 - the watcher does not perform a delete/rename fallback; it waits for a future successful reload or explicit theme switch
 
-Auto mode also reevaluates dark/light slot mapping from terminal appearance changes, `SIGWINCH`, and the macOS fallback observer when active.
 
 ## Color-blind mode behavior
 

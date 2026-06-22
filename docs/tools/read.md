@@ -77,7 +77,6 @@ URL selectors are parsed separately in `packages/coding-agent/src/tools/fetch.ts
    - `parseSqlitePathCandidates()` scans for `.sqlite`, `.sqlite3`, `.db`, `.db3` before any `:table`, `:key`, or `?query` suffix.
    - `#readSqlite()` dispatches on `parseSqliteSelector()`.
 6. Otherwise it treats the input as a local filesystem path.
-   - `resolveReadPath()` expands `~`, resolves relative to session cwd, treats bare `/` as session cwd, and retries macOS screenshot/NFD/curly-quote variants.
    - If the path does not exist, `findUniqueSuffixMatch()` does a workspace glob-based unique suffix lookup (skipped for remote mounts).
 7. Directories go through `#readDirectory()`.
 8. Non-directories branch by content type:
@@ -292,7 +291,6 @@ Notes: ...
 - `readSchema` examples include `https://example.com:L1-L40`, but URL selector parsing in `packages/coding-agent/src/tools/fetch.ts` does not accept `L` prefixes.
 - Hashline anchors are suppressed for raw reads and immutable internal resources because there is no editable backing target for later `edit` consumption.
 - `splitPathAndSel()` intentionally treats unknown trailing `:...` as part of the path so `archive.zip:inner/file` and `db.sqlite:table:key` still work.
-- `resolveReadPath()` contains macOS-specific filename fallbacks for screenshot timestamps, NFD Unicode normalization, and curly apostrophes.
 - A bare `/` resolves to the session cwd, not the filesystem root.
 - URL cache keys are session-scoped and normalized by requested URL + raw/rendered mode; both requested URL and final redirected URL are cached.
 - URL line-range reads request `ensureArtifact: true, preferCached: true` so a later paginated read can reopen the same rendered body from artifact storage.

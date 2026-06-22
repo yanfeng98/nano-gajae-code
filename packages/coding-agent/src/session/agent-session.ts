@@ -5728,7 +5728,7 @@ export class AgentSession {
 		const sessionContext = this.buildDisplaySessionContext();
 		this.agent.replaceMessages(sessionContext.messages);
 		this.#syncTodoPhasesFromBranch();
-		this.#closeCodexProviderSessionsForHistoryRewrite();
+		this.#closeProviderSessionsForHistoryRewrite();
 		return result;
 	}
 
@@ -5860,7 +5860,7 @@ export class AgentSession {
 			const sessionContext = this.buildDisplaySessionContext();
 			this.agent.replaceMessages(sessionContext.messages);
 			this.#syncTodoPhasesFromBranch();
-			this.#closeCodexProviderSessionsForHistoryRewrite();
+			this.#closeProviderSessionsForHistoryRewrite();
 
 			// Get the saved compaction entry for the hook
 			const savedCompactionEntry = newEntries.find(e => e.type === "compaction" && e.summary === summary) as
@@ -6537,7 +6537,7 @@ export class AgentSession {
 		this.#syncAppendOnlyContext(model);
 	}
 
-	#closeCodexProviderSessionsForHistoryRewrite(): void {
+	#closeProviderSessionsForHistoryRewrite(): void {
 		const currentModel = this.model;
 		if (currentModel) {
 			this.#closeProviderSessionsForModelSwitch(currentModel, currentModel);
@@ -7278,7 +7278,7 @@ export class AgentSession {
 			const sessionContext = this.buildDisplaySessionContext();
 			this.agent.replaceMessages(sessionContext.messages);
 			this.#syncTodoPhasesFromBranch();
-			this.#closeCodexProviderSessionsForHistoryRewrite();
+			this.#closeProviderSessionsForHistoryRewrite();
 
 			// Get the saved compaction entry for the hook
 			const savedCompactionEntry = newEntries.find(e => e.type === "compaction" && e.summary === summary) as
@@ -8871,7 +8871,7 @@ export class AgentSession {
 
 		if (!skipConversationRestore) {
 			this.agent.replaceMessages(sessionContext.messages);
-			this.#closeCodexProviderSessionsForHistoryRewrite();
+			this.#closeProviderSessionsForHistoryRewrite();
 		}
 
 		return { selectedText, cancelled: false };
@@ -9037,7 +9037,7 @@ export class AgentSession {
 		await this.#restoreMCPSelectionsForSessionContext(displayContext);
 		this.agent.replaceMessages(displayContext.messages);
 		this.#syncTodoPhasesFromBranch();
-		this.#closeCodexProviderSessionsForHistoryRewrite();
+		this.#closeProviderSessionsForHistoryRewrite();
 
 		this.#branchSummaryAbortController = undefined;
 

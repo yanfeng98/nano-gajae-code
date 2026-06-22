@@ -157,7 +157,7 @@ describe("issue #985: subagent dispatch auth fallback", () => {
 	});
 
 	test("treats keyless providers (kNoAuth marker) as authenticated", async () => {
-		// Keyless-by-design providers (Ollama, llama.cpp, lm-studio) advertise the
+		// Keyless-by-design providers (Ollama, llama.cpp) advertise the
 		// kNoAuth sentinel from getApiKey to signal that they do not require
 		// credentials. The helper treats this as authenticated so an explicitly
 		// configured local model is never silently rerouted to the parent's

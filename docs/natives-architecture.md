@@ -34,7 +34,6 @@ Current capability groups in the generated API include:
 
 - **Search/text/code primitives**: `grep`, `search`, `hasMatch`, `fuzzyFind`, `glob`, `astGrep`, `astEdit`, text width/slicing/wrapping/sanitization, syntax highlighting, token counting.
 - **Execution/process/terminal primitives**: `executeShell`, `Shell`, `PtySession`, process-tree helpers, key parsing.
-- **System/media/conversion primitives**: clipboard, image resize/encode/SIXEL, HTML-to-Markdown, macOS appearance/power helpers, work profiling, Windows ProjFS overlay helpers.
 
 ## Loader layer
 
@@ -46,9 +45,6 @@ Current capability groups in the generated API include:
 - Supported tags are currently:
   - `linux-x64`
   - `linux-arm64`
-  - `darwin-x64`
-  - `darwin-arm64`
-  - `win32-x64`
 - x64 can use CPU variants:
   - `modern` (AVX2-capable)
   - `baseline` (fallback)
@@ -65,7 +61,6 @@ Filename strategy:
 For x64, variant selection uses:
 
 - Linux: `/proc/cpuinfo`
-- macOS: `sysctl -n machdep.cpu.leaf7_features`, then `machdep.cpu.features`
 - Windows: PowerShell check for `System.Runtime.Intrinsics.X86.Avx2`
 
 `GJC_NATIVE_VARIANT` can force `modern` or `baseline`; invalid values are ignored.
@@ -115,7 +110,6 @@ The current loader does not perform a separate post-`require` export validation 
 - `language`
 - `power`
 - `prof`
-- `projfs_overlay`
 - `ps`
 - `pty`
 - `shell`
@@ -153,7 +147,6 @@ N-API exports are generated from Rust `#[napi]` functions/classes/objects/enums.
 ## Glossary
 
 - **Native addon**: A `.node` binary loaded via Node-API (N-API).
-- **Platform tag**: Runtime tuple `platform-arch` (for example `darwin-arm64`).
 - **Variant**: x64 CPU-specific build flavor (`modern` AVX2, `baseline` fallback).
 - **Generated binding declaration**: `native/index.d.ts` emitted by napi-rs during `build-native.ts`.
 - **Compiled binary mode**: Runtime mode where the CLI is bundled and native addons are resolved from embedded/cache paths before package-local paths.

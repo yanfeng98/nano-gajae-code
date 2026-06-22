@@ -53,18 +53,14 @@ Unified LLM API with automatic model discovery, provider configuration, token an
 - **Vertex AI** (Gemini via Vertex AI)
 - **Moonshot** (requires `MOONSHOT_API_KEY`)
 - **Hugging Face Inference**
-- **Venice** (requires `VENICE_API_KEY`)
-- **LiteLLM** (requires `LITELLM_API_KEY`)
 - **zAI** (requires `ZAI_API_KEY`)
 - **MiniMax Coding Plan** (requires `MINIMAX_CODE_API_KEY` or `MINIMAX_CODE_CN_API_KEY`)
-- **Xiaomi MiMo** (requires `XIAOMI_API_KEY`)
-- **ZenMux** (requires `ZENMUX_API_KEY`)
 - **Ollama** (local OpenAI-compatible runtime; optional `OLLAMA_API_KEY`)
 - **Ollama Cloud** (hosted native Ollama API; requires `OLLAMA_CLOUD_API_KEY`)
 - **llama.cpp** (local OpenAI and Anthropic compatible inference server)
 - **vLLM** (OpenAI-compatible server; `VLLM_API_KEY` for secured deployments)
 - **GitHub Copilot** (requires OAuth, see below)
-- **Any OpenAI-compatible API**: LM Studio, custom proxies, etc.
+- **Any OpenAI-compatible API**: custom proxies, etc.
 
 ## Installation
 
@@ -716,12 +712,8 @@ const cloudResponse = await stream(ollamaCloudModel, context, {
 	apiKey: process.env.OLLAMA_CLOUD_API_KEY,
 });
 
-// Example: LiteLLM proxy with explicit compat settings
-const litellmModel: Model<"openai-completions"> = {
 	id: "gpt-4o",
-	name: "GPT-4o (via LiteLLM)",
 	api: "openai-completions",
-	provider: "litellm",
 	baseUrl: "http://localhost:4000/v1",
 	reasoning: false,
 	input: ["text", "image"],
@@ -729,7 +721,6 @@ const litellmModel: Model<"openai-completions"> = {
 	contextWindow: 128000,
 	maxTokens: 16384,
 	compat: {
-		supportsStore: false, // LiteLLM doesn't support the store field
 	},
 };
 
@@ -768,7 +759,6 @@ interface OpenAICompat {
 
 If `compat` is not set, the library falls back to URL-based detection. If `compat` is partially set, unspecified fields use the detected defaults. This is useful for:
 
-- **LiteLLM proxies**: May not support `store` field
 - **Custom inference servers**: May use non-standard field names
 - **Self-hosted endpoints**: May have different feature support
 
@@ -915,15 +905,11 @@ In Node.js environments, you can set environment variables to avoid passing API 
 | Google         | `GEMINI_API_KEY`                                                             |
 | Vertex AI      | `GOOGLE_CLOUD_PROJECT` (or `GCLOUD_PROJECT`) + `GOOGLE_CLOUD_LOCATION` + ADC |
 | Hugging Face   | `HUGGINGFACE_HUB_TOKEN` or `HF_TOKEN`                                        |
-| Venice         | `VENICE_API_KEY`                                                             |
 | Moonshot       | `MOONSHOT_API_KEY`                                                           |
-| LiteLLM        | `LITELLM_API_KEY`                                                            |
 | Ollama         | `OLLAMA_API_KEY` (optional for local deployments)                            |
 | Ollama Cloud   | `OLLAMA_CLOUD_API_KEY`                                                     |
 | zAI            | `ZAI_API_KEY`                                                                |
 | MiniMax Code   | `MINIMAX_CODE_API_KEY` (international) or `MINIMAX_CODE_CN_API_KEY` (China) |
-| Xiaomi MiMo    | `XIAOMI_API_KEY`                                                             |
-| ZenMux         | `ZENMUX_API_KEY`                                                             |
 | vLLM           | `VLLM_API_KEY`                                                               |
 | GitHub Copilot | `COPILOT_GITHUB_TOKEN` or `GH_TOKEN` or `GITHUB_TOKEN`                      |
 
@@ -938,14 +924,9 @@ Provider endpoint defaults for the current OpenAI-compatible integrations:
 
 - Moonshot: `https://api.moonshot.ai/v1`
 - Hugging Face Inference: `https://router.huggingface.co/v1`
-- Venice: `https://api.venice.ai/api/v1`
-- Xiaomi MiMo: `https://api.xiaomimimo.com/anthropic`
-- ZenMux (OpenAI): `https://zenmux.ai/api/v1`
-- ZenMux (Anthropic models): `https://zenmux.ai/api/anthropic`
 - vLLM: `http://127.0.0.1:8000/v1`
 - Ollama: local OpenAI-compatible runtime (`http://127.0.0.1:11434/v1`)
 - Ollama Cloud: native Ollama API host (`https://ollama.com/api`, configured here as base URL `https://ollama.com`)
-- LiteLLM: `http://localhost:4000/v1`
 When set, the library automatically uses these keys:
 
 ```typescript
@@ -1029,7 +1010,7 @@ bunx @gajae-code/ai list               # list available providers
 ```
 `login` supports OAuth providers (Anthropic, OpenAI code provider, GitHub Copilot, Gemini CLI, Antigravity, xAI) and API-key onboarding flows.
 
-For the current API-key onboarding flows, the library covers Together, Moonshot, Qianfan, NVIDIA, NanoGPT, Hugging Face, Venice, Xiaomi, vLLM, LiteLLM, Cloudflare AI Gateway, Qwen Portal, and Ollama Cloud. Ollama remains the local runtime integration; set `OLLAMA_API_KEY` only when your local or self-hosted deployment enforces bearer auth.
+For the current API-key onboarding flows, the library covers Together, Moonshot, Qianfan, NVIDIA, NanoGPT, Hugging Face, vLLM, Cloudflare AI Gateway, Qwen Portal, and Ollama Cloud. Ollama remains the local runtime integration; set `OLLAMA_API_KEY` only when your local or self-hosted deployment enforces bearer auth.
 
 ### Programmatic OAuth
 
@@ -1045,16 +1026,13 @@ import {
 	loginAntigravity,
 	loginCloudflareAiGateway,
 	loginHuggingface,
-	loginLiteLLM,
 	loginMoonshot,
 	loginNvidia,
 	loginNanoGPT,
 	loginQianfan,
 	loginQwenPortal,
 	loginTogether,
-	loginVenice,
 	loginVllm,
-	loginXiaomi,
 
 	// Token management
 	refreshOAuthToken, // (provider, credentials) => new credentials

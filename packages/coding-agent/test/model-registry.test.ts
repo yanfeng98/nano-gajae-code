@@ -1702,7 +1702,7 @@ describe("ModelRegistry", () => {
 			await Settings.init({
 				inMemory: true,
 				overrides: {
-					disabledProviders: ["llama.cpp", "lm-studio", "ollama"],
+					disabledProviders: ["llama.cpp", "ollama"],
 				},
 			});
 			const requestedUrls: string[] = [];

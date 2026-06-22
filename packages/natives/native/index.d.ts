@@ -780,13 +780,10 @@ export declare function isoBackend(): IsoBackendKind
  * the enum without string comparisons.
  */
 export declare enum IsoBackendKind {
-  Apfs = 0,
   Btrfs = 1,
   Zfs = 2,
   LinuxReflink = 3,
   Overlayfs = 4,
-  WindowsBlockClone = 5,
-  Projfs = 6,
   Rcopy = 7
 }
 
