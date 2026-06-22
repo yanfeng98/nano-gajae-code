@@ -200,7 +200,7 @@ bun run build:native # 构建原生 Rust 模块
 
 `bun build --compile` 可将整个 CLI 打包为独立二进制文件。用户无需安装 Bun、Rust 或任何依赖，下载即可运行。
 
-**本地构建（当前平台）：**
+#### 本地构建（当前平台）
 
 ```sh
 # 1. 构建原生模块
@@ -216,31 +216,42 @@ bun run build    # 等于 bun --cwd=packages/coding-agent run build
 
 产物在 `packages/coding-agent/dist/gjc`，单个文件约 200MB+（内嵌了 Bun 运行时 + 原生模块）。
 
-**多平台交叉构建：**
+#### 多平台发布构建
+
+默认构建加密版，AES-256-GCM 保护源码，`linux-x64` 自动捆绑 glibc 2.35 兼容 CentOS 7。产物为自解压单文件，Ubuntu / CentOS 均可直接运行。
 
 ```sh
 # 列出可用目标
 bun run ci:release:build-binaries --list-targets
 
-# 构建所有 2 个 Linux 平台
+# 构建所有平台（加密 + CentOS 7 兼容）
 bun run ci:release:build-binaries
 
 # 只构建指定平台
 RELEASE_TARGETS=linux-x64 bun run ci:release:build-binaries
 ```
 
+如需非加密构建：
+
+```sh
+RELEASE_TARGETS=linux-x64 bun run ci:release:build-binaries --no-encrypt
+```
+
+产物：`packages/coding-agent/binaries/gjc-linux-x64`（及 `gjc-linux-arm64`），单文件自解压格式。
+
 支持的目标平台：
 
-| 目标 ID | 说明 | CPU 基线 |
-|---|---|---|
-| `linux-x64` | Linux x86_64（兼容旧版 glibc） | x86-64-v2 |
-| `linux-arm64` | Linux ARM64 | — |
+| 目标 ID | 说明 | CPU 基线 | CentOS 7 |
+|---|---|---|---|
+| `linux-x64` | Linux x86_64 | x86-64-v2 | 是（捆绑 glibc 2.35） |
+| `linux-arm64` | Linux ARM64 | — | 否 |
 
 Linux x64 使用 `x86-64-v2` 基线，兼容 2008 年后的 CPU；原生模块运行时自动解压到 `~/.gjc/natives/`。
 
 **兼容性说明：**
-- CI 在 **Ubuntu 22.04**（glibc 2.35）上构建，产物可在该版本及更新系统上运行
-- **CentOS 7**（glibc 2.17）无法直接运行 `bun build --compile` 产物
+- CI 在 **Ubuntu 22.04**（glibc 2.35）上构建
+- `linux-x64` 产物自动捆绑 glibc 2.35，兼容 **Ubuntu 18.04+ / CentOS 7+ / Debian 10+**
+- 非加密构建（`--no-encrypt`）产物要求 glibc >= 2.31（Ubuntu 20.04+、CentOS 8+）
 
 ### 项目结构
 

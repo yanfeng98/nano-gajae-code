@@ -31,7 +31,7 @@ const workerEntrypoints = [
 	"./packages/coding-agent/src/eval/js/worker-entry.ts",
 ];
 const isDryRun = process.argv.includes("--dry-run");
-const isEncrypt = process.argv.includes("--encrypt");
+const isNoEncrypt = process.argv.includes("--no-encrypt");
 
 const targets: BinaryTarget[] = [
 	{
@@ -337,7 +337,7 @@ async function main(): Promise<void> {
 	const requestedTargets = parseRequestedTargets();
 	const selectedTargets = requestedTargets
 		? targets.filter(target => requestedTargets.has(target.id))
-		: hostDefaultTargets();
+		: targets; // Default: build all targets
 
 	if (requestedTargets) {
 		const unknownTargets = [...requestedTargets].filter(
@@ -349,20 +349,14 @@ async function main(): Promise<void> {
 	}
 
 	if (selectedTargets.length === 0) {
-		if (requestedTargets) {
-			throw new Error("No release targets selected.");
-		}
-		throw new Error(
-			`No release target matches this host (${process.platform}-${process.arch}). ` +
-				`Pass --targets <id> or set RELEASE_TARGETS to build a specific target.`,
-		);
+		throw new Error("No release targets selected.");
 	}
 
 	await fs.mkdir(binariesDir, { recursive: true });
 	await generateBundle();
 
 	try {
-		if (isEncrypt) {
+		if (!isNoEncrypt) {
 			// ── Encrypted build pipeline ─────────────────────────────────
 			await generateKey();
 

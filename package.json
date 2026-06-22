@@ -108,7 +108,6 @@
     "ci:test:smoke": "bun packages/coding-agent/src/cli.ts --version && bun packages/coding-agent/src/cli.ts --help && bun packages/coding-agent/src/cli.ts stats --help && bun packages/coding-agent/src/cli.ts --smoke-test",
     "ci:test:install-methods": "bash scripts/install-tests/run-ci.sh",
     "ci:release:build-binaries": "bun scripts/ci-release-build-binaries.ts",
-    "ci:release:build-binaries:encrypted": "bun scripts/ci-release-build-binaries.ts --encrypt",
     "ci:release:publish": "bun scripts/ci-release-publish.ts",
 
     "stats:sync": "python3 scripts/session-stats/sync.py",
