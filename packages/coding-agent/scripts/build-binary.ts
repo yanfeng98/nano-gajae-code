@@ -101,6 +101,14 @@ async function buildEncrypted(): Promise<void> {
 			);
 
 			await stageWorkspaceNativeAddons();
+
+				// 6. Wrap as self-extracting portable binary (CentOS 7 glibc 2.17 compat)
+				const gjcBinary = path.join(repoRoot, "packages", "coding-agent", "dist", "gjc");
+				const glibcDir = path.join(repoRoot, "packages", "coding-agent", "dist", "glibc-bundled");
+				fs.mkdirSync(glibcDir, { recursive: true });
+				await runCommand(["bun", "scripts/bundle-glibc.ts", glibcDir], repoRoot);
+				await runCommand(["bun", "scripts/make-portable.ts", gjcBinary, glibcDir, gjcBinary], repoRoot);
+				fs.rmSync(glibcDir, { recursive: true, force: true });
 		} finally {
 			await runCommand(["bun", "--cwd=packages/natives", "run", "embed:native", "--reset"], repoRoot);
 		}
@@ -157,6 +165,14 @@ async function main(): Promise<void> {
 			);
 
 			await stageWorkspaceNativeAddons();
+
+				// 6. Wrap as self-extracting portable binary (CentOS 7 glibc 2.17 compat)
+				const gjcBinary = path.join(repoRoot, "packages", "coding-agent", "dist", "gjc");
+				const glibcDir = path.join(repoRoot, "packages", "coding-agent", "dist", "glibc-bundled");
+				fs.mkdirSync(glibcDir, { recursive: true });
+				await runCommand(["bun", "scripts/bundle-glibc.ts", glibcDir], repoRoot);
+				await runCommand(["bun", "scripts/make-portable.ts", gjcBinary, glibcDir, gjcBinary], repoRoot);
+				fs.rmSync(glibcDir, { recursive: true, force: true });
 		} finally {
 			await runCommand(["bun", "--cwd=../natives", "run", "embed:native", "--reset"]);
 		}

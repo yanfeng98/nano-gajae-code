@@ -295,6 +295,34 @@ async function cleanupEncryptArtifacts(): Promise<void> {
 	}
 }
 
+async function makePortableBinary(target: BinaryTarget): Promise<void> {
+	// CentOS 7 portability only applies to linux-x64
+	if (target.id !== "linux-x64") return;
+
+	const gjcBinary = path.join(repoRoot, target.outfile);
+	if (!(await fs.stat(gjcBinary).catch(() => null))) {
+		throw new Error(`Binary not found: ${gjcBinary}`);
+	}
+
+	// Bundle glibc from the build host
+	const glibcDir = path.join(repoRoot, "packages", "coding-agent", "dist", "glibc-bundled");
+	await fs.mkdir(glibcDir, { recursive: true });
+	await runCommand(["bun", "scripts/bundle-glibc.ts", glibcDir], repoRoot);
+
+	// Wrap as self-extracting shell archive
+	if (isDryRun) {
+		console.log(`DRY RUN bun scripts/make-portable.ts ${gjcBinary} ${glibcDir} ${gjcBinary}`);
+	} else {
+		await runCommand(
+			["bun", "scripts/make-portable.ts", gjcBinary, glibcDir, gjcBinary],
+			repoRoot,
+		);
+	}
+
+	// Cleanup glibc staging dir
+	await fs.rm(glibcDir, { recursive: true, force: true });
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -347,6 +375,9 @@ async function main(): Promise<void> {
 
 				// Compile with launcher entry point (encrypted files embedded as assets)
 				await buildEncryptedBinary(target);
+
+				// Wrap as self-extracting portable binary (CentOS 7 glibc 2.17 compat)
+				await makePortableBinary(target);
 			}
 
 			await cleanupEncryptArtifacts();

@@ -194,10 +194,6 @@ function scanLegacyHits(): LegacyHit[] {
 		"assets",
 		"package.json",
 		"Cargo.toml",
-		"Dockerfile",
-		"Dockerfile.robogjc",
-		"Dockerfile.dockerignore",
-		"Dockerfile.robogjc.dockerignore",
 	];
 	const files = roots.flatMap(root => {
 		const full = path.join(repoRoot, root);
