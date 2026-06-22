@@ -30,7 +30,7 @@ import { embeddedAddon } from "./embedded-addon.js";
  * post-build `--reset` stub) is the authoritative compiled-mode signal.
  */
 
-const SUPPORTED_PLATFORMS = ["linux-x64", "linux-arm64", "darwin-x64", "darwin-arm64", "win32-x64"];
+const SUPPORTED_PLATFORMS = ["linux-x64", "linux-arm64"];
 
 function getNativesDir() {
 	const xdgDataHome = process.env.XDG_DATA_HOME;
@@ -186,24 +186,7 @@ function detectAvx2Support() {
 		}
 	}
 
-	if (process.platform === "darwin") {
-		const leaf7 = runCommand("sysctl", ["-n", "machdep.cpu.leaf7_features"]);
-		if (leaf7 && /\bAVX2\b/i.test(leaf7)) {
-			return true;
-		}
-		const features = runCommand("sysctl", ["-n", "machdep.cpu.features"]);
-		return Boolean(features && /\bAVX2\b/i.test(features));
-	}
 
-	if (process.platform === "win32") {
-		const output = runCommand("powershell.exe", [
-			"-NoProfile",
-			"-NonInteractive",
-			"-Command",
-			"[System.Runtime.Intrinsics.X86.Avx2]::IsSupported",
-		]);
-		return output && output.toLowerCase() === "true";
-	}
 
 	return false;
 }

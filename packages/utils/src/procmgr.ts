@@ -93,7 +93,7 @@ export function resolveBasicShell(): string | undefined {
 	}
 
 	if (process.platform !== "win32") {
-		const searchPaths = ["/bin", "/usr/bin", "/usr/local/bin", "/opt/homebrew/bin"];
+		const searchPaths = ["/bin", "/usr/bin", "/usr/local/bin"];
 		const candidates = ["bash", "sh"];
 
 		for (const name of candidates) {
@@ -111,9 +111,8 @@ export function resolveBasicShell(): string | undefined {
  * Get shell configuration based on platform.
  * Resolution order:
  * 1. User-specified shellPath in settings.json
- * 2. On Windows: Git Bash in known locations, then bash on PATH
- * 3. On Unix: $SHELL if bash/zsh, then fallback paths
- * 4. Fallback: sh
+ * 2. On Unix: $SHELL if bash/zsh, then fallback paths
+ * 3. Fallback: sh
  */
 export function getShellConfig(customShellPath?: string): ShellConfig {
 	if (cachedShellConfig) {

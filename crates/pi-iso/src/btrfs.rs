@@ -9,8 +9,6 @@ use std::path::Path;
 
 use async_trait::async_trait;
 
-#[cfg(not(target_os = "linux"))]
-use crate::IsoError;
 use crate::{BackendKind, IsoResult, IsolationBackend, ProbeResult};
 
 pub struct BtrfsBackend;
@@ -26,42 +24,18 @@ impl IsolationBackend for BtrfsBackend {
 	}
 
 	fn probe(&self) -> ProbeResult {
-		#[cfg(target_os = "linux")]
-		{
-			imp::probe()
-		}
-		#[cfg(not(target_os = "linux"))]
-		{
-			ProbeResult::unavailable("btrfs snapshot isolation is only available on Linux")
-		}
+		imp::probe()
 	}
 
 	fn start(&self, lower: &Path, merged: &Path) -> IsoResult<()> {
-		#[cfg(target_os = "linux")]
-		{
-			imp::start(lower, merged)
-		}
-		#[cfg(not(target_os = "linux"))]
-		{
-			let _ = (lower, merged);
-			Err(IsoError::unavailable("btrfs snapshot isolation is only available on Linux"))
-		}
+		imp::start(lower, merged)
 	}
 
 	fn stop(&self, merged: &Path) -> IsoResult<()> {
-		#[cfg(target_os = "linux")]
-		{
-			imp::stop(merged)
-		}
-		#[cfg(not(target_os = "linux"))]
-		{
-			let _ = merged;
-			Ok(())
-		}
+		imp::stop(merged)
 	}
 }
 
-#[cfg(target_os = "linux")]
 mod imp {
 	use std::{
 		fs,

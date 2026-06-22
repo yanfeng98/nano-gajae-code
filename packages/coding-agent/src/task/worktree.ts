@@ -35,7 +35,7 @@ export async function getRepoRoot(cwd: string): Promise<string> {
 	return repoRoot;
 }
 
-const GIT_NO_INDEX_NULL_PATH = process.platform === "win32" ? "NUL" : "/dev/null";
+const GIT_NO_INDEX_NULL_PATH = "/dev/null";
 
 export function getGitNoIndexNullPath(): string {
 	return GIT_NO_INDEX_NULL_PATH;
@@ -238,18 +238,14 @@ export async function applyNestedPatches(
 export type TaskIsolationMode =
 	| "none"
 	| "auto"
-	| "apfs"
 	| "btrfs"
 	| "zfs"
 	| "reflink"
 	| "overlayfs"
-	| "projfs"
-	| "block-clone"
 	| "rcopy"
 	// Legacy values, accepted for back-compat with pre-PAL settings files.
 	| "worktree"
-	| "fuse-overlay"
-	| "fuse-projfs";
+	| "fuse-overlay";
 
 /**
  * Translate a {@link TaskIsolationMode} string to an [`IsoBackendKind`]
@@ -262,8 +258,6 @@ export function parseIsolationMode(mode: TaskIsolationMode): IsoBackendKind | un
 		case "none":
 		case "auto":
 			return undefined;
-		case "apfs":
-			return IsoBackendKind.Apfs;
 		case "btrfs":
 			return IsoBackendKind.Btrfs;
 		case "zfs":
@@ -273,11 +267,6 @@ export function parseIsolationMode(mode: TaskIsolationMode): IsoBackendKind | un
 		case "overlayfs":
 		case "fuse-overlay":
 			return IsoBackendKind.Overlayfs;
-		case "projfs":
-		case "fuse-projfs":
-			return IsoBackendKind.Projfs;
-		case "block-clone":
-			return IsoBackendKind.WindowsBlockClone;
 		case "rcopy":
 		case "worktree":
 			return IsoBackendKind.Rcopy;

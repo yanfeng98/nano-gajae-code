@@ -30,13 +30,8 @@ export const MIN_BUN_VERSION: string = engines.bun.replace(/[^0-9.]/g, "");
 
 /**
  * Build the diagnostic shown when the Bun runtime executing `gjc` is older
- * than {@link MIN_BUN_VERSION}. This is the most common Windows native-install
- * failure (issue #525): `bun install -g gajae-code` probes a recent Bun while
- * the `gjc` launcher resolves an older Bun still on PATH. The message names the
- * exact detected runtime path and gives a platform-specific upgrade + PATH fix
- * instead of a bare `bun upgrade`.
- *
- * Pure and platform-parameterized so it can be unit-tested cross-platform.
+ * than {@link MIN_BUN_VERSION}. The message names the exact detected runtime
+ * path and gives an upgrade hint instead of a bare `bun upgrade`.
  */
 export function formatBunRuntimeError(opts: {
 	currentVersion: string;
@@ -51,53 +46,21 @@ export function formatBunRuntimeError(opts: {
 	if (opts.execPath) {
 		lines.push(`  detected Bun runtime: ${opts.execPath}`);
 	}
-	if (platform === "win32") {
-		lines.push(
-			"",
-			"The 'gjc' launcher is using an older Bun than the one used to install it.",
-			"Upgrade Bun, then restart your terminal so PATH and the runtime refresh:",
-			"",
-			'  powershell -c "irm bun.sh/install.ps1|iex"',
-			"",
-			"After restarting the terminal, verify both versions match:",
-			"  bun --version",
-			"  gjc --version",
-			"",
-			"If 'gjc' still loads the old runtime, make sure %USERPROFILE%\\.bun\\bin is",
-			"first on PATH and remove any stale Bun installs shadowing it.",
-		);
-	} else {
-		lines.push(
-			"",
-			"Upgrade Bun, then restart your terminal:",
-			"  bun upgrade",
-			"",
-			"Then verify:",
-			"  bun --version",
-			"  gjc --version",
-		);
-	}
+	lines.push(
+		"",
+		"Upgrade Bun, then restart your terminal:",
+		"  bun upgrade",
+		"",
+		"Then verify:",
+		"  bun --version",
+		"  gjc --version",
+	);
 	return `${lines.join("\n")}\n`;
 }
 
 // =============================================================================
 // Project directory
 // =============================================================================
-
-/**
- * On macOS, strip /private prefix only when both paths resolve to the same location.
- * This preserves aliases like /private/tmp -> /tmp without rewriting unrelated paths.
- */
-function standardizeMacOSPath(p: string): string {
-	if (process.platform !== "darwin" || !p.startsWith("/private/")) return p;
-	const stripped = p.slice("/private".length);
-	try {
-		if (fs.realpathSync(p) === fs.realpathSync(stripped)) {
-			return stripped;
-		}
-	} catch {}
-	return p;
-}
 
 export function resolveEquivalentPath(inputPath: string): string {
 	const resolvedPath = path.resolve(inputPath);
@@ -110,7 +73,7 @@ export function resolveEquivalentPath(inputPath: string): string {
 
 export function normalizePathForComparison(inputPath: string): string {
 	const resolvedPath = resolveEquivalentPath(inputPath);
-	return process.platform === "win32" ? resolvedPath.toLowerCase() : resolvedPath;
+	return resolvedPath;
 }
 
 export function pathIsWithin(root: string, candidate: string): boolean {
@@ -128,7 +91,7 @@ export function relativePathWithinRoot(root: string, candidate: string): string 
 	return relative || null;
 }
 
-let projectDir = standardizeMacOSPath(process.cwd());
+let projectDir = process.cwd();
 
 /** Get the project directory. */
 export function getProjectDir(): string {
@@ -137,7 +100,7 @@ export function getProjectDir(): string {
 
 /** Set the project directory. */
 export function setProjectDir(dir: string): void {
-	projectDir = standardizeMacOSPath(path.resolve(dir));
+	projectDir = path.resolve(dir);
 	process.chdir(projectDir);
 }
 
@@ -187,7 +150,7 @@ class DirResolver {
 		let xdgData: string | undefined;
 		let xdgState: string | undefined;
 		let xdgCache: string | undefined;
-		if ((process.platform === "linux" || process.platform === "darwin") && isDefault) {
+		if (isDefault) {
 			const resolveIf = (envVar: string) => {
 				const value = process.env[envVar];
 				if (value) {

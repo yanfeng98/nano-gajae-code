@@ -26,29 +26,6 @@ bun install -g gajae-code
 
 带作用域的包也可通过 `@gajae-code/coding-agent` 获取。
 
-### Windows（原生安装）
-
-在干净的 Windows 11 系统上，先安装 Bun，然后使用 Bun 的全局安装器安装 `gjc`：
-
-```powershell
-# 1. 安装 Bun
-powershell -c "irm bun.sh/install.ps1|iex"
-
-# 2. 重启终端以使 PATH 和 Bun 运行时刷新，然后确认 Bun
-bun --version
-
-# 3. 安装并验证 gjc
-bun install -g gajae-code
-gjc --version
-gjc --smoke-test
-```
-
-`bun install -g` 会将 `gjc` 启动器放在 `%USERPROFILE%\.bun\bin` 目录中。该目录必须在 `PATH` 中才能使 `gjc` 被识别为命令。Bun 的安装器会自动添加该路径，但该更改仅对安装后启动的终端生效——如果 `gjc` 显示"无法识别"，请重启 PowerShell（或注销/重新登录）。
-
-常见问题排查：
-
-- **`gjc` 报告的是旧版 Bun 运行时。** 重新运行上述 Bun 安装器，重启终端，确认 `bun --version` 与 `gjc --version` 期望的版本一致。如果旧版 Bun 仍然优先，请确保 `%USERPROFILE%\.bun\bin` 在 `PATH` 中排在第一位，并删除任何覆盖它的旧 Bun 安装。
-- **`gjc.exe` 存在但 `gjc` "无法识别"。** 启动器已安装但不在 `PATH` 中。确认 `%USERPROFILE%\.bun\bin` 已列在 `echo $env:Path` 的输出中，然后重启终端。
 
 ## 快速开始
 
@@ -254,11 +231,11 @@ bun run build    # 等于 bun --cwd=packages/coding-agent run build
 # 列出可用目标
 bun run ci:release:build-binaries --list-targets
 
-# 构建所有 5 个平台
+# 构建所有 2 个 Linux 平台
 bun run ci:release:build-binaries
 
 # 只构建指定平台
-RELEASE_TARGETS=linux-x64,win32-x64 bun run ci:release:build-binaries
+RELEASE_TARGETS=linux-x64 bun run ci:release:build-binaries
 ```
 
 支持的目标平台：
@@ -267,9 +244,6 @@ RELEASE_TARGETS=linux-x64,win32-x64 bun run ci:release:build-binaries
 |---|---|---|
 | `linux-x64` | Linux x86_64（兼容旧版 glibc） | x86-64-v2 |
 | `linux-arm64` | Linux ARM64 | — |
-| `darwin-arm64` | Apple Silicon Mac | — |
-| `darwin-x64` | Intel Mac | — |
-| `win32-x64` | Windows x64 | x86-64-v3 |
 
 Linux x64 使用 `x86-64-v2` 基线，兼容 2008 年后的 CPU；原生模块运行时自动解压到 `~/.gjc/natives/`。
 

@@ -1,8 +1,8 @@
 # Gajae-Code 功能默认状态完整分析
 
-> 分析日期: 2026-06-21 | 分支: 260613-v0.5.0-dev | 代码基线: 0.5.0
+> 分析日期: 2026-06-22 | 分支: 260613-v0.5.0-dev | 代码基线: 0.5.0
 >
-> **已执行移除（30 轮）**:
+> **已执行移除（31 轮）**:
 > - 第一轮: macOS 电源管理 (~350 行)
 > - 第二轮: 全平台死代码清理 (~1,120 行)
 > - 第三轮: Hindsight 远程记忆系统 (~2,600 行)
@@ -33,7 +33,8 @@
 > - 第二十八轮: lm-studio 僵尸代码 + xiaomi 残留清理（~60 行：DEFAULT_LOCAL_TOKEN 哨兵 + 自动注册 + 测试 xiaomi 条目）
 > - 第二十九轮: 与已删除 Provider 关联的死测试清理（~700 行：3 个整文件 + 6 个测试块，coding-agent 测试 64→44 fail）
 > - 第三十轮: Bridge Mode 完整移除（~5,960 行：49 文件，含 bridge/agent-wire 目录 + 26 测试）
-> - 总计减少 ~120,120+ 行，仅 Linux/WSL2 + 本地记忆 + 交互模式 + Python 调试运行。
+> - **第三十一轮: macOS + Windows 平台代码移除（~4,822 行：27 文件删除 + 29 文件简化，移除 windows-sys 依赖）**
+> - 总计减少 ~124,940+ 行，纯 Linux/WSL2 专用，零跨平台死代码。
 >
 > **生态激活**:
 > - Claude Code 配置发现：激活 `discovery/claude.ts` + `discovery/claude-plugins.ts`，支持从 `~/.claude/` 和项目 `.claude/` 导入技能/命令/钩子/工具/MCP/设置
@@ -53,15 +54,16 @@
 |------|------|
 | TypeScript 源文件数 | ~834 个 (仅 coding-agent) |
 | TypeScript 总行数 | ~252,800 行 |
-| Rust crate 数 | 5 个 (含 2 个 vendored) |
+| Rust crate 数 | 5 个 (含 2 个 vendored，纯 Linux/Unix) |
 | `models.json` 大小 | 454 KB, ~21,666 行, 1030 个模型 |
 | AI Provider 数 | 14 个 (含 models.json 定义的) |
 | 已知 Provider 类型 | 19 个 |
 | 内置 Tool 数 | 31 个 (BUILTIN_TOOLS) + 3 个 (HIDDEN_TOOLS) |
 | Settings 配置项 | ~95 个 (已移除 4 power + 32 hindsight + 9 dead keys) |
-| 已移除代码行数 | ~120,120+ 行 (三十轮) |
-| 运行模式 | 3 种 (interactive, print, bridge) |
+| 已移除代码行数 | ~124,940+ 行 (三十一轮) |
+| 运行模式 | 2 种 (interactive, print) |
 | CLI 子命令 | 14 个 |
+| 目标平台 | Linux x64 / Linux arm64 (仅 WSL2 + Ubuntu/CentOS) |
 
 ---
 
@@ -731,6 +733,99 @@ commit/
 
 验证: 构建零错误 ✅ | 源文件零 bridge 残留 ✅ | 核心能力完整 ✅
 
+### 1.37 ~~macOS + Windows 平台代码移除~~（✅ 第三十一轮 — 纯 Linux/WSL2 目标）
+
+> **状态**: 已删除。项目仅运行在 WSL2 和 Linux（Ubuntu/CentOS）上，移除所有 macOS（Darwin）和 Windows（Win32）平台代码。涵盖 Rust 后端隔离层、TypeScript 平台分支、Shell 脚本、安装器、Cargo 依赖及文档。
+
+**背景**: 项目在 R1-R30 轮清理后，核心功能链路（AI 交互、工具调用、tmux 执行、本地记忆）已高度聚焦。但代码库残留大量从未在 Linux 上编译/执行的跨平台代码：
+- Rust 层：macOS APFS clonefile 后端、Windows ProjFS/块克隆后端、完整的 Windows shell sys 抽象层、非 unix stub 模块
+- TypeScript 层：`process.platform` 分发的 darwin/win32 代码路径
+- 构建层：5 平台发布目标、PowerShell 安装器、macOS codesign 逻辑
+- 依赖层：`windows-sys` crate 及其 7 个 Win32 FFI feature
+
+**删除清单（27 文件删除 + 29 文件简化，4,822 行）：**
+
+**Rust — 纯 macOS/Windows 模块文件（完整删除，~3,000 行）：**
+
+| 文件/目录 | 行数 | 说明 |
+|----------|------|------|
+| `crates/pi-iso/src/apfs.rs` | 148 | macOS APFS `clonefile(2)` CoW 克隆后端 |
+| `crates/pi-iso/src/projfs.rs` | 958 | Windows Projected File System 后端（大量 FFI） |
+| `crates/pi-iso/src/windows_block_clone.rs` | 375 | Windows `FSCTL_DUPLICATE_EXTENTS_TO_FILE` 块克隆 |
+| `crates/brush-core-vendored/src/sys/windows/` (7 文件) | ~1,224 | Windows shell 系统调用抽象层 |
+| `crates/brush-core-vendored/src/sys/stubs/` (15 文件) | ~820 | 非 unix 平台 stub 实现 |
+| `crates/brush-core-vendored/src/sys/wasm/` (2 文件) | 74 | WASM 平台 stub |
+
+**Rust — 调度器和模块简化（~500 行修改）：**
+
+| 文件 | 变更 | 说明 |
+|------|------|------|
+| `crates/pi-iso/src/lib.rs` | -120/+80 行 | 移除 3 个 BackendKind 变体（Apfs/WindowsBlockClone/ProjFS），`native()` 始终返回 Overlayfs，`auto_order()` 只含 Linux 后端 |
+| `crates/pi-natives/src/iso.rs` | -19 行 | NAPI 枚举移除 Apfs/WindowsBlockClone/ProjFS 变体 |
+| `crates/pi-iso/src/overlayfs.rs` | -32 行 | 移除非 Linux stub |
+| `crates/pi-iso/src/btrfs.rs` | -32 行 | 移除非 Linux stub |
+| `crates/pi-iso/src/linux_reflink.rs` | -32 行 | 移除非 Linux stub |
+| `crates/pi-iso/src/zfs.rs` | -32 行 | 移除非 unix stub |
+| `crates/pi-iso/src/rcopy.rs` | -64 行 | 移除 Windows 符号链接/文件时间实现 |
+| `crates/pi-iso/src/diff.rs` | -6 行 | 移除 Windows `NUL` 路径处理 |
+| `crates/brush-core-vendored/src/sys.rs` | -17 行 | 移除 windows/wasm/stubs 平台分派 |
+| `crates/brush-core-vendored/src/sys/unix/signal.rs` | -62/+1 行 | 移除 macOS `waitid_all` + `siginfo_to_wait_status` workaround |
+| `crates/brush-core-vendored/src/sys/unix/commands.rs` | -2 行 | 移除 macOS `TIOCSCTTY` 类型转换 |
+| `crates/brush-core-vendored/src/sys/unix/fs.rs` | -7 行 | 移除 Android `ANDROID_DEFPATH` 常量 |
+
+**Cargo.toml 依赖清理：**
+
+| 文件 | 变更 | 说明 |
+|------|------|------|
+| 根 `Cargo.toml` | -9 行 | 移除 `windows-sys = "0.61"` 及 7 个 Win32 feature |
+| `crates/pi-iso/Cargo.toml` | -4 行 | 移除 `[target.'cfg(windows)'.dependencies]` |
+| `crates/pi-natives/Cargo.toml` | -3 行 | 移除空 windows 目标依赖段 |
+| `crates/brush-core-vendored/Cargo.toml` | -39 行 | 移除 windows/wasm 目标依赖（windows-sys, check_elevation, whoami, getrandom, uuid）+ 简化 `any(unix,windows)` → `unix` |
+| `crates/brush-builtins-vendored/Cargo.toml` | -4 行 | 简化 `any(unix,windows)` → `unix` |
+
+**TypeScript — 核心工具类平台分支移除（~270 行）：**
+
+| 文件 | 变更 | 说明 |
+|------|------|------|
+| `packages/utils/src/which.ts` | -157/+50 行 | 删除 `darwinWhich()` 函数、XCODE_BINS 集合、Xcode 工具链查找逻辑；简化为 `Bun.which` + 缓存层 |
+| `packages/utils/src/dirs.ts` | -67 行 | 删除 `standardizeMacOSPath()`、移除 `formatBunRuntimeError` 中 Windows install.ps1 分支、简化 XDG 检查、移除 win32 大小写不敏感路径比较 |
+| `packages/utils/src/procmgr.ts` | -7 行 | 移除 `/opt/homebrew/bin`（macOS Homebrew 路径） |
+| `packages/coding-agent/src/utils/open.ts` | -14/+5 行 | 移除 darwin `open` / win32 `rundll32` 分支，统一用 `xdg-open` |
+| `packages/coding-agent/src/task/worktree.ts` | -15 行 | 移除 `apfs`/`projfs`/`block-clone`/`fuse-projfs` 隔离模式 + parseIsolationMode 中的对应分支 |
+| `packages/coding-agent/src/cli/update-cli.ts` | -16 行 | 移除 win32 install.ps1 分支、大小写不敏感路径比较、darwin/win32 二进制名映射 |
+| `packages/natives/native/loader-state.js` | -19 行 | 移除 darwin/win32 的 AVX2 CPU 检测（sysctl/PowerShell）、SUPPORTED_PLATFORMS 缩减为 2 个 linux 目标 |
+
+**构建脚本清理（~340 行）：**
+
+| 文件 | 变更 | 说明 |
+|------|------|------|
+| `scripts/install.ps1` | 整文件删除（306 行） | Windows PowerShell 安装器 |
+| `scripts/install.sh` | -1 行 | 移除 Darwin 平台检测 |
+| `scripts/ci-release-build-binaries.ts` | -35 行 | 移除 darwin-arm64/darwin-x64/win32-x64 构建目标、`shouldAdhocSignDarwinBinary()`、codesign 逻辑 |
+| `packages/coding-agent/scripts/build-binary.ts` | -12 行 | 移除 `shouldAdhocSignDarwinBinary()`、codesign 块、BUN_NO_CODESIGN_MACHO_BINARY |
+
+**文档清理：**
+
+| 文件 | 变更 | 说明 |
+|------|------|------|
+| `README.md` | -30 行 | 删除 "Windows（原生安装）" 整节、移除 darwin/win32 构建目标行 |
+
+**隔离后端最终状态（仅 Linux）：**
+
+```
+pi-iso 后端（5 种，按优先级）：
+  btrfs → zfs → linux-reflink → overlayfs → rcopy（通用回退）
+  
+native() = overlayfs（默认内核 overlay 文件系统）
+```
+
+**验证:**
+- Rust 编译零错误 ✅（`cargo check --workspace`）
+- Rust 测试编译全部通过 ✅（4 个可执行测试）
+- `windows-sys` 零残留 ✅（全代码库 `grep -rn 'windows.sys\|windows-sys' Cargo.toml crates/` 无结果）
+- `process.platform` darwin/win32 分支在 critical path 中全部移除 ✅
+- 27 个文件删除 + 29 个文件简化 ✅
+
 ---
 
 ## 二、内置默认 Tool 完整清单
@@ -898,7 +993,7 @@ commit/
 ```
 pi-natives (cdylib)  ← Node.js 加载的唯一入口
   ├── pi-ast      ← tree-sitter AST 解析 (19 默认语言 + 37 可选语言)
-  ├── pi-iso      ← 文件系统隔离 (8 种后端)
+  ├── pi-iso      ← 文件系统隔离 (5 种 Linux 后端，已移除 macOS ADFS + Windows ProjFS/块克隆)
   ├── pi-shell    ← Brush shell 执行 + 输出最小化器
   └── 独立 N-API 模块:
        grep, fd, clipboard, pty, sixel, highlight, tokens, text, ...
@@ -939,7 +1034,10 @@ svelte, swift, tlaplus, verilog, vue, xml, zig
 3. 从 `Cargo.toml` 中移除对应的依赖（如果没有其他模块使用）
 4. 从 `packages/natives/` 中移除对应的 JS 包装
 
-**已移除的模块**: `power.rs` (macOS IOKit 电源断言), `appearance.rs` (macOS 外观检测), `pi-shell/src/windows.rs` (Windows PATH), `winreg` crate
+**已移除的模块**: 
+- R1: `power.rs` (macOS IOKit 电源断言), `appearance.rs` (macOS 外观检测)
+- R31: `sys/windows/`（7 文件，Windows shell 抽象层）, `sys/stubs/`（15 文件，非 unix stub）, `sys/wasm/`（2 文件，WASM stub）, `apfs.rs`（macOS clonefile 后端）, `projfs.rs`（Windows ProjFS 后端，958 行）, `windows_block_clone.rs`（Windows 块克隆后端，375 行）
+- R31: 依赖移除 — `windows-sys` crate, `check_elevation`, `whoami`, WASM target deps
 
 ---
 

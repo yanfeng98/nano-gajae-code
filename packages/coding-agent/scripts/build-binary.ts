@@ -6,10 +6,6 @@ const packageDir = path.join(import.meta.dir, "..");
 const outputPath = path.join(packageDir, "dist", "gjc");
 const nativeDir = path.join(packageDir, "..", "natives", "native");
 
-function shouldAdhocSignDarwinBinary(): boolean {
-	return process.platform === "darwin";
-}
-
 async function runCommand(command: string[], env: NodeJS.ProcessEnv = Bun.env): Promise<void> {
 	const proc = Bun.spawn(command, {
 		cwd: packageDir,
@@ -33,14 +29,14 @@ async function main(): Promise<void> {
 	try {
 		await runCommand(["bun", "--cwd=../natives", "run", "embed:native"]);
 		try {
-			const buildEnv = shouldAdhocSignDarwinBinary() ? { ...Bun.env, BUN_NO_CODESIGN_MACHO_BINARY: "1" } : Bun.env;
+			const buildEnv = Bun.env;
 			await runCommand(
 				[
 					"bun",
 					"build",
 					"--compile",
 					// Minify shrinks the bundled JS the compiled binary must parse at
-					// startup (302MB → ~114MB --help RSS measured on darwin-arm64).
+					// startup.
 					// --keep-names below preserves identifiers for error reports.
 					"--minify",
 					"--no-compile-autoload-bunfig",
@@ -73,10 +69,6 @@ async function main(): Promise<void> {
 			);
 
 			await stageWorkspaceNativeAddons();
-			// Bun 1.3.12 emits a truncated Mach-O signature on darwin builds.
-			if (shouldAdhocSignDarwinBinary()) {
-				await runCommand(["codesign", "--force", "--sign", "-", outputPath]);
-			}
 		} finally {
 			await runCommand(["bun", "--cwd=../natives", "run", "embed:native", "--reset"]);
 		}

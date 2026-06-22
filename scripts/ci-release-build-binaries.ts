@@ -31,20 +31,6 @@ const workerEntrypoints = [
 const isDryRun = process.argv.includes("--dry-run");
 const targets: BinaryTarget[] = [
 	{
-		id: "darwin-arm64",
-		platform: "darwin",
-		arch: "arm64",
-		target: "bun-darwin-arm64",
-		outfile: "packages/coding-agent/binaries/gjc-darwin-arm64",
-	},
-	{
-		id: "darwin-x64",
-		platform: "darwin",
-		arch: "x64",
-		target: "bun-darwin-x64",
-		outfile: "packages/coding-agent/binaries/gjc-darwin-x64",
-	},
-	{
 		id: "linux-x64",
 		platform: "linux",
 		arch: "x64",
@@ -57,13 +43,6 @@ const targets: BinaryTarget[] = [
 		arch: "arm64",
 		target: "bun-linux-arm64",
 		outfile: "packages/coding-agent/binaries/gjc-linux-arm64",
-	},
-	{
-		id: "win32-x64",
-		platform: "win32",
-		arch: "x64",
-		target: "bun-windows-x64-modern",
-		outfile: "packages/coding-agent/binaries/gjc-windows-x64.exe",
 	},
 ];
 
@@ -94,10 +73,6 @@ function hostDefaultTargets(): BinaryTarget[] {
 	// target instead of every release target so we never demand native addons
 	// for architectures this machine cannot produce.
 	return targets.filter(target => target.platform === process.platform && target.arch === process.arch);
-}
-
-function shouldAdhocSignDarwinBinary(target: BinaryTarget): boolean {
-	return target.platform === "darwin" && process.platform === "darwin";
 }
 
 async function runCommand(command: string[], cwd: string, env: NodeJS.ProcessEnv = Bun.env): Promise<void> {
@@ -134,9 +109,6 @@ async function buildBinary(target: BinaryTarget): Promise<void> {
 		return;
 	}
 
-	const buildEnv = shouldAdhocSignDarwinBinary(target)
-		? { ...Bun.env, BUN_NO_CODESIGN_MACHO_BINARY: "1" }
-		: Bun.env;
 	await runCommand(
 		[
 			"bun",
@@ -161,13 +133,8 @@ async function buildBinary(target: BinaryTarget): Promise<void> {
 			target.outfile,
 		],
 		repoRoot,
-		buildEnv,
+		Bun.env,
 	);
-
-	// Bun 1.3.12 emits a truncated Mach-O signature on darwin builds.
-	if (shouldAdhocSignDarwinBinary(target)) {
-		await runCommand(["codesign", "--force", "--sign", "-", path.join(repoRoot, target.outfile)], repoRoot);
-	}
 }
 
 async function generateBundle(): Promise<void> {

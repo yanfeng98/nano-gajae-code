@@ -98,9 +98,7 @@ fn pre_exec_lead_session() -> Result<(), std::io::Error> {
 		return Err(std::io::Error::other(format!("failed to become session leader: {e}")));
 	}
 
-	#[cfg(not(target_os = "macos"))]
 	let control = libc::TIOCSCTTY;
-	#[cfg(target_os = "macos")]
 	let control: u64 = libc::TIOCSCTTY.into();
 
 	// SAFETY:

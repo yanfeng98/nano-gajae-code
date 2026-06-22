@@ -29,14 +29,11 @@ const ISO_UNAVAILABLE_PREFIX: &str = "ISO_UNAVAILABLE:";
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[napi]
 pub enum IsoBackendKind {
-	Apfs              = 0,
-	Btrfs             = 1,
-	Zfs               = 2,
-	LinuxReflink      = 3,
-	Overlayfs         = 4,
-	WindowsBlockClone = 5,
-	Projfs            = 6,
-	Rcopy             = 7,
+	Btrfs        = 1,
+	Zfs          = 2,
+	LinuxReflink = 3,
+	Overlayfs    = 4,
+	Rcopy        = 7,
 }
 
 /// How a single file changed between `lower` and `merged`.
@@ -181,26 +178,20 @@ pub fn iso_is_unavailable_error(message: String) -> bool {
 
 const fn to_napi_kind(kind: BackendKind) -> IsoBackendKind {
 	match kind {
-		BackendKind::Apfs => IsoBackendKind::Apfs,
 		BackendKind::Btrfs => IsoBackendKind::Btrfs,
 		BackendKind::Zfs => IsoBackendKind::Zfs,
 		BackendKind::LinuxReflink => IsoBackendKind::LinuxReflink,
 		BackendKind::Overlayfs => IsoBackendKind::Overlayfs,
-		BackendKind::WindowsBlockClone => IsoBackendKind::WindowsBlockClone,
-		BackendKind::Projfs => IsoBackendKind::Projfs,
 		BackendKind::Rcopy => IsoBackendKind::Rcopy,
 	}
 }
 
 const fn from_napi_kind(kind: IsoBackendKind) -> BackendKind {
 	match kind {
-		IsoBackendKind::Apfs => BackendKind::Apfs,
 		IsoBackendKind::Btrfs => BackendKind::Btrfs,
 		IsoBackendKind::Zfs => BackendKind::Zfs,
 		IsoBackendKind::LinuxReflink => BackendKind::LinuxReflink,
 		IsoBackendKind::Overlayfs => BackendKind::Overlayfs,
-		IsoBackendKind::WindowsBlockClone => BackendKind::WindowsBlockClone,
-		IsoBackendKind::Projfs => BackendKind::Projfs,
 		IsoBackendKind::Rcopy => BackendKind::Rcopy,
 	}
 }

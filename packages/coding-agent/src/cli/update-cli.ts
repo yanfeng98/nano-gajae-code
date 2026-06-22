@@ -64,9 +64,7 @@ async function getBunGlobalBinDir(): Promise<string | undefined> {
 }
 
 function normalizePathForComparison(filePath: string): string {
-	const normalized = path.normalize(filePath);
-	if (process.platform === "win32") return normalized.toLowerCase();
-	return normalized;
+	return path.normalize(filePath);
 }
 
 function tryRealpath(p: string): string | undefined {
@@ -172,12 +170,6 @@ function getBinaryName(platform: NodeJS.Platform = process.platform, arch: strin
 		case "linux":
 			os = "linux";
 			break;
-		case "darwin":
-			os = "darwin";
-			break;
-		case "win32":
-			os = "windows";
-			break;
 		default:
 			throw new Error(formatUnsupportedTargetMessage(`Unsupported platform: ${platform}`));
 	}
@@ -194,9 +186,6 @@ function getBinaryName(platform: NodeJS.Platform = process.platform, arch: strin
 			throw new Error(formatUnsupportedTargetMessage(`Unsupported architecture: ${arch}`));
 	}
 
-	if (os === "windows") {
-		return `${APP_NAME}-${os}-${archName}.exe`;
-	}
 	return `${APP_NAME}-${os}-${archName}`;
 }
 
@@ -231,9 +220,6 @@ function printVerifiedVersion(expectedVersion: string): void {
 }
 
 function formatBinaryInstallInstruction(platform: NodeJS.Platform = process.platform): string {
-	if (platform === "win32") {
-		return `For a supported binary install, reinstall with PowerShell: irm https://raw.githubusercontent.com/${RELEASE_REPO}/main/scripts/install.ps1 | iex`;
-	}
 	return `For a supported binary install, reinstall with: curl -fsSL https://raw.githubusercontent.com/${RELEASE_REPO}/main/scripts/install.sh | sh -s -- --binary`;
 }
 

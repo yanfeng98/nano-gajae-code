@@ -8,12 +8,6 @@ use std::{
 
 use crate::error;
 
-#[cfg(target_os = "android")]
-// _PATH_DEFPATH in https://android.googlesource.com/platform/bionic/+/refs/heads/main/libc/include/paths.h
-const ANDROID_DEFPATH: &str = "/product/bin:/apex/com.android.runtime/bin:/apex/com.android.art/\
-                               bin:/apex/com.android.virt/bin:/system_ext/bin:/system/bin:/system/\
-                               xbin:/odm/bin:/vendor/bin:/vendor/xbin";
-
 impl crate::sys::fs::PathExt for Path {
 	fn readable(&self) -> bool {
 		nix::unistd::access(self, nix::unistd::AccessFlags::R_OK).is_ok()
@@ -159,7 +153,6 @@ fn confstr_cs_path() -> Result<Option<PathBuf>, std::io::Error> {
 /// N.B. We would strongly prefer to use a safe API exposed (in an idiomatic
 /// way) by nix or similar. Until that exists, we accept the need to make the
 /// unsafe call directly.
-#[cfg(not(target_os = "android"))]
 fn confstr(name: nix::libc::c_int) -> Result<Option<std::ffi::OsString>, std::io::Error> {
 	// SAFETY:
 	// Calling `confstr` with a null pointer and size 0 is a documented way to query

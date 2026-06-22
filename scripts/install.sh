@@ -191,7 +191,6 @@ install_binary() {
 
     case "$OS" in
         Linux)  PLATFORM="linux" ;;
-        Darwin) PLATFORM="darwin" ;;
         *)      echo "Unsupported OS: $OS"; exit 1 ;;
     esac
 

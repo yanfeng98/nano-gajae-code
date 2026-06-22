@@ -90,69 +90,9 @@ pub(crate) fn poll_for_stopped_children() -> Result<bool, error::Error> {
 	Ok(found_stopped)
 }
 
-#[cfg(not(target_os = "macos"))]
+
 fn waitid_all(
 	flags: nix::sys::wait::WaitPidFlag,
 ) -> Result<nix::sys::wait::WaitStatus, nix::errno::Errno> {
 	nix::sys::wait::waitid(nix::sys::wait::Id::All, flags)
-}
-
-//
-// N.B. These functions were mostly copied from nix::sys::wait (https://github.com/nix-rust/nix, MIT license)
-// to enable use of the `waitid` call on macOS. Ideally nix would expose it on
-// macOS and we would remove this code.
-//
-
-#[cfg(target_os = "macos")]
-fn waitid_all(
-	flags: nix::sys::wait::WaitPidFlag,
-) -> Result<nix::sys::wait::WaitStatus, nix::errno::Errno> {
-	// SAFETY:
-	// Code copied from nix::sys::wait implementation of waitid for other platforms.
-	// The siginfo structure is valid when filled with zeroes. Memory is zeroed
-	// rather than uninitialized, as not all platforms initialize the memory in
-	// the StillAlive case.
-	let mut siginfo: nix::libc::siginfo_t = unsafe { std::mem::zeroed() };
-
-	// SAFETY:
-	// Code copied from nix::sys::wait implementation of waitid for other platforms.
-	nix::errno::Errno::result(unsafe {
-		nix::libc::waitid(nix::libc::P_ALL, 0, &raw mut siginfo, flags.bits())
-	})?;
-
-	siginfo_to_wait_status(siginfo)
-}
-
-#[cfg(target_os = "macos")]
-fn siginfo_to_wait_status(
-	siginfo: nix::libc::siginfo_t,
-) -> Result<nix::sys::wait::WaitStatus, nix::errno::Errno> {
-	// SAFETY:
-	// Code copied from nix::sys::wait implementation of waitid for other platforms.
-	let si_pid = unsafe { siginfo.si_pid() };
-	if si_pid == 0 {
-		return Ok(nix::sys::wait::WaitStatus::StillAlive);
-	}
-
-	let pid = nix::unistd::Pid::from_raw(si_pid);
-
-	// SAFETY:
-	// Code copied from nix::sys::wait implementation of waitid for other platforms.
-	let si_status = unsafe { siginfo.si_status() };
-
-	let status = match siginfo.si_code {
-		nix::libc::CLD_EXITED => nix::sys::wait::WaitStatus::Exited(pid, si_status),
-		nix::libc::CLD_KILLED | nix::libc::CLD_DUMPED => nix::sys::wait::WaitStatus::Signaled(
-			pid,
-			nix::sys::signal::Signal::try_from(si_status)?,
-			siginfo.si_code == nix::libc::CLD_DUMPED,
-		),
-		nix::libc::CLD_STOPPED => {
-			nix::sys::wait::WaitStatus::Stopped(pid, nix::sys::signal::Signal::try_from(si_status)?)
-		},
-		nix::libc::CLD_CONTINUED => nix::sys::wait::WaitStatus::Continued(pid),
-		_ => return Err(nix::errno::Errno::EINVAL),
-	};
-
-	Ok(status)
 }

@@ -201,7 +201,7 @@ features = ["unstable"]
 [target.'cfg(any(target_os = "linux", target_os = "android"))'.dependencies.procfs]
 version = "0.18.0"
 
-[target."cfg(any(unix, windows))".dependencies.tokio]
+[target."cfg(unix)".dependencies.tokio]
 version = "1.50.0"
 features = [
     "io-util",
@@ -213,7 +213,7 @@ features = [
     "sync",
 ]
 
-[target."cfg(any(unix, windows))".dependencies.uucore]
+[target."cfg(unix)".dependencies.uucore]
 version = "0.8.0"
 features = ["format"]
 default-features = false
