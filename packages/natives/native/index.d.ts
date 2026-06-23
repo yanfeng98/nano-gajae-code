@@ -353,6 +353,17 @@ export declare function copyToClipboard(text: string): void
 export declare function countTokens(input: string | Array<string>, encoding?: Encoding | undefined | null): number
 
 /**
+ * Decrypt the AES-256-GCM-encrypted app bundle.
+ *
+ * # Format
+ * `encrypted` layout: `[nonce: 12 bytes][ciphertext + tag: N + 16 bytes]`
+ *
+ * The nonce is prepended at encryption time by the TypeScript
+ * `scripts/encrypt-bundle.ts` script.
+ */
+export declare function decryptBundle(encrypted: Buffer): string
+
+/**
  * Compute a line-level diff byte-identical to jsdiff `Diff.diffLines(old,
  * new)` with default options. Returns ordered `{added, removed, value}` parts.
  */

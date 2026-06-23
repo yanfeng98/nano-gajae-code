@@ -73,6 +73,10 @@ function hostDefaultTargets(): BinaryTarget[] {
 	return targets.filter(target => target.platform === process.platform && target.arch === process.arch);
 }
 
+function isHostRunnableTarget(target: BinaryTarget): boolean {
+	return hostDefaultTargets().some(hostTarget => hostTarget.id === target.id);
+}
+
 async function runCommand(command: string[], cwd: string, env: NodeJS.ProcessEnv = Bun.env): Promise<void> {
 	const proc = Bun.spawn(command, {
 		cwd,
@@ -300,6 +304,11 @@ async function makePortableBinary(target: BinaryTarget): Promise<void> {
 	if (target.id !== "linux-x64") return;
 
 	const gjcBinary = path.join(repoRoot, target.outfile);
+	if (isDryRun) {
+		console.log(`DRY RUN bun scripts/bundle-glibc.ts ${path.join(repoRoot, "packages", "coding-agent", "dist", "glibc-bundled")}`);
+		console.log(`DRY RUN bun scripts/make-portable.ts ${gjcBinary} <glibc-dir> ${gjcBinary}`);
+		return;
+	}
 	if (!(await fs.stat(gjcBinary).catch(() => null))) {
 		throw new Error(`Binary not found: ${gjcBinary}`);
 	}
@@ -310,17 +319,47 @@ async function makePortableBinary(target: BinaryTarget): Promise<void> {
 	await runCommand(["bun", "scripts/bundle-glibc.ts", glibcDir], repoRoot);
 
 	// Wrap as self-extracting shell archive
-	if (isDryRun) {
-		console.log(`DRY RUN bun scripts/make-portable.ts ${gjcBinary} ${glibcDir} ${gjcBinary}`);
-	} else {
-		await runCommand(
-			["bun", "scripts/make-portable.ts", gjcBinary, glibcDir, gjcBinary],
-			repoRoot,
-		);
-	}
+	await runCommand(
+		["bun", "scripts/make-portable.ts", gjcBinary, glibcDir, gjcBinary],
+		repoRoot,
+	);
 
 	// Cleanup glibc staging dir
 	await fs.rm(glibcDir, { recursive: true, force: true });
+}
+
+async function validateBuiltBinary(target: BinaryTarget): Promise<void> {
+	if (isDryRun) {
+		console.log(`DRY RUN validate ${target.outfile} with --version/--help/stats --help/--smoke-test`);
+		return;
+	}
+	if (!isHostRunnableTarget(target)) {
+		console.log(`Skipping runtime validation for ${target.id} (host is ${process.platform}-${process.arch})`);
+		return;
+	}
+
+	const binaryPath = path.join(repoRoot, target.outfile);
+	const runtimeRoot = await fs.mkdtemp("/tmp/gjc-release-smoke.");
+	const homeDir = path.join(runtimeRoot, "home");
+	const xdgDir = path.join(runtimeRoot, "xdg");
+	await fs.mkdir(homeDir, { recursive: true });
+	await fs.mkdir(xdgDir, { recursive: true });
+
+	const runtimeEnv: NodeJS.ProcessEnv = {
+		...Bun.env,
+		HOME: homeDir,
+		XDG_DATA_HOME: xdgDir,
+	};
+
+	try {
+		console.log(`Validating ${target.outfile}...`);
+		await runCommand([binaryPath, "--version"], repoRoot, runtimeEnv);
+		await runCommand([binaryPath, "--help"], repoRoot, runtimeEnv);
+		await runCommand([binaryPath, "stats", "--help"], repoRoot, runtimeEnv);
+		await runCommand([binaryPath, "--smoke-test"], repoRoot, runtimeEnv);
+	} finally {
+		await fs.rm(runtimeRoot, { recursive: true, force: true });
+	}
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────
@@ -363,24 +402,26 @@ async function main(): Promise<void> {
 			// Bundle + encrypt happens once (same JS bundles for all targets)
 			await buildAndEncryptBundles();
 
-			for (const target of selectedTargets) {
-				// Build native addon with key baked in (per-target arch/variant)
-				await buildNativeWithKey(target);
+				for (const target of selectedTargets) {
+					// Build native addon with key baked in (per-target arch/variant)
+					await buildNativeWithKey(target);
 
-				// Compile with launcher entry point (encrypted files embedded as assets)
-				await buildEncryptedBinary(target);
+					// Compile with launcher entry point (encrypted files embedded as assets)
+					await buildEncryptedBinary(target);
 
-				// Wrap as self-extracting portable binary (CentOS 7 glibc 2.17 compat)
-				await makePortableBinary(target);
-			}
+					// Wrap as self-extracting portable binary (CentOS 7 glibc 2.17 compat)
+					await makePortableBinary(target);
+					await validateBuiltBinary(target);
+				}
 
 			await cleanupEncryptArtifacts();
-		} else {
-			// ── Standard (non-encrypted) build pipeline ──────────────────
-			for (const target of selectedTargets) {
-				await buildBinary(target);
+			} else {
+				// ── Standard (non-encrypted) build pipeline ──────────────────
+				for (const target of selectedTargets) {
+					await buildBinary(target);
+					await validateBuiltBinary(target);
+				}
 			}
-		}
 	} finally {
 		await resetArtifacts();
 	}

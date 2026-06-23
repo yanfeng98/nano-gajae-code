@@ -28,6 +28,7 @@ export const astEdit = nativeBindings.astEdit;
 export const astGrep = nativeBindings.astGrep;
 export const copyToClipboard = nativeBindings.copyToClipboard;
 export const countTokens = nativeBindings.countTokens;
+export const decryptBundle = nativeBindings.decryptBundle;
 export const diffLines = nativeBindings.diffLines;
 export const encodeSixel = nativeBindings.encodeSixel;
 export const executeShell = nativeBindings.executeShell;

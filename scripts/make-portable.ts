@@ -28,6 +28,7 @@ const WRAPPER_SCRIPT = [
 	'trap \'rm -rf "$TMPDIR"\' EXIT',
 	'sed \'1,/^__ARCHIVE__$/d\' "$0" | tar xz -C "$TMPDIR"',
 	'LD_LIBRARY_PATH="$TMPDIR/glibc" "$TMPDIR/glibc/ld-linux-x86-64.so.2" "$TMPDIR/gjc" "$@"',
+	"exit $?",
 ].join("\n") + "\n__ARCHIVE__\n";
 
 interface MakePortableOptions {

@@ -28,6 +28,18 @@ async function stageWorkspaceNativeAddons(): Promise<void> {
 	});
 }
 
+async function maybeMakePortableBinary(gjcBinary: string): Promise<void> {
+	if (process.platform !== "linux" || process.arch !== "x64") {
+		return;
+	}
+
+	const glibcDir = path.join(repoRoot, "packages", "coding-agent", "dist", "glibc-bundled");
+	fs.mkdirSync(glibcDir, { recursive: true });
+	await runCommand(["bun", "scripts/bundle-glibc.ts", glibcDir], repoRoot);
+	await runCommand(["bun", "scripts/make-portable.ts", gjcBinary, glibcDir, gjcBinary], repoRoot);
+	fs.rmSync(glibcDir, { recursive: true, force: true });
+}
+
 // ── Encrypted build ──────────────────────────────────────────────────────
 
 const ENCRYPTED_BUNDLES: Record<string, string> = {
@@ -98,20 +110,16 @@ async function buildEncrypted(): Promise<void> {
 				],
 				repoRoot,
 				Bun.env,
-			);
+				);
 
-			await stageWorkspaceNativeAddons();
+				await stageWorkspaceNativeAddons();
 
-				// 6. Wrap as self-extracting portable binary (CentOS 7 glibc 2.17 compat)
+				// Wrap as self-extracting portable binary only on linux-x64.
 				const gjcBinary = path.join(repoRoot, "packages", "coding-agent", "dist", "gjc");
-				const glibcDir = path.join(repoRoot, "packages", "coding-agent", "dist", "glibc-bundled");
-				fs.mkdirSync(glibcDir, { recursive: true });
-				await runCommand(["bun", "scripts/bundle-glibc.ts", glibcDir], repoRoot);
-				await runCommand(["bun", "scripts/make-portable.ts", gjcBinary, glibcDir, gjcBinary], repoRoot);
-				fs.rmSync(glibcDir, { recursive: true, force: true });
-		} finally {
-			await runCommand(["bun", "--cwd=packages/natives", "run", "embed:native", "--reset"], repoRoot);
-		}
+				await maybeMakePortableBinary(gjcBinary);
+			} finally {
+				await runCommand(["bun", "--cwd=packages/natives", "run", "embed:native", "--reset"], repoRoot);
+			}
 	} finally {
 		// Cleanup
 		const keyTmp = path.join(repoRoot, "crates", "pi-natives", "key.tmp");
@@ -132,12 +140,12 @@ async function main(): Promise<void> {
 	}
 
 	// Original non-encrypted dev build
-	await runCommand(["bun", "--cwd=../stats", "scripts/generate-client-bundle.ts", "--generate"]);
-	try {
-		await runCommand(["bun", "--cwd=../natives", "run", "embed:native"]);
+		await runCommand(["bun", "--cwd=../stats", "scripts/generate-client-bundle.ts", "--generate"], packageDir);
 		try {
-			const buildEnv = Bun.env;
-			await runCommand(
+			await runCommand(["bun", "--cwd=../natives", "run", "embed:native"], packageDir);
+			try {
+				const buildEnv = Bun.env;
+				await runCommand(
 				[
 					"bun",
 					"build",
@@ -159,26 +167,23 @@ async function main(): Promise<void> {
 					"./src/tools/browser/tab-worker-entry.ts",
 					"./src/eval/js/worker-entry.ts",
 					"--outfile",
-					"dist/gjc",
-				],
-				buildEnv,
-			);
+						"dist/gjc",
+					],
+					packageDir,
+					buildEnv,
+				);
 
-			await stageWorkspaceNativeAddons();
+				await stageWorkspaceNativeAddons();
 
-				// 6. Wrap as self-extracting portable binary (CentOS 7 glibc 2.17 compat)
+				// Wrap as self-extracting portable binary only on linux-x64.
 				const gjcBinary = path.join(repoRoot, "packages", "coding-agent", "dist", "gjc");
-				const glibcDir = path.join(repoRoot, "packages", "coding-agent", "dist", "glibc-bundled");
-				fs.mkdirSync(glibcDir, { recursive: true });
-				await runCommand(["bun", "scripts/bundle-glibc.ts", glibcDir], repoRoot);
-				await runCommand(["bun", "scripts/make-portable.ts", gjcBinary, glibcDir, gjcBinary], repoRoot);
-				fs.rmSync(glibcDir, { recursive: true, force: true });
+				await maybeMakePortableBinary(gjcBinary);
+			} finally {
+				await runCommand(["bun", "--cwd=../natives", "run", "embed:native", "--reset"], packageDir);
+			}
 		} finally {
-			await runCommand(["bun", "--cwd=../natives", "run", "embed:native", "--reset"]);
+			await runCommand(["bun", "--cwd=../stats", "scripts/generate-client-bundle.ts", "--reset"], packageDir);
 		}
-	} finally {
-		await runCommand(["bun", "--cwd=../stats", "scripts/generate-client-bundle.ts", "--reset"]);
 	}
-}
 
 await main();

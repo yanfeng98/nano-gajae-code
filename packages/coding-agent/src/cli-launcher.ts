@@ -52,6 +52,10 @@ for (const [filename, encryptedPath] of Object.entries(encryptedFiles)) {
 
 // Tell workers where to find the decrypted bundles
 process.env.PI_DECRYPTED_BUNDLE_DIR = shmDir;
+// The decrypted main bundle runs from a plain file:// URL, so the usual bunfs
+// marker no longer exists. Preserve the compiled-binary signal explicitly so
+// the natives loader still extracts and probes embedded addons.
+process.env.PI_COMPILED = "true";
 
 // ── Boot the application ──────────────────────────────────────────────────
 

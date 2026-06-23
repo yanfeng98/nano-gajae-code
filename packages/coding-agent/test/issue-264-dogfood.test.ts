@@ -6,9 +6,11 @@ describe("issue #264 — dogfood build and telemetry boundaries", () => {
 		const repoRoot = path.resolve(import.meta.dir, "../../..");
 		const buildScriptPath = path.join(repoRoot, "packages/coding-agent/scripts/build-binary.ts");
 		const source = await Bun.file(buildScriptPath).text();
+		const devSection = source.split("// Original non-encrypted dev build")[1] ?? "";
 
 		expect(source).toContain('new Bun.Glob("pi_natives.*.node")');
 		expect(source).toContain('path.join(packageDir, "dist", filename)');
-		expect(source.indexOf("await stageWorkspaceNativeAddons();")).toBeGreaterThan(source.indexOf('"dist/gjc"'));
+		expect(devSection).toContain("await stageWorkspaceNativeAddons();");
+		expect(devSection.indexOf("await stageWorkspaceNativeAddons();")).toBeGreaterThan(devSection.indexOf('"dist/gjc"'));
 	});
 });
