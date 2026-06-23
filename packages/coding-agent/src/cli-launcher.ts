@@ -35,16 +35,16 @@ const shmDir = path.join(tmpfsBase, `gjc-${process.pid}`);
 fs.mkdirSync(shmDir, { recursive: true, mode: 0o700 });
 
 // Decrypt and write all four bundles
-const encryptedFiles: Record<string, string> = {
-	"bundle.mjs": encMain,
-	"worker-sync.mjs": encSyncWorker,
-	"worker-tab.mjs": encTabWorker,
-	"worker-eval.mjs": encEvalWorker,
-};
+const encryptedFiles = [
+	{ bundleId: "enc-main.bin", filename: "bundle.mjs", encryptedPath: encMain },
+	{ bundleId: "enc-sync-worker.bin", filename: "worker-sync.mjs", encryptedPath: encSyncWorker },
+	{ bundleId: "enc-tab-worker.bin", filename: "worker-tab.mjs", encryptedPath: encTabWorker },
+	{ bundleId: "enc-eval-worker.bin", filename: "worker-eval.mjs", encryptedPath: encEvalWorker },
+] as const;
 
-for (const [filename, encryptedPath] of Object.entries(encryptedFiles)) {
+for (const { bundleId, filename, encryptedPath } of encryptedFiles) {
 	const encrypted = fs.readFileSync(encryptedPath);
-	const decrypted: string = decryptBundle(encrypted);
+	const decrypted: string = decryptBundle(encrypted, bundleId);
 	const filePath = path.join(shmDir, filename);
 	fs.writeFileSync(filePath, decrypted);
 	fs.chmodSync(filePath, 0o600);

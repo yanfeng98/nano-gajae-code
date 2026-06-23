@@ -356,12 +356,13 @@ export declare function countTokens(input: string | Array<string>, encoding?: En
  * Decrypt the AES-256-GCM-encrypted app bundle.
  *
  * # Format
- * `encrypted` layout: `[nonce: 12 bytes][ciphertext + tag: N + 16 bytes]`
+ * `encrypted` layout:
+ * `[magic: 4][version: 1][bundle_id_len: 1][nonce_len: 1][flags: 1][bundle_id][nonce][ciphertext + tag]`
  *
- * The nonce is prepended at encryption time by the TypeScript
- * `scripts/encrypt-bundle.ts` script.
+ * The launcher must supply `expected_bundle_id` so the decryptor can reject
+ * swapped payloads and derive the matching bundle-specific AES key.
  */
-export declare function decryptBundle(encrypted: Buffer): string
+export declare function decryptBundle(encrypted: Buffer, expectedBundleId: string): string
 
 /**
  * Compute a line-level diff byte-identical to jsdiff `Diff.diffLines(old,

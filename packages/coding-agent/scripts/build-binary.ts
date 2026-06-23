@@ -73,8 +73,8 @@ async function buildEncrypted(): Promise<void> {
 				repoRoot,
 			);
 
-			console.log(`Encrypting ${bundlePath}...`);
-			await runCommand(["bun", "scripts/encrypt-bundle.ts", bundlePath, encPath], repoRoot);
+				console.log(`Encrypting ${bundlePath}...`);
+				await runCommand(["bun", "scripts/encrypt-bundle.ts", bundlePath, encPath, encName], repoRoot);
 
 			// Remove intermediate plaintext bundle
 			fs.rmSync(bundlePath, { force: true });

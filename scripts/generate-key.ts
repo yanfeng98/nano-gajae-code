@@ -1,12 +1,11 @@
 #!/usr/bin/env bun
 
 /**
- * Generate an AES-256 key and 96-bit nonce for bundle encryption.
+ * Generate a per-build AES-256 master key for bundle encryption.
  *
- * Writes `key.tmp` (64 hex chars = 32 bytes) and `nonce.tmp` (24 hex chars =
- * 12 bytes) into `crates/pi-natives/` so `build.rs` can embed the key into the
- * Rust native addon at compile time. Also writes an XOR-obfuscated key
- * reconstruction file for defence-in-depth.
+ * The master key is later expanded into bundle-specific AES keys by
+ * `scripts/bundle-crypto.ts` / `crates/pi-natives/src/decrypt.rs`, so swapping
+ * encrypted bundles across roles no longer reuses the exact same key stream.
  */
 
 import * as fs from "node:fs";

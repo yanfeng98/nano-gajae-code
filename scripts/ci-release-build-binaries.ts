@@ -179,11 +179,11 @@ async function buildAndEncryptBundles(): Promise<void> {
 		const bundlePath = path.join(distDir, `${encName}.mjs`);
 		const encPath = path.join(distDir, encName);
 
-		if (isDryRun) {
-			console.log(`DRY RUN bun build ${entry} --outfile ${bundlePath}`);
-			console.log(`DRY RUN bun scripts/encrypt-bundle.ts ${bundlePath} ${encPath}`);
-			continue;
-		}
+			if (isDryRun) {
+				console.log(`DRY RUN bun build ${entry} --outfile ${bundlePath}`);
+				console.log(`DRY RUN bun scripts/encrypt-bundle.ts ${bundlePath} ${encPath} ${encName}`);
+				continue;
+			}
 
 		console.log(`Bundling ${entry} → ${bundlePath}...`);
 		await runCommand(
@@ -207,11 +207,11 @@ async function buildAndEncryptBundles(): Promise<void> {
 			Bun.env,
 		);
 
-		console.log(`Encrypting ${bundlePath} → ${encPath}...`);
-		await runCommand(
-			["bun", "scripts/encrypt-bundle.ts", bundlePath, encPath],
-			repoRoot,
-		);
+			console.log(`Encrypting ${bundlePath} → ${encPath}...`);
+			await runCommand(
+				["bun", "scripts/encrypt-bundle.ts", bundlePath, encPath, encName],
+				repoRoot,
+			);
 
 		// Remove the intermediate plaintext bundle
 		await fs.rm(bundlePath, { force: true });
