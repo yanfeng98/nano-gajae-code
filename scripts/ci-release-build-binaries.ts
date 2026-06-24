@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 
 import * as fs from "node:fs/promises";
+import * as os from "node:os";
 import * as path from "node:path";
 
 interface BinaryTarget {
@@ -151,6 +152,51 @@ async function runCommand(command: string[], cwd: string, env: NodeJS.ProcessEnv
 	}
 }
 
+async function bundleEntrypointToFile(options: {
+	entry: string;
+	outputPath: string;
+	rootDir: string;
+	env?: NodeJS.ProcessEnv;
+	isDryRun?: boolean;
+}): Promise<void> {
+	const outdir = await fs.mkdtemp(path.join(os.tmpdir(), "gjc-bundle."));
+	try {
+		const relativeFromRoot = path.relative(options.rootDir, options.entry);
+		if (options.isDryRun) {
+			console.log(`DRY RUN bun build ${options.entry} --outdir ${outdir}`);
+			console.log(`DRY RUN cp ${path.join(outdir, relativeFromRoot.replace(/\.[^.]+$/u, ".js"))} ${options.outputPath}`);
+			return;
+		}
+
+		await runCommand(
+			[
+				"bun",
+				"build",
+				"--minify",
+				"--target",
+				"bun",
+				"--format",
+				"esm",
+				"--root",
+				options.rootDir,
+				"--external",
+				"mupdf",
+				options.entry,
+				"--outdir",
+				outdir,
+			],
+			repoRoot,
+			options.env ?? Bun.env,
+		);
+
+		const bundledPath = path.join(outdir, relativeFromRoot.replace(/\.[^.]+$/u, ".js"));
+		await fs.mkdir(path.dirname(options.outputPath), { recursive: true });
+		await fs.copyFile(bundledPath, options.outputPath);
+	} finally {
+		await fs.rm(outdir, { recursive: true, force: true });
+	}
+}
+
 async function embedNative(target: BinaryTarget): Promise<void> {
 	if (isDryRun) {
 		console.log(`DRY RUN bun --cwd=packages/natives run embed:native [${target.platform}/${target.arch}]`);
@@ -234,39 +280,29 @@ async function buildAndEncryptBundles(): Promise<void> {
 		const bundlePath = path.join(distDir, `${encName}.mjs`);
 		const encPath = path.join(distDir, encName);
 
-			if (isDryRun) {
-				console.log(`DRY RUN bun build ${entry} --outfile ${bundlePath}`);
-				console.log(`DRY RUN bun scripts/encrypt-bundle.ts ${bundlePath} ${encPath} ${encName}`);
-				continue;
-			}
+		if (isDryRun) {
+			await bundleEntrypointToFile({
+				entry,
+				outputPath: bundlePath,
+				rootDir: ".",
+				isDryRun: true,
+			});
+			console.log(`DRY RUN bun scripts/encrypt-bundle.ts ${bundlePath} ${encPath} ${encName}`);
+			continue;
+		}
 
 		console.log(`Bundling ${entry} → ${bundlePath}...`);
-		await runCommand(
-			[
-				"bun",
-				"build",
-				"--minify",
-				"--target",
-				"bun",
-				"--format",
-				"esm",
-				"--root",
-				".",
-				"--external",
-				"mupdf",
-				entry,
-				"--outfile",
-				bundlePath,
-			],
-			repoRoot,
-			Bun.env,
-		);
+		await bundleEntrypointToFile({
+			entry,
+			outputPath: bundlePath,
+			rootDir: ".",
+		});
 
-			console.log(`Encrypting ${bundlePath} → ${encPath}...`);
-			await runCommand(
-				["bun", "scripts/encrypt-bundle.ts", bundlePath, encPath, encName],
-				repoRoot,
-			);
+		console.log(`Encrypting ${bundlePath} → ${encPath}...`);
+		await runCommand(
+			["bun", "scripts/encrypt-bundle.ts", bundlePath, encPath, encName],
+			repoRoot,
+		);
 
 		// Remove the intermediate plaintext bundle
 		await fs.rm(bundlePath, { force: true });
@@ -275,9 +311,6 @@ async function buildAndEncryptBundles(): Promise<void> {
 
 async function buildEncryptedBinary(target: BinaryTarget): Promise<void> {
 	console.log(`Building encrypted ${target.outfile}...`);
-
-	// Embed native addon (contains decrypt logic)
-	await embedNative(target);
 
 	if (isDryRun) {
 		console.log(
@@ -454,19 +487,28 @@ async function main(): Promise<void> {
 			// ── Encrypted build pipeline ─────────────────────────────────
 			await generateKey();
 
-			// Bundle + encrypt happens once (same JS bundles for all targets)
-			await buildAndEncryptBundles();
-
 				for (const target of selectedTargets) {
 					// Build native addon with key baked in (per-target arch/variant)
 					await buildNativeWithKey(target);
 
-					// Compile with launcher entry point (encrypted files embedded as assets)
-					await buildEncryptedBinary(target);
+					// The encrypted JS bundles import the embedded-addon metadata, so
+					// they must be bundled while the target-specific embed file is populated.
+					await embedNative(target);
 
-					// Wrap as self-extracting portable binary (CentOS 7 glibc 2.17 compat)
-					await makePortableBinary(target);
-					await validateBuiltBinary(target);
+					try {
+						// Bundle + encrypt per target so the main bundle sees the same
+						// embedded addon fingerprint/pathing as the compiled launcher.
+						await buildAndEncryptBundles();
+
+						// Compile with launcher entry point (encrypted files embedded as assets)
+						await buildEncryptedBinary(target);
+
+						// Wrap as self-extracting portable binary (CentOS 7 glibc 2.17 compat)
+						await makePortableBinary(target);
+						await validateBuiltBinary(target);
+					} finally {
+						await runCommand(["bun", "--cwd=packages/natives", "run", "embed:native", "--reset"], repoRoot);
+					}
 				}
 
 			await cleanupEncryptArtifacts();

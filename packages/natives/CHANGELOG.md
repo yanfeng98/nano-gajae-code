@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed compiled `gjc` binaries reusing stale extracted native addons from `~/.gjc/natives/<version>/` across different builds of the same package version. The embedded-addon extractor now isolates compiled-binary cache paths under `~/.gjc/natives/<version>/<fingerprint>/`, so per-build decryption keys no longer collide with a previous build's cached `.node`.
+
 ## [0.5.0] - 2026-06-13
 
 ### Fixed

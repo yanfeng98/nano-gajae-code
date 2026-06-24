@@ -40,6 +40,23 @@ function getNativesDir() {
 	return path.join(os.homedir(), ".gjc", "natives");
 }
 
+/**
+ * @param {{
+ *   nativesDir: string;
+ *   packageVersion: string;
+ *   embeddedAddon: { fingerprint?: string } | null | undefined;
+ *   isCompiledBinary: boolean;
+ * }} input
+ * @returns {string}
+ */
+export function resolveVersionedDir({ nativesDir, packageVersion, embeddedAddon, isCompiledBinary }) {
+	const baseDir = path.join(nativesDir, packageVersion);
+	if (!isCompiledBinary) return baseDir;
+	const fingerprint = embeddedAddon?.fingerprint;
+	if (!fingerprint) return baseDir;
+	return path.join(baseDir, fingerprint);
+}
+
 // =========================================================================
 // Pure helpers — re-exported for unit tests in `packages/natives/test/`.
 // =========================================================================
@@ -331,7 +348,7 @@ function initLoaderContext() {
 	const packageVersion = packageJson.version;
 	const nativeDir = path.join(import.meta.dir, "..", "native");
 	const execDir = path.dirname(process.execPath);
-	const versionedDir = path.join(getNativesDir(), packageVersion);
+	const nativesDir = getNativesDir();
 	const userDataDir =
 		process.platform === "win32"
 			? path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local"), "gjc")
@@ -341,6 +358,12 @@ function initLoaderContext() {
 		embeddedAddon,
 		env: process.env,
 		importMetaUrl: import.meta.url,
+	});
+	const versionedDir = resolveVersionedDir({
+		nativesDir,
+		packageVersion,
+		embeddedAddon,
+		isCompiledBinary,
 	});
 	const stageFromNodeModules = shouldStageNodeModulesAddon({
 		platform: process.platform,

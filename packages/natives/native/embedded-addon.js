@@ -15,6 +15,7 @@
  * @typedef {Object} EmbeddedAddon
  * @property {string} platformTag
  * @property {string} version
+ * @property {string} fingerprint
  * @property {EmbeddedAddonFile[]} files
  */
 

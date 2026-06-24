@@ -35,16 +35,16 @@ function configureCrossLinker(): void {
 	}
 
 	if (!Bun.env[`${cargoTargetEnvPrefix}_LINKER`]) {
-		Bun.env[`${cargoTargetEnvPrefix}_LINKER`] = gcc;
+		Bun.env[`${cargoTargetEnvPrefix}_LINKER`] = gcc ?? undefined;
 	}
 	if (!Bun.env.CC_aarch64_unknown_linux_gnu) {
-		Bun.env.CC_aarch64_unknown_linux_gnu = gcc;
+		Bun.env.CC_aarch64_unknown_linux_gnu = gcc ?? undefined;
 	}
 	if (!Bun.env.CXX_aarch64_unknown_linux_gnu) {
-		Bun.env.CXX_aarch64_unknown_linux_gnu = gxx;
+		Bun.env.CXX_aarch64_unknown_linux_gnu = gxx ?? undefined;
 	}
 	if (!Bun.env.AR_aarch64_unknown_linux_gnu) {
-		Bun.env.AR_aarch64_unknown_linux_gnu = ar;
+		Bun.env.AR_aarch64_unknown_linux_gnu = ar ?? undefined;
 	}
 }
 

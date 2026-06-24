@@ -2,6 +2,7 @@
 
 import * as path from "node:path";
 import * as fs from "node:fs";
+import * as os from "node:os";
 
 const repoRoot = path.join(import.meta.dir, "..", "..", "..");
 const packageDir = path.join(repoRoot, "packages", "coding-agent");
@@ -19,6 +20,37 @@ async function runCommand(command: string[], cwd: string, env: NodeJS.ProcessEnv
 	const exitCode = await proc.exited;
 	if (exitCode !== 0) {
 		throw new Error(`Command failed with exit code ${exitCode}: ${command.join(" ")}`);
+	}
+}
+
+async function bundleEntrypointToFile(entry: string, outputPath: string, rootDir: string): Promise<void> {
+	const outdir = fs.mkdtempSync(path.join(os.tmpdir(), "gjc-bundle."));
+	try {
+		const relativeFromRoot = path.relative(rootDir, entry);
+		await runCommand(
+			[
+				"bun",
+				"build",
+				"--minify",
+				"--target",
+				"bun",
+				"--format",
+				"esm",
+				"--root",
+				rootDir,
+				"--external",
+				"mupdf",
+				entry,
+				"--outdir",
+				outdir,
+			],
+			repoRoot,
+		);
+		const bundledPath = path.join(outdir, relativeFromRoot.replace(/\.[^.]+$/u, ".js"));
+		fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+		fs.copyFileSync(bundledPath, outputPath);
+	} finally {
+		fs.rmSync(outdir, { recursive: true, force: true });
 	}
 }
 
@@ -59,31 +91,29 @@ async function buildEncrypted(): Promise<void> {
 	await runCommand(["bun", "run", "build:native"], repoRoot);
 
 	try {
-		// 3. Build and encrypt each bundle
-		const distDir = path.join(packageDir, "dist");
-		fs.mkdirSync(distDir, { recursive: true });
+		// 3. Embed native addon before bundling encrypted JS so the main bundle
+		// captures the populated embedded-addon metadata instead of the reset stub.
+		await runCommand(["bun", "--cwd=packages/natives", "run", "embed:native"], repoRoot);
 
-		for (const [encName, entry] of Object.entries(ENCRYPTED_BUNDLES)) {
-			const bundlePath = path.join(distDir, `${encName}.mjs`);
-			const encPath = path.join(distDir, encName);
+		try {
+			// 4. Build and encrypt each bundle
+			const distDir = path.join(packageDir, "dist");
+			fs.mkdirSync(distDir, { recursive: true });
 
-			console.log(`Bundling ${entry}...`);
-			await runCommand(
-				["bun", "build", "--minify", "--target", "bun", "--format", "esm", "--root", ".", "--external", "mupdf", entry, "--outfile", bundlePath],
-				repoRoot,
-			);
+			for (const [encName, entry] of Object.entries(ENCRYPTED_BUNDLES)) {
+				const bundlePath = path.join(distDir, `${encName}.mjs`);
+				const encPath = path.join(distDir, encName);
+
+				console.log(`Bundling ${entry}...`);
+				await bundleEntrypointToFile(entry, bundlePath, ".");
 
 				console.log(`Encrypting ${bundlePath}...`);
 				await runCommand(["bun", "scripts/encrypt-bundle.ts", bundlePath, encPath, encName], repoRoot);
 
-			// Remove intermediate plaintext bundle
-			fs.rmSync(bundlePath, { force: true });
-		}
+				// Remove intermediate plaintext bundle
+				fs.rmSync(bundlePath, { force: true });
+			}
 
-		// 4. Embed native addon
-		await runCommand(["bun", "--cwd=packages/natives", "run", "embed:native"], repoRoot);
-
-		try {
 			// 5. Compile with launcher entry point
 			await runCommand(
 				[

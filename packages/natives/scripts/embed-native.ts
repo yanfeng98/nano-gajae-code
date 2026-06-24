@@ -1,3 +1,4 @@
+import * as crypto from "node:crypto";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { type BuildSidecar, type CandidateAddon, verifyDefaultLanguageSet } from "./embed-guard";
@@ -24,6 +25,7 @@ const stubContent = `
  * @typedef {Object} EmbeddedAddon
  * @property {string} platformTag
  * @property {string} version
+ * @property {string} fingerprint
  * @property {EmbeddedAddonFile[]} files
  */
 
@@ -53,6 +55,21 @@ async function fileExists(filePath: string): Promise<boolean> {
 		if ((err as NodeJS.ErrnoException).code === "ENOENT") return false;
 		throw err;
 	}
+}
+
+async function computeEmbeddedFingerprint(available: readonly CandidateAddon[]): Promise<string> {
+	const hash = crypto.createHash("sha256");
+	hash.update("gjc-embedded-addon:v1\0");
+	hash.update(platformTag);
+	hash.update("\0");
+	for (const candidate of available) {
+		hash.update(candidate.variant);
+		hash.update("\0");
+		hash.update(candidate.filename);
+		hash.update("\0");
+		hash.update(new Uint8Array(await Bun.file(path.join(nativeDir, candidate.filename)).arrayBuffer()));
+	}
+	return hash.digest("hex");
 }
 const targetPlatform = Bun.env.TARGET_PLATFORM || process.platform;
 const targetArch = Bun.env.TARGET_ARCH || process.arch;
@@ -87,6 +104,7 @@ if (available.length === 0) {
 	throw new Error(`No native addons found for ${platformTag}. Expected one of:\n${expected}`);
 }
 const packageJson = (await Bun.file(packageJsonPath).json()) as { version: string };
+const fingerprint = await computeEmbeddedFingerprint(available);
 
 const imports = available
 	.map(
@@ -119,6 +137,7 @@ const content = `
  * @typedef {Object} EmbeddedAddon
  * @property {string} platformTag
  * @property {string} version
+ * @property {string} fingerprint
  * @property {EmbeddedAddonFile[]} files
  */
 
@@ -127,6 +146,7 @@ ${imports}
 export const embeddedAddon = {
 \tplatformTag: ${JSON.stringify(platformTag)},
 \tversion: ${JSON.stringify(packageJson.version)},
+\tfingerprint: ${JSON.stringify(fingerprint)},
 \tfiles: [
 ${files}
 \t],

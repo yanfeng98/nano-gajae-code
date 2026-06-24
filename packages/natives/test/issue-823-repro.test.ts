@@ -27,7 +27,7 @@
 
 import { describe, expect, it } from "bun:test";
 import * as path from "node:path";
-import { detectCompiledBinary, getAddonFilenames, resolveLoaderCandidates } from "../native/loader-state.js";
+import { detectCompiledBinary, getAddonFilenames, resolveLoaderCandidates, resolveVersionedDir } from "../native/loader-state.js";
 
 describe("issue 823: standalone-binary native loader path resolution", () => {
 	it("detects compiled-binary mode from embedded-addon presence when env and url markers are absent", () => {
@@ -43,6 +43,7 @@ describe("issue 823: standalone-binary native loader path resolution", () => {
 				embeddedAddon: {
 					platformTag: "linux-x64",
 					version: "14.5.2",
+					fingerprint: "build-fingerprint",
 					files: [
 						{
 							variant: "modern",
@@ -85,7 +86,7 @@ describe("issue 823: standalone-binary native loader path resolution", () => {
 	});
 
 	it("places embedded-extracted candidates ahead of build-host candidates for linux-x64 standalone", () => {
-		const versionedDir = "/home/u/.gjc/natives/14.5.2";
+		const versionedDir = "/home/u/.gjc/natives/14.5.2/build-fingerprint";
 		const userDataDir = "/home/u/.local/bin";
 		const nativeDir = "/build-host/packages/natives/native";
 		const execDir = "/home/u/.local/bin";
@@ -104,7 +105,7 @@ describe("issue 823: standalone-binary native loader path resolution", () => {
 		const buildHostModern = path.join(nativeDir, "pi_natives.linux-x64-modern.node");
 
 		// Versioned cache and user-data dir candidates must exist for compiled binaries —
-		// these are where the embedded-addon extraction lands (~/.gjc/natives/<v>) and where
+		// these are where the embedded-addon extraction lands (~/.gjc/natives/<v>/<fingerprint>) and where
 		// `gjc update` writes the standalone binary on linux (~/.local/bin).
 		expect(candidates).toContain(versionedModern);
 		expect(candidates).toContain(versionedBaseline);
@@ -128,5 +129,35 @@ describe("issue 823: standalone-binary native loader path resolution", () => {
 		});
 		expect(candidates).not.toContain(path.join(versionedDir, "pi_natives.linux-x64-baseline.node"));
 		expect(candidates).not.toContain(path.join(userDataDir, "pi_natives.linux-x64-baseline.node"));
+	});
+
+	it("isolates compiled-binary addon cache by embedded fingerprint", () => {
+		expect(
+			resolveVersionedDir({
+				nativesDir: "/home/u/.gjc/natives",
+				packageVersion: "14.5.2",
+				embeddedAddon: {
+					platformTag: "linux-x64",
+					version: "14.5.2",
+					fingerprint: "abc123",
+					files: [],
+				},
+				isCompiledBinary: true,
+			}),
+		).toBe("/home/u/.gjc/natives/14.5.2/abc123");
+
+		expect(
+			resolveVersionedDir({
+				nativesDir: "/home/u/.gjc/natives",
+				packageVersion: "14.5.2",
+				embeddedAddon: {
+					platformTag: "linux-x64",
+					version: "14.5.2",
+					fingerprint: "abc123",
+					files: [],
+				},
+				isCompiledBinary: false,
+			}),
+		).toBe("/home/u/.gjc/natives/14.5.2");
 	});
 });

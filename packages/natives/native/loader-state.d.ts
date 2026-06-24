@@ -7,6 +7,7 @@ export interface EmbeddedAddonFile {
 export interface EmbeddedAddon {
 	platformTag: string;
 	version: string;
+	fingerprint: string;
 	files: EmbeddedAddonFile[];
 }
 
@@ -45,5 +46,14 @@ export interface ResolveLoaderCandidatesInput {
 }
 
 export function resolveLoaderCandidates(input: ResolveLoaderCandidatesInput): string[];
+
+export interface ResolveVersionedDirInput {
+	nativesDir: string;
+	packageVersion: string;
+	embeddedAddon: EmbeddedAddon | null | undefined;
+	isCompiledBinary: boolean;
+}
+
+export function resolveVersionedDir(input: ResolveVersionedDirInput): string;
 
 export function loadNative(): Record<string, unknown>;
