@@ -26,3 +26,9 @@ declare module "*.lark" {
 	const content: string;
 	export default content;
 }
+
+// Build-time encrypted bundle assets imported as Bun file paths
+declare module "*.bin" {
+	const filePath: string;
+	export default filePath;
+}

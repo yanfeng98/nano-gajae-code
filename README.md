@@ -298,42 +298,7 @@ ls -lh packages/coding-agent/binaries/gjc-linux-arm64
 | `linux-arm64` | Linux ARM64 | — | 否 |
 
 Linux x64 使用 `x86-64-v2` 基线，兼容 2008 年后的 CPU；原生模块运行时自动解压到 `~/.gjc/natives/`。
-
-**本机复现说明：**
-
-- `bun run ci:release:build-binaries`
-  - 本地默认只构建宿主平台。
-- `bun run ci:release:build-binaries:all`
-  - 强制构建 `linux-x64` + `linux-arm64`。
-  - 需要预先完成上面的 ARM64 GNU 交叉工具链与 Rust target 安装。
-
-完整复现顺序：
-
-```sh
-# 1. 安装 JS 依赖
-bun install
-
-# 2. （如需全平台）安装 arm64 Rust target + GNU cross toolchain
-rustup target add aarch64-unknown-linux-gnu
-sudo apt-get update
-sudo apt-get install -y \
-  gcc-aarch64-linux-gnu \
-  g++-aarch64-linux-gnu \
-  binutils-aarch64-linux-gnu \
-  libc6-dev-arm64-cross
-
-# 3. 生成全部发布产物
-bun run ci:release:build-binaries:all
-
-# 4. 验证 x64 产物可运行
-packages/coding-agent/binaries/gjc-linux-x64 --version
-packages/coding-agent/binaries/gjc-linux-x64 --smoke-test
-
-# 5. 验证 arm64 产物已生成
-ls -lh packages/coding-agent/binaries/gjc-linux-arm64
-```
-
-如果缺少 ARM64 交叉工具链，脚本会直接报错并提示安装命令，而不是跑到中途才失败。
+如果缺少 ARM64 交叉工具链，`bun run ci:release:build-binaries:all` 会直接报错并提示安装命令，而不是跑到中途才失败。
 
 **兼容性说明：**
 - CI 在 **Ubuntu 22.04**（glibc 2.35）上构建
