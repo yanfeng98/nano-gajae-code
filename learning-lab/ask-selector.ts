@@ -1,52 +1,17 @@
 #!/usr/bin/env bun
-/**
- * ask-selector.ts — 独立的多选项交互式 TUI 选择器
- *
- * 这是从 GJC 项目的 ask 工具中提取的核心交互机制，完全自包含，
- * 不依赖项目源码。使用原始 ANSI 转义序列控制终端。
- *
- * 运行:
- *   bun run learning-lab/ask-selector.ts
- *   或
- *   chmod +x learning-lab/ask-selector.ts && ./learning-lab/ask-selector.ts
- *
- * 学习要点:
- *   1. 原始模式的终端 I/O — 逐键读取，不回显
- *   2. ANSI 转义序列 — 移动光标、清屏、颜色、加粗
- *   3. 选项列表渲染 — 光标指示器、checkbox、树形线
- *   4. 键盘导航 — 上下移动、选中/取消、确认/取消
- *   5. 外框绘制 — 用 box-drawing 字符画边框
- *   6. 倒计时 — 超时自动选择
- *   7. 内联输入 — 不离开列表的自定义输入
- */
-
-
-// =============================================================================
-// ANSI 转义序列工具
-// =============================================================================
 
 const CSI = "\x1b[";
 
-/** 移动光标到指定行列 (1-indexed) */
 function cursorTo(row: number, col: number): string {
   return `${CSI}${row};${col}H`;
 }
 
-/** 清除从光标到行尾 */
 const CLEAR_LINE_END = `${CSI}K`;
-/** 清除从光标到屏幕尾 */
 const CLEAR_SCREEN_END = `${CSI}J`;
-/** 隐藏光标 */
 const HIDE_CURSOR = `${CSI}?25l`;
-/** 显示光标 */
 const SHOW_CURSOR = `${CSI}?25h`;
-/** 启用原始模式的行缓冲替代方案 — 使用逐字符 raw mode */
 const ENTER_ALT_SCREEN = `${CSI}?1049h`;
 const EXIT_ALT_SCREEN = `${CSI}?1049l`;
-
-// =============================================================================
-// 颜色 / 样式 (SGR)
-// =============================================================================
 
 const SGR_RESET = `${CSI}0m`;
 const SGR_BOLD = `${CSI}1m`;
@@ -68,10 +33,6 @@ const Styles = {
   muted: (t: string) => fg(90, t),
 };
 
-// =============================================================================
-// Box-drawing 字符
-// =============================================================================
-
 const BoxSharp = {
   horizontal: "─",
   vertical: "│",
@@ -82,10 +43,6 @@ const BoxSharp = {
 };
 
 const Cursor = "▶";
-
-// =============================================================================
-// 终端管理
-// =============================================================================
 
 class Terminal {
   private rawMode = false;
@@ -133,26 +90,14 @@ class Terminal {
   }
 }
 
-// =============================================================================
-// 选择器组件
-// =============================================================================
-
 interface SelectorOptions {
-  /** 提示文本（问题） */
   title: string;
-  /** 选项列表 */
   options: string[];
-  /** 是否多选 */
   multi?: boolean;
-  /** 推荐项索引 */
   recommended?: number;
-  /** 超时时间（毫秒），0 表示不超时 */
   timeout?: number;
-  /** 是否显示外框 */
   outline?: boolean;
-  /** 帮助文本 */
   helpText?: string;
-  /** 是否启用自定义输入（"Other" 选项） */
   customInput?: {
     label: string;
     placeholder?: string;
@@ -160,19 +105,11 @@ interface SelectorOptions {
 }
 
 interface SelectorResult {
-  /** 选中的选项标签 */
   selected: string[];
-  /** 自定义输入内容 */
   customInput?: string;
-  /** 是否因超时而自动选择 */
   timedOut: boolean;
-  /** 是否被取消 */
   cancelled: boolean;
 }
-
-// =============================================================================
-// 主选择器
-// =============================================================================
 
 function askSelector(opts: SelectorOptions): Promise<SelectorResult> {
   return new Promise((resolve) => {
@@ -500,21 +437,16 @@ function askSelector(opts: SelectorOptions): Promise<SelectorResult> {
   });
 }
 
-// =============================================================================
-// 演示
-// =============================================================================
-
 async function main() {
   console.log("=== GJC ask 工具 — 独立交互式选择器演示 ===\n");
 
-  // ---- 演示 1：单选 ----
   console.log("📌 演示 1: 单选 + 外框\n");
   const result1 = await askSelector({
     title: "Which authentication method should this API use?",
     options: ["JWT", "OAuth2", "Session cookies", "API Key"],
     recommended: 0,
     outline: true,
-    timeout: 15_000,  // 15秒超时
+    timeout: 15_000,
     helpText: "↑↓/jk 移动  Enter 确认  Esc 取消  ⏱ 15s 超时",
   });
   console.log("\n--- 单选结果 ---");
