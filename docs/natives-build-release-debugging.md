@@ -203,6 +203,15 @@ Generated declarations currently include exports from these Rust modules:
 # Release artifact for current host
 bun --cwd=packages/natives run build
 
+# Cross-build linux-arm64 from an x64 Debian/Ubuntu host
+rustup target add aarch64-unknown-linux-gnu
+sudo apt-get install -y \
+  gcc-aarch64-linux-gnu \
+  g++-aarch64-linux-gnu \
+  binutils-aarch64-linux-gnu \
+  libc6-dev-arm64-cross
+CROSS_TARGET=aarch64-unknown-linux-gnu TARGET_PLATFORM=linux TARGET_ARCH=arm64 bun --cwd=packages/natives run build
+
 # Build explicit x64 variants
 TARGET_VARIANT=modern bun --cwd=packages/natives run build
 TARGET_VARIANT=baseline bun --cwd=packages/natives run build

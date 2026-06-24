@@ -9,6 +9,7 @@ interface BinaryTarget {
 	arch: string;
 	target: string;
 	outfile: string;
+	rustTarget?: string;
 }
 
 const repoRoot = path.join(import.meta.dir, "..");
@@ -32,6 +33,7 @@ const workerEntrypoints = [
 ];
 const isDryRun = process.argv.includes("--dry-run");
 const isNoEncrypt = process.argv.includes("--no-encrypt");
+const isAllTargets = process.argv.includes("--all-targets");
 
 const targets: BinaryTarget[] = [
 	{
@@ -41,13 +43,14 @@ const targets: BinaryTarget[] = [
 		target: "bun-linux-x64-baseline",
 		outfile: "packages/coding-agent/binaries/gjc-linux-x64",
 	},
-	{
-		id: "linux-arm64",
-		platform: "linux",
-		arch: "arm64",
-		target: "bun-linux-arm64",
-		outfile: "packages/coding-agent/binaries/gjc-linux-arm64",
-	},
+		{
+			id: "linux-arm64",
+			platform: "linux",
+			arch: "arm64",
+			target: "bun-linux-arm64",
+			outfile: "packages/coding-agent/binaries/gjc-linux-arm64",
+			rustTarget: "aarch64-unknown-linux-gnu",
+		},
 ];
 
 function parseRequestedTargets(): Set<string> | null {
@@ -73,8 +76,66 @@ function hostDefaultTargets(): BinaryTarget[] {
 	return targets.filter(target => target.platform === process.platform && target.arch === process.arch);
 }
 
+function defaultSelectedTargets(requestedTargets: Set<string> | null): BinaryTarget[] {
+	if (requestedTargets) {
+		return targets.filter(target => requestedTargets.has(target.id));
+	}
+	if (isAllTargets) {
+		return targets;
+	}
+	return Bun.env.CI ? targets : hostDefaultTargets();
+}
+
 function isHostRunnableTarget(target: BinaryTarget): boolean {
 	return hostDefaultTargets().some(hostTarget => hostTarget.id === target.id);
+}
+
+function buildTargetEnv(target: BinaryTarget): NodeJS.ProcessEnv {
+	const env: NodeJS.ProcessEnv = {
+		...Bun.env,
+		TARGET_PLATFORM: target.platform,
+		TARGET_ARCH: target.arch,
+	};
+	if (target.rustTarget) {
+		env.CROSS_TARGET = target.rustTarget;
+	}
+	return env;
+}
+
+function installedRustTargets(): Set<string> {
+	const result = Bun.spawnSync(["rustup", "target", "list", "--installed"], {
+		cwd: repoRoot,
+		stdout: "pipe",
+		stderr: "pipe",
+		env: Bun.env,
+	});
+	if (result.exitCode !== 0) {
+		const stderr = result.stderr.toString().trim();
+		throw new Error(`Failed to list installed rustup targets${stderr ? `: ${stderr}` : ""}`);
+	}
+	return new Set(
+		result.stdout
+			.toString()
+			.split(/\r?\n/u)
+			.map(line => line.trim())
+			.filter(Boolean),
+	);
+}
+
+function assertRequiredRustTargetsInstalled(selectedTargets: readonly BinaryTarget[]): void {
+	if (isDryRun) return;
+
+	const requiredTargets = [...new Set(selectedTargets.map(target => target.rustTarget).filter((value): value is string => Boolean(value)))];
+	if (requiredTargets.length === 0) return;
+
+	const installed = installedRustTargets();
+	const missing = requiredTargets.filter(target => !installed.has(target));
+	if (missing.length === 0) return;
+
+	throw new Error(
+		`Missing Rust cross target(s): ${missing.join(", ")}. ` +
+			`Install with: rustup target add ${missing.join(" ")}`,
+	);
 }
 
 async function runCommand(command: string[], cwd: string, env: NodeJS.ProcessEnv = Bun.env): Promise<void> {
@@ -96,11 +157,7 @@ async function embedNative(target: BinaryTarget): Promise<void> {
 		return;
 	}
 
-	await runCommand(["bun", "--cwd=packages/natives", "run", "embed:native"], repoRoot, {
-		...Bun.env,
-		TARGET_PLATFORM: target.platform,
-		TARGET_ARCH: target.arch,
-	});
+	await runCommand(["bun", "--cwd=packages/natives", "run", "embed:native"], repoRoot, buildTargetEnv(target));
 }
 
 async function buildBinary(target: BinaryTarget): Promise<void> {
@@ -152,15 +209,13 @@ async function generateKey(): Promise<void> {
 
 async function buildNativeWithKey(target: BinaryTarget): Promise<void> {
 	if (isDryRun) {
-		console.log(`DRY RUN bun run build:native [${target.platform}/${target.arch}]`);
+		console.log(
+			`DRY RUN bun run build:native [${target.platform}/${target.arch}${target.rustTarget ? ` -> ${target.rustTarget}` : ""}]`,
+		);
 		return;
 	}
 	console.log("Building native addon with embedded decryption key...");
-	await runCommand(["bun", "run", "build:native"], repoRoot, {
-		...Bun.env,
-		TARGET_PLATFORM: target.platform,
-		TARGET_ARCH: target.arch,
-	});
+	await runCommand(["bun", "run", "build:native"], repoRoot, buildTargetEnv(target));
 }
 
 /** Bundle definitions: output filename → entry point */
@@ -374,9 +429,7 @@ async function main(): Promise<void> {
 	}
 
 	const requestedTargets = parseRequestedTargets();
-	const selectedTargets = requestedTargets
-		? targets.filter(target => requestedTargets.has(target.id))
-		: targets; // Default: build all targets
+	const selectedTargets = defaultSelectedTargets(requestedTargets);
 
 	if (requestedTargets) {
 		const unknownTargets = [...requestedTargets].filter(
@@ -390,6 +443,8 @@ async function main(): Promise<void> {
 	if (selectedTargets.length === 0) {
 		throw new Error("No release targets selected.");
 	}
+
+	assertRequiredRustTargetsInstalled(selectedTargets);
 
 	await fs.mkdir(binariesDir, { recursive: true });
 	await generateBundle();

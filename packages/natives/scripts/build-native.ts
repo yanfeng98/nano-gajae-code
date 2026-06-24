@@ -16,6 +16,40 @@ const configuredVariantRaw = Bun.env.TARGET_VARIANT;
 const isCrossCompile = Boolean(crossTarget) || targetPlatform !== process.platform || targetArch !== process.arch;
 const languageSet = Bun.env.PI_NATIVE_FULL_LANGS === "1" ? "full" : "default";
 
+function configureCrossLinker(): void {
+	if (crossTarget !== "aarch64-unknown-linux-gnu") return;
+
+	const cargoTargetEnvPrefix = "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU";
+	const gcc = Bun.which("aarch64-linux-gnu-gcc");
+	const gxx = Bun.which("aarch64-linux-gnu-g++");
+	const ar = Bun.which("aarch64-linux-gnu-ar");
+	const missing: string[] = [];
+	if (!gcc) missing.push("aarch64-linux-gnu-gcc");
+	if (!gxx) missing.push("aarch64-linux-gnu-g++");
+	if (!ar) missing.push("aarch64-linux-gnu-ar");
+	if (missing.length > 0) {
+		throw new Error(
+			`Cross-compiling for ${crossTarget} requires the GNU ARM64 cross toolchain. Missing: ${missing.join(", ")}. ` +
+				"Install on Debian/Ubuntu with: sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu binutils-aarch64-linux-gnu libc6-dev-arm64-cross",
+		);
+	}
+
+	if (!Bun.env[`${cargoTargetEnvPrefix}_LINKER`]) {
+		Bun.env[`${cargoTargetEnvPrefix}_LINKER`] = gcc;
+	}
+	if (!Bun.env.CC_aarch64_unknown_linux_gnu) {
+		Bun.env.CC_aarch64_unknown_linux_gnu = gcc;
+	}
+	if (!Bun.env.CXX_aarch64_unknown_linux_gnu) {
+		Bun.env.CXX_aarch64_unknown_linux_gnu = gxx;
+	}
+	if (!Bun.env.AR_aarch64_unknown_linux_gnu) {
+		Bun.env.AR_aarch64_unknown_linux_gnu = ar;
+	}
+}
+
+configureCrossLinker();
+
 type X64Variant = "modern" | "baseline";
 
 let configuredVariant: X64Variant | undefined;

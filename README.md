@@ -220,12 +220,52 @@ bun run build    # 等于 bun --cwd=packages/coding-agent run build
 
 默认构建加密版，AES-256-GCM 保护源码，`linux-x64` 自动捆绑 glibc 2.35 兼容 CentOS 7。产物为自解压单文件，Ubuntu / CentOS 均可直接运行。
 
+**推荐主机环境：**
+
+- Debian / Ubuntu x86_64
+- 已安装 Bun
+- 已安装 Rust（推荐 `rustup`）
+- 已执行 `bun install`
+
+从一台全新的 Debian / Ubuntu x86_64 机器复现多平台发布构建，建议按下面顺序执行。
+
+**1. 安装项目依赖**
+
+```sh
+bun install
+```
+
+**2. 准备 Rust 与交叉编译环境**
+
+- 仅构建当前主机平台（`linux-x64`）：
+
+```sh
+rustup show
+```
+
+- 构建全部平台（`linux-x64` + `linux-arm64`）：
+
+```sh
+rustup target add aarch64-unknown-linux-gnu
+sudo apt-get update
+sudo apt-get install -y \
+  gcc-aarch64-linux-gnu \
+  g++-aarch64-linux-gnu \
+  binutils-aarch64-linux-gnu \
+  libc6-dev-arm64-cross
+```
+
+**3. 执行发布构建**
+
 ```sh
 # 列出可用目标
 bun run ci:release:build-binaries --list-targets
 
-# 构建所有平台（加密 + CentOS 7 兼容）
+# 本地默认只构建宿主平台；CI 默认构建所有平台
 bun run ci:release:build-binaries
+
+# 本地强制构建所有平台
+bun run ci:release:build-binaries:all
 
 # 只构建指定平台
 RELEASE_TARGETS=linux-x64 bun run ci:release:build-binaries
@@ -235,6 +275,17 @@ RELEASE_TARGETS=linux-x64 bun run ci:release:build-binaries
 
 ```sh
 RELEASE_TARGETS=linux-x64 bun run ci:release:build-binaries --no-encrypt
+```
+
+**4. 验证产物**
+
+```sh
+# linux-x64 产物
+packages/coding-agent/binaries/gjc-linux-x64 --version
+packages/coding-agent/binaries/gjc-linux-x64 --smoke-test
+
+# 如已构建全平台，再确认 arm64 文件存在
+ls -lh packages/coding-agent/binaries/gjc-linux-arm64
 ```
 
 产物：`packages/coding-agent/binaries/gjc-linux-x64`（及 `gjc-linux-arm64`），单文件自解压格式。
@@ -247,6 +298,42 @@ RELEASE_TARGETS=linux-x64 bun run ci:release:build-binaries --no-encrypt
 | `linux-arm64` | Linux ARM64 | — | 否 |
 
 Linux x64 使用 `x86-64-v2` 基线，兼容 2008 年后的 CPU；原生模块运行时自动解压到 `~/.gjc/natives/`。
+
+**本机复现说明：**
+
+- `bun run ci:release:build-binaries`
+  - 本地默认只构建宿主平台。
+- `bun run ci:release:build-binaries:all`
+  - 强制构建 `linux-x64` + `linux-arm64`。
+  - 需要预先完成上面的 ARM64 GNU 交叉工具链与 Rust target 安装。
+
+完整复现顺序：
+
+```sh
+# 1. 安装 JS 依赖
+bun install
+
+# 2. （如需全平台）安装 arm64 Rust target + GNU cross toolchain
+rustup target add aarch64-unknown-linux-gnu
+sudo apt-get update
+sudo apt-get install -y \
+  gcc-aarch64-linux-gnu \
+  g++-aarch64-linux-gnu \
+  binutils-aarch64-linux-gnu \
+  libc6-dev-arm64-cross
+
+# 3. 生成全部发布产物
+bun run ci:release:build-binaries:all
+
+# 4. 验证 x64 产物可运行
+packages/coding-agent/binaries/gjc-linux-x64 --version
+packages/coding-agent/binaries/gjc-linux-x64 --smoke-test
+
+# 5. 验证 arm64 产物已生成
+ls -lh packages/coding-agent/binaries/gjc-linux-arm64
+```
+
+如果缺少 ARM64 交叉工具链，脚本会直接报错并提示安装命令，而不是跑到中途才失败。
 
 **兼容性说明：**
 - CI 在 **Ubuntu 22.04**（glibc 2.35）上构建
