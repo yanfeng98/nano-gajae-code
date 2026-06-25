@@ -4,13 +4,12 @@ import type { CompactionSummaryMessage } from "../../session/messages";
 
 /**
  * Component that renders a compaction message with collapsed/expanded state.
- * Uses same background color as hook messages for visual consistency.
  */
 export class CompactionSummaryMessageComponent extends Box {
 	#expanded = false;
 
 	constructor(private readonly message: CompactionSummaryMessage) {
-		super(1, 1, t => theme.bg("customMessageBg", t));
+		super(1, 1);
 		this.#updateDisplay();
 	}
 

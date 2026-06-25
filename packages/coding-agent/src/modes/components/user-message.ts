@@ -12,23 +12,21 @@ const OSC133_ZONE_FINAL = "\x1b]133;C\x07";
 export class UserMessageComponent extends Container {
 	constructor(text: string, synthetic = false) {
 		super();
-		const bgColor = (value: string) => theme.bg("userMessageBg", value);
 		const color = synthetic
 			? (value: string) => theme.fg("dim", value)
 			: (value: string) => theme.fg("userMessageText", value);
 		this.addChild(new Spacer(1));
 		const label = synthetic ? "replay" : "user";
 		this.addChild(new Text(theme.bold(theme.fg("accent", label)), 1, 0));
-		this.addChild(new PromptZoneMarkdown(text, bgColor, color));
+		this.addChild(new PromptZoneMarkdown(text, color));
 	}
 }
 
 class PromptZoneMarkdown implements Component {
 	#markdown: Markdown;
 
-	constructor(text: string, bgColor: (value: string) => string, color: (value: string) => string) {
+	constructor(text: string, color: (value: string) => string) {
 		this.#markdown = new Markdown(text, 1, 1, getMarkdownTheme(), {
-			bgColor,
 			color,
 		});
 	}

@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Improved `gjc --tmux` readability by removing full-width dark background fills from default chat, tool, output-block, and custom-message TUI rendering; red-claw and blue-crab keep softer background tokens for the surfaces that still opt into background styling.
+
 ## [0.5.0] - 2026-06-13
 
 ### Fixed

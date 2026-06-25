@@ -1,7 +1,6 @@
 import type { Component } from "@gajae-code/tui";
 import { Box, Container, Spacer } from "@gajae-code/tui";
 import type { HookMessageRenderer } from "../../extensibility/hooks/types";
-import { theme } from "../../modes/theme/theme";
 import type { HookMessage } from "../../session/messages";
 import { renderFramedMessage } from "./message-frame";
 
@@ -25,8 +24,8 @@ export class HookMessageComponent extends Container {
 
 		this.addChild(new Spacer(1));
 
-		// Create box with purple background (used for default rendering)
-		this.#box = new Box(1, 1, t => theme.bg("customMessageBg", t));
+		// Default rendering uses spacing and labels instead of a full-width background.
+		this.#box = new Box(1, 1);
 
 		this.#rebuild();
 	}

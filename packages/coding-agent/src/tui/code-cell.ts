@@ -130,7 +130,7 @@ export function renderCodeCell(options: CodeCellOptions, theme: Theme): string[]
 		sections.push({ label: theme.fg("toolTitle", "Output"), lines: outputLines });
 	}
 
-	return renderOutputBlock({ header: title, headerMeta: meta, state, sections, width }, theme);
+	return renderOutputBlock({ header: title, headerMeta: meta, state, sections, width, applyBg: false }, theme);
 }
 
 export interface MarkdownCellOptions {
@@ -197,5 +197,5 @@ export function renderMarkdownCell(options: MarkdownCellOptions, theme: Theme): 
 		sections.push({ label: theme.fg("toolTitle", "Output"), lines: outputLines });
 	}
 
-	return renderOutputBlock({ header: title, headerMeta: meta, state, sections, width }, theme);
+	return renderOutputBlock({ header: title, headerMeta: meta, state, sections, width, applyBg: false }, theme);
 }

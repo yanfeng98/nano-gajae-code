@@ -14,11 +14,12 @@ export interface OutputBlockOptions {
 	state?: State;
 	sections?: Array<{ label?: string; lines: string[] }>;
 	width: number;
+	/** Opt into a full-width state background. Defaults off to keep tmux panes readable. */
 	applyBg?: boolean;
 }
 
 export function renderOutputBlock(options: OutputBlockOptions, theme: Theme): string[] {
-	const { header, headerMeta, state, sections = [], width, applyBg = true } = options;
+	const { header, headerMeta, state, sections = [], width, applyBg = false } = options;
 	const h = theme.boxSharp.horizontal;
 	const v = theme.boxSharp.vertical;
 	const cap = h.repeat(3);
@@ -136,7 +137,7 @@ export class CachedOutputBlock {
 		h.optional(options.header);
 		h.optional(options.headerMeta);
 		h.optional(options.state);
-		h.bool(options.applyBg ?? true);
+		h.bool(options.applyBg ?? false);
 		if (options.sections) {
 			for (const s of options.sections) {
 				h.optional(s.label);
