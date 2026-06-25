@@ -159,7 +159,6 @@ function askSelector(opts: SelectorOptions): Promise<SelectorResult> {
       const halfVisible = Math.floor(maxVisible / 2);
       let startIndex = Math.max(0, selectedIndex - halfVisible);
       const endIndex = Math.min(startIndex + maxVisible, optionCount);
-      // 确保 selectedIndex 在可见范围内
       if (endIndex - startIndex < maxVisible && startIndex > 0) {
         startIndex = Math.max(0, endIndex - maxVisible);
       }
@@ -168,14 +167,12 @@ function askSelector(opts: SelectorOptions): Promise<SelectorResult> {
 
       let row = 1;
 
-      // ---- 外框顶部 ----
       if (outline) {
         const hLine = BoxSharp.horizontal.repeat(cols - 2);
         term.writeAt(row, 1, Styles.border(BoxSharp.topLeft + hLine + BoxSharp.topRight));
         row++;
       }
 
-      // ---- 标题 ----
       const titleText = countdownTimer
         ? `${title} (${getCountdown()}s)`
         : title;
@@ -186,10 +183,8 @@ function askSelector(opts: SelectorOptions): Promise<SelectorResult> {
       term.writeAt(row, 1, titlePrefix + Styles.accent(Styles.bold(titleLine)));
       row++;
 
-      // 空行
       row++;
 
-      // ---- 选项列表 ----
       for (let i = startIndex; i < endIndex; i++) {
         const opt = allOptions[i]!;
         const isSelected = i === selectedIndex;
@@ -197,11 +192,9 @@ function askSelector(opts: SelectorOptions): Promise<SelectorResult> {
 
         let prefix: string;
         if (multi) {
-          // 多选模式：checkbox
           const checked = selected.has(opt) ? "☑" : "☐";
           prefix = isSelected ? Styles.accent(`${Cursor} ${checked} `) : `  ${checked} `;
         } else {
-          // 单选模式：光标
           prefix = isSelected ? Styles.accent(`${Cursor} `) : "  ";
         }
 
@@ -216,14 +209,12 @@ function askSelector(opts: SelectorOptions): Promise<SelectorResult> {
         row++;
       }
 
-      // 滚动位置提示
       if (startIndex > 0 || endIndex < optionCount) {
         const marker = `  (${selectedIndex + 1}/${optionCount})`;
         term.writeAt(row, 1, (outline ? ` ${BoxSharp.vertical} ` : "") + Styles.dim(marker));
         row++;
       }
 
-      // ---- 内联输入 ----
       if (inputMode) {
         row++;
         const pfx = outline ? `${BoxSharp.vertical} ` : "";
@@ -231,7 +222,6 @@ function askSelector(opts: SelectorOptions): Promise<SelectorResult> {
         row++;
       }
 
-      // ---- 帮助文本 ----
       row++;
       const defaultHelp = multi
         ? "↑↓/jk 移动  Enter 切换选中  Esc 取消  Ctrl+D 完成"
@@ -240,14 +230,12 @@ function askSelector(opts: SelectorOptions): Promise<SelectorResult> {
       term.writeAt(row, 1, (outline ? ` ${BoxSharp.vertical} ` : "") + Styles.dim(finalHelp));
       row++;
 
-      // ---- 外框底部 ----
       if (outline) {
         const hLine = BoxSharp.horizontal.repeat(cols - 2);
         term.writeAt(row, 1, Styles.border(BoxSharp.bottomLeft + hLine + BoxSharp.bottomRight));
       }
     }
 
-    // ---- 倒计时 ----
     let countdownStart = 0;
     function getCountdown(): number {
       const elapsed = Date.now() - countdownStart;
@@ -270,7 +258,6 @@ function askSelector(opts: SelectorOptions): Promise<SelectorResult> {
       }, 1000);
     }
 
-    // ---- 结果处理 ----
     function finish(): void {
       if (countdownTimer) {
         clearInterval(countdownTimer);
@@ -288,7 +275,6 @@ function askSelector(opts: SelectorOptions): Promise<SelectorResult> {
           cancelled: false,
         };
       } else if (timedOut) {
-        // 超时 → 自动选当前高亮项
         result = {
           selected: allOptions[selectedIndex] === customInput?.label
             ? []
@@ -325,47 +311,37 @@ function askSelector(opts: SelectorOptions): Promise<SelectorResult> {
       resolve({ selected: [], timedOut: false, cancelled: true });
     }
 
-    // ---- 键盘处理 ----
     function handleInput(key: Buffer): void {
       const str = key.toString();
       const char = str[0];
 
-      // 重置倒计时
       if (countdownTimer && timeout > 0) {
         clearInterval(countdownTimer);
         startCountdown();
       }
 
-      // ---- 内联输入模式 ----
       if (inputMode) {
         if (str === "\x1b") {
-          // Esc → 退回选项列表
           inputMode = false;
           inputText = "";
         } else if (str === "\r" || str === "\n") {
-          // Enter → 提交自定义输入
           finish();
           return;
         } else if (str === "\x7f" || str === "\b") {
-          // Backspace
           inputText = inputText.slice(0, -1);
         } else if (char !== undefined && char >= " " && char <= "~") {
-          // 可打印字符
           inputText += str;
         }
         render();
         return;
       }
 
-      // ---- 导航模式 ----
       switch (str) {
-        // 上移
         case "\x1b[A": // ↑
         case "k":
           selectedIndex = Math.max(0, selectedIndex - 1);
           break;
 
-        // 下移
         case "\x1b[B": // ↓
         case "j":
           selectedIndex = Math.min(optionCount - 1, selectedIndex + 1);
@@ -416,7 +392,6 @@ function askSelector(opts: SelectorOptions): Promise<SelectorResult> {
       render();
     }
 
-    // ---- 启动 ----
     function stdinPause(): void {
       process.stdin.removeAllListeners("data");
       process.stdin.pause();
@@ -447,7 +422,6 @@ async function main() {
   console.log(`超时: ${result1.timedOut}`);
   console.log(`取消: ${result1.cancelled}\n`);
 
-  // ---- 演示 2：多选 ----
   console.log("📌 演示 2: 多选 + 自定义输入 (Other)\n");
   const result2 = await askSelector({
     title: "Which features should be enabled?",
@@ -467,7 +441,6 @@ async function main() {
   }
   console.log(`取消: ${result2.cancelled}\n`);
 
-  // ---- 演示 3：无外框轻量模式 ----
   console.log("📌 演示 3: 无外框轻量模式\n");
   const result3 = await askSelector({
     title: "Select theme:",
