@@ -123,7 +123,6 @@ export class AssistantMessageComponent extends Container {
 		const trimmed = content.thinking.trim();
 		const component = new Markdown(trimmed, 1, 0, getMarkdownTheme(), {
 			color: (text: string) => theme.fg("thinkingText", text),
-			italic: true,
 		});
 		this.#contentBlocksCache.set(content, { source: content.thinking, component });
 		return component;
@@ -185,7 +184,7 @@ export class AssistantMessageComponent extends Container {
 
 				if (this.hideThinkingBlock) {
 					// Show static "Thinking..." label when hidden
-					this.#contentContainer.addChild(new Text(theme.italic(theme.fg("thinkingText", "Thinking...")), 1, 0));
+					this.#contentContainer.addChild(new Text(theme.fg("thinkingText", "Thinking..."), 1, 0));
 					if (hasVisibleContentAfter) {
 						this.#contentContainer.addChild(new Spacer(1));
 					}

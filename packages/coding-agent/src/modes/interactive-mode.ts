@@ -198,7 +198,7 @@ function formatHudNoteMarker(count: number): string {
 		.split("")
 		.map(d => HUD_NOTE_SUP_DIGITS[d] ?? d)
 		.join("");
-	return theme.fg("dim", chalk.italic(` \u207a${sub}`));
+	return theme.fg("dim", ` \u207a${sub}`);
 }
 
 type GoalSubcommand = "set" | "show" | "pause" | "resume" | "drop";

@@ -599,7 +599,7 @@ export function formatPhaseDisplayName(name: string, oneBasedIndex: number): str
 
 function noteMarker(count: number, uiTheme: Theme): string {
 	if (count <= 0) return "";
-	return uiTheme.fg("dim", chalk.italic(` \u207a${toSuperscript(count)}`));
+	return uiTheme.fg("dim", ` \u207a${toSuperscript(count)}`);
 }
 
 function formatTodoLine(item: TodoItem, uiTheme: Theme, prefix: string): string {
@@ -623,7 +623,7 @@ function renderNoteAttachments(phases: TodoPhase[], uiTheme: Theme): string[] {
 		for (const task of phase.tasks) {
 			if (task.status !== "in_progress" || !task.notes || task.notes.length === 0) continue;
 			const bar = uiTheme.fg("dim", uiTheme.tree.vertical);
-			const title = uiTheme.fg("dim", chalk.italic(`§ notes — ${task.content}`));
+			const title = uiTheme.fg("dim", `§ notes — ${task.content}`);
 			lines.push("");
 			lines.push(`  ${title}`);
 			for (let j = 0; j < task.notes.length; j++) {

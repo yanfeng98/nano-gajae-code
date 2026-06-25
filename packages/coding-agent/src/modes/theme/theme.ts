@@ -1273,7 +1273,9 @@ export class Theme {
 	}
 
 	italic(text: string): string {
-		return chalk.italic(text);
+		// Some tmux/terminal combinations render SGR italic as reverse-video
+		// background. Keep italic semantic styling background-safe in GJC TUI.
+		return text;
 	}
 
 	underline(text: string): string {
