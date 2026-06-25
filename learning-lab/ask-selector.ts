@@ -127,28 +127,24 @@ function askSelector(opts: SelectorOptions): Promise<SelectorResult> {
       customInput,
     } = opts;
 
-    // ---- 状态 ----
     let selectedIndex = Math.max(0, Math.min(recommended, options.length - 1));
     const selected = new Set<string>();
-    let inputMode = false;          // 是否在内联输入模式
+    let inputMode = false;
     let inputText = "";
     let timedOut = false;
     let countdownTimer: ReturnType<typeof setInterval> | undefined;
 
-    // 构建完整选项列表（包含 Other/自定义输入）
     const allOptions = customInput ? [...options, customInput.label] : options;
     const optionCount = allOptions.length;
 
-    // 多选时默认预选推荐项
     if (multi && options[recommended]) {
       selected.add(options[recommended]);
     }
 
-    // ---- 布局计算 ----
-    const OUTLINE_BORDER = outline ? 2 : 0;   // 上下各一行
+    const OUTLINE_BORDER = outline ? 2 : 0;
     const TITLE_ROWS = 1;
     const HELP_ROWS = 1;
-    const SPACER_ROWS = 2;                     // 标题下 + 帮助下各一空行
+    const SPACER_ROWS = 2;
     const CHROME_ROWS = OUTLINE_BORDER + TITLE_ROWS + HELP_ROWS + SPACER_ROWS;
 
     function getMaxVisible(): number {
@@ -156,13 +152,10 @@ function askSelector(opts: SelectorOptions): Promise<SelectorResult> {
       return Math.max(3, rows - CHROME_ROWS - (inputMode ? 3 : 0));
     }
 
-    // ---- 渲染 ----
     function render(): void {
-      const { rows: termRows, cols } = term.getSize();
+      const { rows, cols } = term.getSize();
       const maxVisible = getMaxVisible();
-      const totalRows = outline ? termRows : termRows;
 
-      // 计算滚动窗口
       const halfVisible = Math.floor(maxVisible / 2);
       let startIndex = Math.max(0, selectedIndex - halfVisible);
       const endIndex = Math.min(startIndex + maxVisible, optionCount);
