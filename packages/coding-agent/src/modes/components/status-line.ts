@@ -40,6 +40,7 @@ export interface StatusLineSettings {
 	rightSegments?: StatusLineSegmentId[];
 	separator?: StatusLineSeparatorStyle;
 	segmentOptions?: StatusLineSegmentOptions;
+	previewHighlightSegment?: StatusLineSegmentId;
 	showHookStatus?: boolean;
 	showSkillHud?: boolean;
 	sessionAccent?: boolean;
@@ -218,7 +219,7 @@ export class StatusLineComponent implements Component {
 	}
 
 	updateSettings(settings: StatusLineSettings): void {
-		this.#settings = { ...this.#settings, ...settings };
+		this.#settings = { ...this.#settings, previewHighlightSegment: undefined, ...settings };
 	}
 
 	setAutoCompactEnabled(enabled: boolean): void {
@@ -714,12 +715,15 @@ export class StatusLineComponent implements Component {
 		const sepAnsi = theme.getFgAnsi("statusLineSep");
 
 		// Collect visible segment contents
+		const highlightSegment = (segId: StatusLineSegmentId, content: string): string =>
+			effectiveSettings.previewHighlightSegment === segId ? `\x1b[7m${content}\x1b[27m` : content;
+
 		const leftParts: string[] = [];
 		const leftSegIds: StatusLineSegmentId[] = [];
 		for (const segId of effectiveSettings.leftSegments) {
 			const rendered = renderSegment(segId, ctx);
 			if (rendered.visible && rendered.content) {
-				leftParts.push(rendered.content);
+				leftParts.push(highlightSegment(segId, rendered.content));
 				leftSegIds.push(segId);
 			}
 		}
@@ -728,7 +732,7 @@ export class StatusLineComponent implements Component {
 		for (const segId of effectiveSettings.rightSegments) {
 			const rendered = renderSegment(segId, ctx);
 			if (rendered.visible && rendered.content) {
-				rightParts.push(rendered.content);
+				rightParts.push(highlightSegment(segId, rendered.content));
 			}
 		}
 
@@ -795,7 +799,7 @@ export class StatusLineComponent implements Component {
 							if (!adjusted.visible || !adjusted.content) break;
 							reRendered = adjusted;
 						}
-						left[pathIdx] = reRendered.content;
+						left[pathIdx] = highlightSegment("path", reRendered.content);
 						leftWidth = groupWidth(left, leftCapWidth, leftSepWidth);
 					}
 				}
