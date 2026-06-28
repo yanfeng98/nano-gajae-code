@@ -1217,8 +1217,8 @@ export class TUI extends Container {
 			this.#fullRedrawCount += 1;
 			if (renderMetrics.enabled) renderMetrics.recordFullRedraw(reason);
 			let buffer = "\x1b[?2026h"; // Begin synchronized output
-			// Skip clearing scrollback (3J) in multiplexers — users actively navigate scrollback history
-			if (clear) buffer += isMultiplexerSession() ? "\x1b[2J\x1b[H" : "\x1b[2J\x1b[H\x1b[3J";
+			// Never clear scrollback (3J) — users actively navigate scrollback history
+			if (clear) buffer += "\x1b[2J\x1b[H";
 			for (let i = 0; i < newLines.length; i++) {
 				if (i > 0) buffer += "\r\n";
 				// Lines were pre-terminated/normalized by #applyLineResets; image

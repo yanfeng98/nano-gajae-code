@@ -1,19 +1,4 @@
 #!/usr/bin/env bun
-/**
- * goal-lab.ts — GJC Goal 目标系统：完整自主 Agent 模拟
- *
- * 核心演示：
- *   1. Goal 状态机 (active → paused → complete → dropped)
- *   2. 增量记账 (每个 tool call 后 token/time 累加)
- *   3. Agent 自主调用 goal({op:"get"}) 查看进度
- *   4. 自动续跑 (800ms 空闲后注入 continuation prompt)
- *   5. Completion Audit (逐条验证交付物后才允许 complete)
- *
- * 运行:
- *   bun run learning-lab/goal-lab.ts                          # 交互选择
- *   bun run learning-lab/goal-lab.ts "修复分页 Bug"            # 直接指定
- *   bun run learning-lab/goal-lab.ts "自定义目标" --speed 100  # 加速
- */
 
 const CSI = "\x1b[";
 const cursorTo = (r: number, c: number) => `${CSI}${r};${c}H`;
@@ -43,7 +28,6 @@ class Terminal {
   at(r: number, c: number, t: string) { process.stdout.write(cursorTo(r, c) + CLR_LINE + t); }
 }
 
-// ═══════════════════════════════════════════════ Goal 数据类型
 type GoalStatus = "active" | "paused" | "complete" | "dropped";
 interface Goal {
   id: string; objective: string; status: GoalStatus;
@@ -51,7 +35,6 @@ interface Goal {
 }
 interface GoalModeState { enabled: boolean; mode: "active" | "exiting"; reason?: "completed"; goal: Goal | null; }
 
-// ═══════════════════════════════════════════════ GoalRuntime
 let _sid = 0n;
 function snowflake() { _sid++; return String((BigInt(Date.now()) - 1700000000000n) << 8n | (_sid & 0xFFn)); }
 
@@ -100,11 +83,12 @@ class GoalRuntime {
       return ng;
     });
   }
+
   async complete(): Promise<Goal> {
     return this.#lock(() => {
       const g = this.#s.goal; if (!g) throw new Error("无目标");
       if (g.status === "complete") throw new Error("已完成");
-      this.#flush(g.tokensUsed);
+      this.#flush(g.tokensUsed);                     // 最后 flush 一次
       this.#s.enabled = false; g.status = "complete"; g.updatedAt = Date.now();
       this.#s.mode = "exiting"; this.#s.reason = "completed"; this.#wallStart = 0;
       this.emit(`GOAL.COMPLETE  tokens=${g.tokensUsed}  time=${g.timeUsedSeconds}s`);
@@ -113,7 +97,6 @@ class GoalRuntime {
   }
 }
 
-// ═══════════════════════════════════════════════ 场景数据
 interface SimStep { tool: string; args: string; output: string; tokens: number; ms: number; }
 interface SimTask { name: string; desc: string; steps: SimStep[]; deliverable: string; }
 
@@ -167,7 +150,7 @@ const SCENARIOS: Record<string, SimTask[]> = {
   ],
 };
 
-// ═══════════════════════════════════════════════ Completion Audit
+
 function runAudit(tasks: SimTask[]): { checks: { deliverable: string; passed: boolean }[]; allPassed: boolean } {
   const checks = tasks.map(t => ({
     deliverable: t.deliverable,
@@ -176,7 +159,6 @@ function runAudit(tasks: SimTask[]): { checks: { deliverable: string; passed: bo
   return { checks, allPassed: checks.every(c => c.passed) };
 }
 
-// ═══════════════════════════════════════════════ Agent 自主执行循环
 type LogKind = "agent" | "goal_sys" | "turn_boundary" | "audit";
 interface LogLine { kind: LogKind; text: string; }
 
@@ -184,9 +166,15 @@ class AgentLoop {
   runtime: GoalRuntime;
   tasks: SimTask[];
   speed: number;
-  turn = 0; continuations = 0; phase = "init";
-  currentTask = 0; totalTokens = 0;
-  private aborted = false; private paused = false; private pausedResolve: (() => void) | null = null;
+  turn = 0;
+  continuations = 0;
+  phase = "init";
+  currentTask = 0;
+  totalTokens = 0;
+
+  private aborted = false;
+  private paused = false;
+  private pausedResolve: (() => void) | null = null;
 
   constructor(runtime: GoalRuntime, tasks: SimTask[], speed: number) {
     this.runtime = runtime; this.tasks = tasks; this.speed = speed;
@@ -203,24 +191,22 @@ class AgentLoop {
     await Bun.sleep(ms);
   }
 
-  /** 主循环 */
   async run(onFrame: (logs: LogLine[]) => void): Promise<boolean> {
     const L = (kind: LogKind, text: string) => onFrame([{ kind, text }]);
     try {
       this.phase = "executing";
+
       for (let ti = 0; ti < this.tasks.length; ti++) {
         if (this.aborted) return false;
         this.currentTask = ti;
         const task = this.tasks[ti]!;
         const turnTokensBefore = this.runtime.state.goal?.tokensUsed ?? 0;
 
-        // ── TURN 开始 ──
         this.turn++;
         this.runtime.onTurnStart(this.totalTokens);
         L("turn_boundary", `TURN #${this.turn} 开始 ── Task ${ti + 1}/${this.tasks.length}: ${task.desc}`);
         await this.wait(this.speed);
 
-        // ── 执行工具调用 ──
         for (let si = 0; si < task.steps.length; si++) {
           if (this.aborted) return false;
           const step = task.steps[si]!;
@@ -234,7 +220,6 @@ class AgentLoop {
           if (si < task.steps.length - 1) await this.wait(Math.max(80, this.speed / 2));
         }
 
-        // ── TURN 结束：Agent 调用 goal({op:"get"}) ──
         this.runtime.onTurnEnd(this.totalTokens);
         const turnTokens = (this.runtime.state.goal?.tokensUsed ?? 0) - turnTokensBefore;
         const turnTime = this.runtime.state.goal?.timeUsedSeconds ?? 0;
@@ -242,12 +227,10 @@ class AgentLoop {
         L("goal_sys", `goal({op:"get"}) → status: ACTIVE  tokens: ${this.runtime.state.goal?.tokensUsed ?? 0}  time: ${turnTime}s`);
         L("agent", `Turn #${this.turn} 完成 — +${turnTokens} tokens  (Task "${task.name}" done)`);
 
-        // ── 自动续跑 ──
         if (ti < this.tasks.length - 1) {
           this.continuations++;
           L("goal_sys", `⏳ 自动续跑倒计时 …`);
 
-          // 倒计时动画
           const steps = [800, 600, 400, 200];
           for (const ms of steps) {
             L("goal_sys", `⏳ 续跑倒计时 ${ms}ms — goal.enabled=true, goal.status=active, 无用户输入 →`);
@@ -260,7 +243,6 @@ class AgentLoop {
         }
       }
 
-      // ── Completion Audit ──
       this.phase = "auditing";
       L("goal_sys", "╔══════════════════════════════════════════╗");
       L("goal_sys", "║  COMPLETION AUDIT — 完成审计守卫        ║");
@@ -301,7 +283,6 @@ class AgentLoop {
   }
 }
 
-// ═══════════════════════════════════════════════ TUI 渲染
 function fmtT(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1000).toFixed(1)}K`;
@@ -324,12 +305,10 @@ function render(term: Terminal, runtime: GoalRuntime, ag: AgentLoop, logLines: L
   const st = runtime.state;
   const g = st.goal;
 
-  // ── Title ──
   term.at(1, 1, S.accent(S.bold(" GJC Goal 系统 — 自主 Agent 模拟 ")));
   term.at(1, cols - 25, S.dim("[q]退出  [p]暂停/继续"));
   term.at(2, 1, S.dim("━".repeat(cols - 1)));
 
-  // ── Goal 状态面板 ──
   let r = 4;
   const gw = 48;
   hdrBox(term, r, 1, gw, DBOX, S.yellow, " GOAL ");
@@ -349,7 +328,6 @@ function render(term: Terminal, runtime: GoalRuntime, ag: AgentLoop, logLines: L
     term.at(r, 3, `${S.magenta("Phase:")} ${S.accent(ag.phase)}   ${S.magenta("Turn:")} ${ag.turn}   ${S.magenta("续跑:")} ${ag.continuations}   ${S.magenta("Task:")} ${ag.currentTask + 1}/${ag.tasks.length}`); r++;
   }
 
-  // ── Agent 动作日志 ──
   r += 1;
   hdrBox(term, r, 1, cols - 1, BOX, S.gray, " Agent 执行日志 ");
   r += 3;
@@ -369,13 +347,11 @@ function render(term: Terminal, runtime: GoalRuntime, ag: AgentLoop, logLines: L
       case "audit":         prefix = "🔍 ";  color = S.blue;   break;
     }
     const text = line.text;
-    // 特殊高亮
     if (text.includes("GOAL COMPLETE")) {
       term.at(r, 1, S.bold(S.green(text))); r++;
     } else if (text.startsWith("$")) {
       term.at(r, 1, prefix + S.accent(text.slice(1))); r++;
     } else if (text.includes("→")) {
-      // goal system 消息里的箭头高亮
       const parts = text.split("→");
       term.at(r, 1, prefix + S.white(parts[0]!) + S.green("→") + S.white(parts.slice(1).join("→"))); r++;
     } else {
@@ -384,7 +360,6 @@ function render(term: Terminal, runtime: GoalRuntime, ag: AgentLoop, logLines: L
     if (r >= logEnd) break;
   }
 
-  // ── 底部状态栏 ──
   term.at(rows, 1, S.gray("━".repeat(cols - 1)));
   term.at(rows, 1, S.dim(
     (st.enabled ? " Goal: ENABLED " : st.mode === "exiting" ? " Goal: EXITING " : " Goal: OFF ") +
@@ -392,7 +367,6 @@ function render(term: Terminal, runtime: GoalRuntime, ag: AgentLoop, logLines: L
   ));
 }
 
-// ═══════════════════════════════════════════════ 场景选择
 async function pickScenario(term: Terminal): Promise<string | null> {
   const scenarios = Object.keys(SCENARIOS);
   let sel = 0;
@@ -439,7 +413,6 @@ async function inputObjective(term: Terminal): Promise<string | null> {
   });
 }
 
-// ═══════════════════════════════════════════════ Main
 async function main() {
   const args = process.argv.slice(2);
   let speed = 500;
@@ -456,7 +429,6 @@ async function main() {
   if (!objective) { objective = await inputObjective(term); }
   if (!objective) { term.leave(); console.log("取消。"); return; }
 
-  // 匹配 / 生成任务
   let tasks = SCENARIOS[objective];
   if (!tasks) {
     tasks = [
@@ -490,7 +462,6 @@ async function main() {
   const logLines: LogLine[] = [];
   let done = false;
 
-  // 键盘
   process.stdin.on("data", (k: Buffer) => {
     const s = k.toString();
     if (s === "q" || s === "\x03") { agent.abort(); done = true; }
@@ -500,7 +471,6 @@ async function main() {
     }
   });
 
-  // 执行
   const doRender = () => render(term, runtime, agent, logLines);
   try {
     const completed = await agent.run((newLines) => {
@@ -517,7 +487,6 @@ async function main() {
   }
   doRender();
 
-  // 等待退出
   if (!done) {
     term.at(term.sz().rows - 2, 2, S.dim("按 [q] 退出"));
     await new Promise<void>((resolve) => {

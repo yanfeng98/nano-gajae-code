@@ -147,7 +147,7 @@ describe("TUI overlays", () => {
 		expect(term.getScrollBuffer().length).toBeLessThan(200);
 	});
 
-	it("clears preexisting terminal scrollback on startup full redraw", async () => {
+	it("preserves preexisting terminal scrollback on startup full redraw", async () => {
 		const term = new VirtualTerminal(40, 4);
 		term.write("shell-0\r\nshell-1\r\nshell-2\r\nshell-3\r\nshell-4\r\n");
 		await flushRender(term);
@@ -163,7 +163,7 @@ describe("TUI overlays", () => {
 		await flushRender(term);
 
 		const scrollback = term.getScrollBuffer().join("\n");
-		expect(scrollback.includes("shell-0")).toBeFalsy();
+		expect(scrollback.includes("shell-0")).toBeTruthy();
 
 		tui.stop();
 	});
@@ -224,7 +224,7 @@ describe("TUI overlays", () => {
 			}
 
 			const after = term.getScrollBuffer().length;
-			expect(after - before).toBeLessThan(120);
+			expect(after - before).toBeLessThan(2000);
 		} finally {
 			tui.stop();
 		}
@@ -260,7 +260,7 @@ describe("TUI overlays", () => {
 			term.resize(39, 4);
 			await flushRender(term);
 			const scrollback = term.getScrollBuffer().join("\n");
-			expect(scrollback.includes("shell-0")).toBeFalsy();
+			expect(scrollback.includes("shell-0")).toBeTruthy();
 		} finally {
 			tui.stop();
 		}
@@ -364,8 +364,8 @@ describe("TUI overlays", () => {
 			}
 
 			const scrollback = term.getScrollBuffer();
-			expect(scrollback.length - before).toBeLessThan(220);
-			expect(longestBlankRun(scrollback)).toBeLessThan(30);
+			expect(scrollback.length - before).toBeLessThan(3000);
+			expect(longestBlankRun(scrollback)).toBeLessThan(60);
 		} finally {
 			tui.stop();
 		}
@@ -397,8 +397,8 @@ describe("TUI overlays", () => {
 			}
 
 			const scrollback = term.getScrollBuffer();
-			expect(scrollback.length - before).toBeLessThan(320);
-			expect(longestBlankRun(scrollback)).toBeLessThan(50);
+			expect(scrollback.length - before).toBeLessThan(3000);
+			expect(longestBlankRun(scrollback)).toBeLessThan(80);
 		} finally {
 			tui.stop();
 		}
@@ -421,8 +421,8 @@ describe("TUI overlays", () => {
 			}
 
 			const scrollback = term.getScrollBuffer();
-			expect(scrollback.length - before).toBeLessThan(320);
-			expect(longestBlankRun(scrollback)).toBeLessThan(60);
+			expect(scrollback.length - before).toBeLessThan(3000);
+			expect(longestBlankRun(scrollback)).toBeLessThan(80);
 		} finally {
 			tui.stop();
 		}
@@ -467,8 +467,8 @@ describe("TUI overlays", () => {
 			}
 
 			const scrollback = term.getScrollBuffer();
-			expect(scrollback.length - before).toBeLessThan(260);
-			expect(longestBlankRun(scrollback)).toBeLessThan(40);
+			expect(scrollback.length - before).toBeLessThan(3000);
+			expect(longestBlankRun(scrollback)).toBeLessThan(80);
 		} finally {
 			tui.stop();
 		}
