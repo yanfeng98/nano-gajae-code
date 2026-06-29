@@ -14,6 +14,7 @@ bun run learning-lab/<script>.ts
 |------|------|
 | `ask-selector.ts` | 多选项交互式 TUI 选择器（ask 工具核心） |
 | `goal-lab.ts` | Goal 目标系统 — 完整自主 Agent 模拟（状态机 / 记账 / 自动续跑 / 完成审计） |
+| `compaction-lab.ts` | 上下文压缩 — 切割点检测算法演示（反向累积 / 有效切割点 / Split Turn） |
 
 ## ask-selector.ts 学习要点
 
@@ -187,3 +188,112 @@ async #withAccounting<T>(fn: () => T): Promise<T> {
 | `⚙ goal({op:"get"})` 调用 | `GoalTool.execute` → `runtime.getState()` | Agent 自查进度 |
 | `⚙ ⏳ 续跑倒计时 → 注入` | `#scheduleGoalContinuation` + `goal-continuation.md` | 自动续跑 |
 | `🔍 COMPLETION AUDIT` 守卫 | `assertCanCompleteCurrentGoal` (ultragoal-guard) | 完成审计 |
+
+
+## compaction-lab.ts 学习要点
+
+### 1. 上下文压缩问题
+
+LLM 会话在不断增长。当累积 token 超过模型上下文窗口时，必须压缩旧消息让出新空间。compaction-lab 演示了 GJC 的核心切割点检测算法 — 这是压缩决策中最关键的一步。
+
+```
+完整会话 (142K tokens)
+┌──────────────────────────────────────────────────┐
+│  Turn 1-6  旧对话历史                            │  ← 将被摘要
+│  ─────────────────────────────────────────────── │
+│  Turn 7  (split turn prefix)                     │  ← 部分摘要
+│  ─────────────────────────────────────────────── │
+│  Turn 8-N  最近对话                              │  ← 保留原文
+└──────────────────────────────────────────────────┘
+      ↓ 压缩后
+  [LLM 摘要: "用户请求实现登录系统..."] + Turn 7-N 原文
+```
+
+### 2. 核心算法：findCutPoint
+
+```ts
+function findCutPoint(entries, start, end, keepRecentTokens) {
+  // 1. 找到所有合法切割点（绝不切割 toolResult）
+  const cutPoints = findValidCutPoints(entries, start, end);
+
+  // 2. 从最新消息反向遍历，累积 token
+  let accumulated = 0;
+  for (let i = end - 1; i >= start; i--) {
+    accumulated += entries[i].tokens;
+    if (accumulated >= keepRecentTokens) {
+      // 3. 找到距离当前位置最近的合法切割点
+      cutIndex = closestCutPoint(cutPoints, i);
+      break;
+    }
+  }
+
+  // 4. 反向扫描，拉入非消息条目（设置变更等），停止于 compaction 边界
+  while (cutIndex > start) {
+    if (prev.type === "compaction") break;
+    if (prev.type === "message") break;
+    cutIndex--;
+  }
+
+  // 5. 检测 split turn（切割点在 assistant 消息上，不是完整 turn）
+  const isSplitTurn = cutEntry.role !== "user";
+  if (isSplitTurn) turnStart = findTurnStart(entries, cutIndex, start);
+
+  return { cutIndex, turnStart, isSplitTurn };
+}
+```
+
+### 3. 有效切割点规则
+
+| 条目类型 | 可作为切割点？ | 原因 |
+|----------|---------------|------|
+| `user` | 可以 | 完整 turn 边界 |
+| `assistant` | 可以 | 可能产生 split turn，其 toolResult 跟着保留 |
+| `toolResult` | **绝不** | 必须紧跟其 tool call，否则 LLM 看到孤立的工具结果 |
+| `compaction` | 可以 | 前一次压缩的边界 |
+| `custom_message` | 可以 | 视为 user 角色消息 |
+
+### 4. Split Turn 处理
+
+当切割点落在 assistant 消息上（而非 user 消息），意味着切割点不是一个完整的 turn 边界：
+
+```
+Turn 5:
+  User: "现在写测试"           ← turn start
+  Assistant: "我来写 12 个用例"  ← cutIndex (切割点)
+  ──── 切割线 ────
+  ToolResult: [测试文件]        ← 跟着 assistant 保留
+  ToolResult: [测试结果 ✓]
+```
+
+这部分 turn prefix（User + Assistant 开头）需要单独生成"turn prefix 摘要"，告诉模型这个 turn 在做什么。剩余的 toolResult 完整保留。
+
+### 5. 两种压缩策略
+
+| 策略 | 机制 | 适用场景 |
+|------|------|----------|
+| `context-full` | 旧消息 → LLM 摘要 + 新消息原文 | 默认策略，保留连续性 |
+| `handoff` | 生成结构化交接文档 + toolChoice:none | 任务交接给新的 Agent 实例 |
+
+### 6. 运行时交互
+
+按 `Space` 逐步推进算法各阶段：
+1. **查看完整会话** — 上下文溢出状态
+2. **扫描有效切割点** — 绿色 ◆ = 可切割，红色 ✕ = toolResult（不可切割）
+3. **反向累积** — 动画展示从最新消息反向累加 token
+4. **切割点确定** — 展示切割位置
+5. **Split Turn 检测** — 如果切割在 assistant 上，展示 turn prefix
+6. **结果展示** — 绿色 = 保留，黄色 = turn prefix，灰色 = 摘要
+
+按 `s` 切换策略（context-full / handoff），`↑↓/jk` 滚动条目列表。
+
+### 7. 与项目源码的对应关系
+
+| 本脚本 | 项目源码 | 职责 |
+|--------|----------|------|
+| `findValidCutPoints()` | `compaction.ts:findValidCutPoints()` | 合法切割点扫描 |
+| `findCutPoint()` | `compaction.ts:findCutPoint()` | 核心切割算法 |
+| `findTurnStart()` | `compaction.ts:findTurnStartIndex()` | 回溯找 turn 起点 |
+| `estimateTokens()` | `compaction.ts:estimateMessageTokensHeuristic()` | 启发式 token 估算 |
+| `context-full` 策略 | `compaction.ts:compact()` | 摘要 + 保留完整流程 |
+| `handoff` 策略 | `compaction.ts:generateHandoff()` | 交接文档生成 |
+| Phase walkthrough | `SessionManager.#compactInternal()` | 压缩触发 → 准备 → 执行 → 写入 |
