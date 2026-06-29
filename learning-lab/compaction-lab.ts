@@ -110,6 +110,54 @@ function generateSession(): SessionEntry[] {
   return entries;
 }
 
+// === Simulated summary generation (what LLM would produce) ===
+
+function generateSimulatedSummary(entries: SessionEntry[], start: number, end: number): string {
+  // Pair each user message with the FIRST assistant response that follows it
+  const turns: { user: string; assistant?: string }[] = [];
+
+  for (let i = start; i < end; i++) {
+    const m = entries[i]?.message;
+    if (!m) continue;
+    if (m.role === "user") {
+      turns.push({ user: m.content.split("\n")[0]! });
+    } else if (m.role === "assistant" && turns.length > 0 && !turns[turns.length - 1]!.assistant) {
+      turns[turns.length - 1]!.assistant = m.content.split("\n")[0]!;
+    }
+  }
+
+  const totalTokens = entries.slice(start, end).reduce((s, e) => s + (e.message?.tokens ?? 0), 0);
+
+  const lines: string[] = [];
+  lines.push("Summary of previous conversation:");
+  lines.push("");
+
+  for (let i = 0; i < turns.length; i++) {
+    const t = turns[i]!;
+    lines.push(`  Turn ${i + 1}. ${trunc(t.user, 52)}`);
+    if (t.assistant) {
+      lines.push(`     → ${trunc(t.assistant, 48)}`);
+    }
+  }
+
+  lines.push("");
+  lines.push(`─── ${turns.length} turns summarized, ${fmtTok(totalTokens)} tokens compacted ───`);
+
+  return lines.join("\n");
+}
+
+function generateTurnPrefixSummary(entries: SessionEntry[], start: number, end: number): string {
+  const parts: string[] = [];
+  for (let i = start; i < end; i++) {
+    const m = entries[i]?.message;
+    if (!m) continue;
+    const line = m.content.split("\n")[0]!;
+    if (m.role === "user") parts.push(`User asked: ${trunc(line, 50)}`);
+    else if (m.role === "assistant") parts.push(`Assistant began: ${trunc(line, 44)}`);
+  }
+  return parts.join("\n");
+}
+
 // === Core Algorithm: token estimation (heuristic) ===
 
 function estimateTokens(text: string): number {
@@ -235,7 +283,19 @@ interface RenderState {
   scrollOffset: number;
   walkStep: number; // for walk animation
   highlightEntry: number; // entry being examined in backward walk
+  historySummary: string; // simulated summary for result phase
+  turnPrefixSummary: string; // simulated turn-prefix summary for result phase
 }
+
+const TOTAL_STEPS = 6;
+const STEP_LABELS: Record<Phase, string> = {
+  show_all: "查看完整会话",
+  finding_cutpoints: "扫描有效切割点",
+  walking_back: "反向累积 Token",
+  cut_found: "确定切割位置",
+  split_check: "检测 Split Turn",
+  result: "压缩完成 — 查看结果",
+};
 
 
 function render(term: Terminal, st: RenderState) {
@@ -247,28 +307,31 @@ function render(term: Terminal, st: RenderState) {
   // Layout: left 48 cols for entry list, right side for algorithm info
   const listW = Math.min(52, Math.floor(cols * 0.55));
   const infoX = listW + 2;
-  const infoW = cols - listW - 3;
 
   // === Top bar ===
-  term.at(1, 1, S.accent(S.bold(" Context Compaction — 上下文压缩算法演示 ")));
-  term.at(1, cols - 32, S.dim(`[Space]下一步  [q]退出  [s]切换策略`));
+  const stepNum = Object.keys(STEP_LABELS).indexOf(phase) + 1;
+  const stepLabel = STEP_LABELS[phase];
+  term.at(1, 1, S.accent(S.bold(` Context Compaction — 上下文压缩算法演示 `)) +
+    S.hiWhite(`  Step ${stepNum}/${TOTAL_STEPS}: ${stepLabel}`));
   term.at(2, 1, S.dim("━".repeat(cols - 1)));
+  term.at(3, 1, S.dim(`[Space]下一步  [q]退出  [s]切换策略  [↑↓/jk]滚动`));
 
   // === Context gauge ===
   const overflow = totalTokens > contextWindow;
-  const barW = Math.min(50, cols - 20);
   const barLabel = overflow
     ? S.red(`Context: ${fmtTok(totalTokens)} / ${fmtTok(contextWindow)}  OVERFLOW!`)
     : S.white(`Context: ${fmtTok(totalTokens)} / ${fmtTok(contextWindow)}`);
-  term.at(3, 2, barLabel);
-  term.at(3, barLabel.length + 3, `Keep budget: ${fmtTok(keepTokens)}  |  Strategy: ${strategy === "context-full" ? "context-full" : "handoff"}`);
+  term.at(4, 2, barLabel);
+  term.at(4, barLabel.length + 3, `Keep budget: ${fmtTok(keepTokens)}  |  Strategy: ${strategy === "context-full" ? "context-full" : "handoff"}`);
 
   // === Entry list header ===
   const listHeaderY = 5;
-  hdrBox(term, listHeaderY, 1, listW, BOX, S.gray, " Session Entries ");
+  const isResultPhase = phase === "result" && result;
+  const listTitle = isResultPhase ? " Compaction Result — 压缩结果 " : " Session Entries ";
+  const listTitleColor = isResultPhase ? S.green : S.gray;
+  hdrBox(term, listHeaderY, 1, listW, BOX, listTitleColor, listTitle);
   const listStartY = listHeaderY + 3;
   const listEndY = rows - 3;
-  const maxVis = listEndY - listStartY;
 
   // Determine which entries are kept/summarized/prefix based on phase
   const showCut = (phase === "cut_found" || phase === "split_check" || phase === "result") && result;
@@ -278,78 +341,153 @@ function render(term: Terminal, st: RenderState) {
 
   // Render entry list
   let ry = listStartY;
-  const displayStart = Math.max(0, Math.min(scrollOffset, entries.length - maxVis));
-  const displayEnd = Math.min(entries.length, displayStart + maxVis);
+  const displayStart = Math.max(0, Math.min(scrollOffset, entries.length - (listEndY - listStartY)));
+  const displayEnd = Math.min(entries.length, displayStart + (listEndY - listStartY));
 
-  for (let i = displayStart; i < displayEnd && ry < listEndY; i++) {
-    const e = entries[i];
-    if (!e || ry >= listEndY) break;
-
-    let color: (t: string) => string;
-    let marker = "  ";
-
-    if (e.type === "compaction") {
-      term.at(ry, 2, S.dim("──── compaction boundary ────"));
-      ry++; continue;
-    }
-    if (!e.message) { ry++; continue; }
-
-    const m = e.message;
-
-    // Determine coloring based on phase
-    if (phase === "finding_cutpoints" && result) {
-      // Highlight valid cut points
-      if (result.cutpoints.includes(i)) {
-        color = m.role === "user" ? S.green : m.role === "assistant" ? S.yellow : S.white;
-        marker = S.green("◆ ");
-      } else if (m.role === "toolResult") {
-        color = S.red;
-        marker = S.red("✕ ");
-      } else {
-        color = S.dim;
+  // === Result phase: render summary block instead of old entries ===
+  if (isResultPhase) {
+    if (st.historySummary) {
+      // Render history summary (replaces all summarized entries)
+      const summaryLines = st.historySummary.split("\n");
+      const boxW = listW - 4;
+      term.at(ry, 2, S.dim("┌" + "─".repeat(boxW) + "┐"));
+      ry++;
+      const sumTitle = "  Summarized Region — 摘要区域 (灰色条目 → LLM 摘要) ".padEnd(boxW + 1);
+      term.at(ry, 2, S.dim("│") + S.accent(S.bold(sumTitle)) + S.dim("│"));
+      ry++;
+      term.at(ry, 2, S.dim("├" + "─".repeat(boxW) + "┤"));
+      ry++;
+      for (const line of summaryLines) {
+        if (ry >= listEndY - 5) break;
+        const displayLine = line.length > boxW - 2 ? line.slice(0, boxW - 5) + "…" : line;
+        term.at(ry, 2, S.dim("│ ") + S.dim(displayLine.padEnd(boxW - 1)) + S.dim("│"));
+        ry++;
       }
-    } else if (phase === "walking_back" && result) {
-      // Highlight entries being visited in backward walk
-      if (highlightEntry >= 0 && i === highlightEntry) {
-        color = S.accent;
-        marker = S.accent("← ");
-      } else if (result.cutPointIndices.slice(0, walkStep).includes(i)) {
-        color = S.yellow;
-        marker = "  ";
-      } else if (i >= result.firstKeptIndex) {
-        color = S.dim;
-        marker = "  ";
-      } else {
-        color = S.dim;
-      }
-    } else if ((phase === "cut_found" || phase === "split_check" || phase === "result") && result) {
-      if (result.firstKeptIndex === i) {
-        color = S.accent;
-        marker = S.accent("▸▸");
-      } else if (i >= keptStart) {
-        color = S.green;
-        marker = "  ";
-      } else if (prefixStart >= 0 && i >= prefixStart && i < prefixEnd) {
-        color = S.yellow;
-        marker = S.yellow("◒ ");
-      } else {
-        color = S.dim;
-      }
-    } else {
-      // show_all
-      color = m.role === "user" ? S.white : m.role === "assistant" ? S.accent : S.dim;
+      term.at(ry, 2, S.dim("└" + "─".repeat(boxW) + "┘"));
+      ry++;
     }
 
-    const rl = roleLabel(m.role);
-    const content = trunc(m.content.split("\n")[0]!, listW - 15);
-    const tokStr = fmtTok(m.tokens);
-    const line = `${rl} ${content}`.padEnd(listW - 10) + S.dim(tokStr.padStart(6));
-    term.at(ry, 2, marker + color(line));
+    // Show turn prefix summary if split turn
+    if (st.turnPrefixSummary) {
+      ry++;
+      const prefixLines = st.turnPrefixSummary.split("\n");
+      const pboxW = listW - 4;
+      term.at(ry, 2, S.yellow("┌" + "─".repeat(pboxW) + "┐"));
+      ry++;
+      const tpTitle = "  Turn Prefix — 被切割的 Turn 前半部分 ".padEnd(pboxW + 1);
+      term.at(ry, 2, S.yellow("│") + S.yellow(S.bold(tpTitle)) + S.yellow("│"));
+      ry++;
+      term.at(ry, 2, S.yellow("├" + "─".repeat(pboxW) + "┤"));
+      ry++;
+      for (const line of prefixLines) {
+        if (ry >= listEndY - 3) break;
+        const displayLine = line.length > pboxW - 2 ? line.slice(0, pboxW - 5) + "…" : line;
+        term.at(ry, 2, S.yellow("│ ") + S.yellow(displayLine.padEnd(pboxW - 1)) + S.yellow("│"));
+        ry++;
+      }
+      term.at(ry, 2, S.yellow("└" + "─".repeat(pboxW) + "┘"));
+      ry++;
+    }
+
+    // Separator between summary and kept entries
     ry++;
+    const sepLabel = " Kept Region (保留原文) ";
+    const sepW = Math.max(0, listW - 4);
+    const padW = Math.floor((sepW - sepLabel.length) / 2);
+    const sepPad = "─".repeat(Math.max(0, padW));
+    term.at(ry, 2, S.accent(S.bold(sepPad + sepLabel + sepPad)));
+    ry++;
+
+    // Render kept entries (from firstKeptIndex)
+    for (let i = keptStart; i < entries.length && ry < listEndY; i++) {
+      const e = entries[i];
+      if (!e || e.type === "compaction") continue;
+      if (!e.message) continue;
+      const m = e.message;
+      const rl = roleLabel(m.role);
+      const content = trunc(m.content.split("\n")[0]!, listW - 15);
+      const tokStr = fmtTok(m.tokens);
+      const line = `${rl} ${content}`.padEnd(listW - 10) + S.dim(tokStr.padStart(6));
+
+      if (i === keptStart) {
+        term.at(ry, 2, S.accent("▸▸") + S.green(line));
+      } else {
+        term.at(ry, 2, "  " + S.green(line));
+      }
+      ry++;
+    }
+  } else {
+    // === Non-result phases: normal entry list ===
+    for (let i = displayStart; i < displayEnd && ry < listEndY; i++) {
+      const e = entries[i];
+      if (!e || ry >= listEndY) break;
+
+      let color: (t: string) => string;
+      let marker = "  ";
+
+      if (e.type === "compaction") {
+        term.at(ry, 2, S.dim("──── compaction boundary ────"));
+        ry++; continue;
+      }
+      if (!e.message) { ry++; continue; }
+
+      const m = e.message;
+
+      // Determine coloring based on phase
+      if (phase === "finding_cutpoints" && result) {
+        // Highlight valid cut points
+        if (result.cutpoints.includes(i)) {
+          color = m.role === "user" ? S.green : m.role === "assistant" ? S.yellow : S.white;
+          marker = S.green("◆ ");
+        } else if (m.role === "toolResult") {
+          color = S.red;
+          marker = S.red("✕ ");
+        } else {
+          color = S.dim;
+        }
+      } else if (phase === "walking_back" && result) {
+        // Highlight entries being visited in backward walk
+        if (highlightEntry >= 0 && i === highlightEntry) {
+          color = S.accent;
+          marker = S.accent("← ");
+        } else if (result.cutPointIndices.slice(0, walkStep).includes(i)) {
+          color = S.yellow;
+          marker = "  ";
+        } else if (i >= result.firstKeptIndex) {
+          color = S.dim;
+          marker = "  ";
+        } else {
+          color = S.dim;
+        }
+      } else if ((phase === "cut_found" || phase === "split_check") && result) {
+        if (result.firstKeptIndex === i) {
+          color = S.accent;
+          marker = S.accent("▸▸");
+        } else if (i >= keptStart) {
+          color = S.green;
+          marker = "  ";
+        } else if (prefixStart >= 0 && i >= prefixStart && i < prefixEnd) {
+          color = S.yellow;
+          marker = S.yellow("◒ ");
+        } else {
+          color = S.dim;
+        }
+      } else {
+        // show_all
+        color = m.role === "user" ? S.white : m.role === "assistant" ? S.accent : S.dim;
+      }
+
+      const rl = roleLabel(m.role);
+      const content = trunc(m.content.split("\n")[0]!, listW - 15);
+      const tokStr = fmtTok(m.tokens);
+      const line = `${rl} ${content}`.padEnd(listW - 10) + S.dim(tokStr.padStart(6));
+      term.at(ry, 2, marker + color(line));
+      ry++;
+    }
   }
 
-  // Scroll indicator
-  if (displayStart > 0 || displayEnd < entries.length) {
+  // Scroll indicator (only for non-result phases since result shows all kept entries)
+  if (!isResultPhase && (displayStart > 0 || displayEnd < entries.length)) {
     const pos = `${displayStart + 1}-${displayEnd} / ${entries.length}`;
     term.at(listEndY, 2, S.dim(`  ↑ scroll  [↑↓/jk]  (${pos})`));
   }
@@ -398,15 +536,16 @@ function render(term: Terminal, st: RenderState) {
 
   // Phase description
   iy += 2;
+  const stepNum2 = Object.keys(STEP_LABELS).indexOf(phase) + 1;
   const phaseDescs: Record<Phase, string> = {
-    show_all: "展示完整会话 — 上下文已溢出。\n按 Space 开始压缩算法。",
-    finding_cutpoints: "扫描有效切割点：\n◆ 绿色 = user/assistant (可切)\n✕ 红色 = toolResult (绝不切割)\n因为 toolResult 必须紧跟其 tool call。",
-    walking_back: "从最新消息反向遍历，\n累积 token 估算值。\n黄色 = 已累加的消息\n← 青色 = 当前检查点",
-    cut_found: "累积超出 keep 预算！\n找到最近的合法切割点。\n▸▸ = 切割位置\n绿色 = 保留区域",
+    show_all: `${S.bold(`Step ${stepNum2}/${TOTAL_STEPS}`)}  完整会话 — 上下文已溢出 (${fmtTok(totalTokAll)} > ${fmtTok(contextWindow)})\n\n按 Space 开始压缩算法。`,
+    finding_cutpoints: `${S.bold(`Step ${stepNum2}/${TOTAL_STEPS}`)}  扫描有效切割点\n\n◆ 绿色 = user/assistant (可切割)\n✕ 红色 = toolResult (绝不切割)\n\n原因: toolResult 必须紧跟 tool call,\n否则 LLM 看到孤立工具结果会出错。`,
+    walking_back: `${S.bold(`Step ${stepNum2}/${TOTAL_STEPS}`)}  反向累积 Token\n\n从最新消息反向遍历,\n逐条累加 token 估算值。\n黄色 = 已累加的消息\n← 青色 = 当前正在检查\n\n累积量 >= keep 预算时停止。`,
+    cut_found: `${S.bold(`Step ${stepNum2}/${TOTAL_STEPS}`)}  切割点确定\n\n累积量已超出 keep 预算！\n找到最近的合法切割点。\n▸▸ 青色 = 切割位置\n绿色 = 保留区域 (原文)\n灰色 = 将被摘要的历史`,
     split_check: result?.isSplitTurn
-      ? "切割点在 assistant 消息上 —\n这不是一个完整的 turn 边界！\n黄色 = turn prefix (需单独摘要)\n绿色 = 完整保留"
-      : "切割点恰好是 user 消息 —\n完整的 turn 边界，无需 split。",
-    result: "压缩完成！\n绿色 = 保留原文\n黄色 = turn prefix 摘要\n灰色 = 历史摘要\n\n[压缩前] = 摘要 + [保留区域]",
+      ? `${S.bold(`Step ${stepNum2}/${TOTAL_STEPS}`)}  Split Turn 检测\n\n切割点落在 assistant 消息 —\n这不是完整 turn 边界！\n黄色 = turn prefix (需单独摘要)\n绿色 = 完整保留的条目\n\nTurn prefix 的 user+assistant 摘要后\n与 toolResult 拼接保留。`
+      : `${S.bold(`Step ${stepNum2}/${TOTAL_STEPS}`)}  Turn 边界完整\n\n切割点恰好是 user 消息 —\n完整 turn 边界, 无需 split。\n直接进入结果阶段。`,
+    result: `${S.bold(`Step ${stepNum2}/${TOTAL_STEPS}`)}  压缩完成\n\n左栏上方 = 摘要文本 (LLM 生成)\n左栏下方 = 保留原文\n\n这就是 compaction 后的新上下文:\n  [系统提示] + [摘要] + [保留区域]\n\n按 Space 重新演示。`,
   };
 
   const desc = phaseDescs[phase] || "";
@@ -419,13 +558,9 @@ function render(term: Terminal, st: RenderState) {
 
   // Bottom status bar
   term.at(rows, 1, S.gray("━".repeat(cols - 1)));
+  const stepNum3 = Object.keys(STEP_LABELS).indexOf(phase) + 1;
   const statusParts: string[] = [];
-  if (phase === "show_all") statusParts.push("Phase: 查看完整会话");
-  else if (phase === "finding_cutpoints") statusParts.push("Phase: 寻找有效切割点");
-  else if (phase === "walking_back") statusParts.push(`Phase: 反向累积 (${Math.min(walkStep, result?.cutPointIndices.length ?? 0)}/${result?.cutPointIndices.length ?? 0})`);
-  else if (phase === "cut_found") statusParts.push("Phase: 切割点确定");
-  else if (phase === "split_check") statusParts.push("Phase: Split Turn 检测");
-  else if (phase === "result") statusParts.push("Phase: 压缩结果");
+  statusParts.push(`Step ${stepNum3}/${TOTAL_STEPS}: ${STEP_LABELS[phase]}`);
   statusParts.push(`Entries: ${entries.length}`);
   statusParts.push(`Tokens: ${fmtTok(totalTokAll)}`);
   term.at(rows, 2, S.dim(statusParts.join("  |  ")));
@@ -457,10 +592,27 @@ async function main() {
   let scrollOffset = 0;
   let walkStep = 0;
   let highlightEntry = -1;
+  let historySummary = "";
+  let turnPrefixSummary = "";
   let done = false;
 
   function updateResult() {
     result = findCutPoint(entries, 0, entries.length, KEEP_TOKENS);
+  }
+
+  function generateSummaries() {
+    if (!result) return;
+    const historyEnd = result.isSplitTurn ? result.turnStartIndex : result.firstKeptIndex;
+    if (historyEnd > 0) {
+      historySummary = generateSimulatedSummary(entries, 0, historyEnd);
+    } else {
+      historySummary = "";
+    }
+    if (result.isSplitTurn && result.turnStartIndex >= 0) {
+      turnPrefixSummary = generateTurnPrefixSummary(entries, result.turnStartIndex, result.firstKeptIndex);
+    } else {
+      turnPrefixSummary = "";
+    }
   }
 
   const renderS = (): RenderState => ({
@@ -471,6 +623,8 @@ async function main() {
     scrollOffset,
     walkStep,
     highlightEntry,
+    historySummary,
+    turnPrefixSummary,
   });
 
   const doRender = () => render(term, renderS());
@@ -526,9 +680,15 @@ async function main() {
           highlightEntry = -1;
           break;
         case "cut_found":
-          phase = result?.isSplitTurn ? "split_check" : "result";
+          if (result?.isSplitTurn) {
+            phase = "split_check";
+          } else {
+            generateSummaries();
+            phase = "result";
+          }
           break;
         case "split_check":
+          generateSummaries();
           phase = "result";
           break;
         case "result":
@@ -537,6 +697,8 @@ async function main() {
           result = null;
           walkStep = 0;
           highlightEntry = -1;
+          historySummary = "";
+          turnPrefixSummary = "";
           break;
       }
       doRender();
@@ -612,7 +774,23 @@ async function main() {
     const prefixCount = result.isSplitTurn ? result.firstKeptIndex - result.turnStartIndex : 0;
     console.log(`  保留: ${keptCount} entries (绿色)`);
     if (prefixCount > 0) console.log(`  Turn prefix: ${prefixCount} entries (黄色)`);
-    console.log(`  摘要: ${summarizedCount} entries (灰色)`);
+    console.log(`  摘要: ${summarizedCount} entries (灰色 → 变为下方摘要)`);
+    console.log("");
+    if (historySummary) {
+      // Strip ANSI for clean terminal output
+      const clean = historySummary.replace(/\x1b\[[0-9;]*m/g, "");
+      console.log("  ── LLM 生成的摘要 (模拟) ──");
+      for (const line of clean.split("\n")) {
+        console.log(`  ${line}`);
+      }
+    }
+    if (turnPrefixSummary) {
+      const clean = turnPrefixSummary.replace(/\x1b\[[0-9;]*m/g, "");
+      console.log("  ── Turn Prefix 摘要 ──");
+      for (const line of clean.split("\n")) {
+        console.log(`  ${line}`);
+      }
+    }
   }
   console.log(`${"=".repeat(55)}\n`);
   process.exit(0);
