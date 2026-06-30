@@ -1,36 +1,5 @@
 #!/usr/bin/env bun
 
-/**
- * Context Compaction Algorithm — 互动演示
- * ==========================================
- *
- * 这是一个教学脚本，逐步展示 LLM 编码 Agent 中「上下文压缩」算法的完整流程。
- *
- * 运行方式:
- *   bun run learning-lab/compaction-lab.ts
- *
- * 核心问题: 当对话上下文超出模型窗口时，需要对旧消息做摘要压缩。
- * 本算法解决三个关键决策:
- *   1. 切割点选择 — 只在合法的边界切割（user/assistant 消息，绝不切割 toolResult）
- *   2. Split Turn 检测 — 切割点落在 assistant 消息中间时，需要拆分 turn 并单独摘要前半部分
- *   3. 摘要策略 — 旧消息 → LLM 摘要，新消息 → 保留原文，摘要 + 新消息 = 新上下文
- *
- * 操作方式:
- *   [Space]  逐步推进算法阶段
- *   [q]      退出并打印摘要
- *   [s]      切换策略 (context-full / handoff)
- *   [↑↓/jk] 滚动会话列表
- *
- * 结构:
- *   1. ANSI 终端控制 + 颜色常量
- *   2. 类型定义 (消息、条目、切割结果)
- *   3. 模拟会话生成器 (生成一段长对话用于演示)
- *   4. 摘要生成 (模拟 LLM 产出摘要文本)
- *   5. 核心算法 (token 估算、切割点扫描、turn 边界查找、主切割逻辑)
- *   6. 渲染引擎 (左右分栏 TUI)
- *   7. 主循环 (阶段机 + 键盘处理 + 动画)
- */
-
 const CSI = "\x1b[";
 const cursorTo = (r: number, c: number) => `${CSI}${r};${c}H`;
 const CLR_LINE = `${CSI}K`, CLR_SCREEN = `${CSI}J`;
@@ -57,8 +26,6 @@ class Terminal {
   at(r: number, c: number, t: string) { process.stdout.write(cursorTo(r, c) + CLR_LINE + t); }
 }
 
-// === 类型定义: 模拟 LLM 会话的消息和条目结构 ===
-
 type MsgRole = "user" | "assistant" | "toolResult";
 
 interface SimMessage {
@@ -82,15 +49,12 @@ interface CutPointResult {
   cutpoints: number[];
 }
 
-// === 模拟会话生成: 构造一段包含 8 个 turn 的长对话，用于触发上下文溢出 ===
-
 function generateSession(): SessionEntry[] {
   const entries: SessionEntry[] = [];
   let id = 0;
   const M = (role: MsgRole, content: string, tokens: number) =>
     entries.push({ id: id++, type: "message", message: { role, content, tokens } });
 
-  // Turn 1: User asks to build auth system
   M("user", "I need a complete user authentication system for our Express backend — signup, login, password reset, JWT tokens, and refresh token rotation.", 280);
   M("assistant", "I'll start by reading the existing project structure and understanding the current routing setup before making any changes.", 180);
   M("toolResult", "// src/app.ts — Express app setup\nimport express from 'express';\nimport { userRouter } from './routes/users';\nimport { errorHandler } from './middleware/error';\n\nconst app = express();\napp.use(express.json());\napp.use('/api/users', userRouter);\napp.use(errorHandler);\n\n// ... 180 more lines of middleware, config, database connection pool setup, CORS, helmet, rate limiting basics, logger setup...", 4200);
@@ -99,41 +63,34 @@ function generateSession(): SessionEntry[] {
   M("assistant", "Auth utilities are in place. Now let me create the auth routes — signup, login, logout, refresh, and password reset endpoints.", 200);
   M("toolResult", "import { Router } from 'express';\nimport { hashPassword, verifyPassword, generateAccessToken, generateRefreshToken } from '../auth/utils';\nimport { User } from '../models/User';\nimport { sendPasswordResetEmail } from '../email/send';\n\nconst router = Router();\n\n// POST /api/auth/signup\nrouter.post('/signup', async (req, res, next) => {\n  try {\n    const { email, password, name } = req.body;\n\n    // Validate input\n    if (!email || !password || password.length < 8) {\n      return res.status(400).json({ error: 'Invalid input' });\n    }\n\n    // Check existing user\n    const existing = await User.findOne({ email });\n    if (existing) {\n      return res.status(409).json({ error: 'User already exists' });\n    }\n\n    const hashedPw = await hashPassword(password);\n    const user = await User.create({ email, password: hashedPw, name });\n    const accessToken = generateAccessToken(user.id);\n    const refreshToken = generateRefreshToken();\n\n    await user.updateOne({ refreshToken });\n\n    res.cookie('refreshToken', refreshToken, {\n      httpOnly: true,\n      secure: true,\n      sameSite: 'strict',\n      maxAge: 7 * 24 * 60 * 60 * 1000,\n      path: '/api/auth/refresh',\n    });\n\n    res.status(201).json({ accessToken, user: { id: user.id, email, name } });\n  } catch (err) {\n    next(err);\n  }\n});\n\n// POST /api/auth/login\nrouter.post('/login', async (req, res, next) => {\n  // ... 35 lines: find user, verify password, generate tokens, set cookie, return accessToken\n});\n\n// POST /api/auth/logout\nrouter.post('/logout', async (req, res, next) => {\n  // ... 15 lines: clear refresh token, clear cookie\n});\n\n// POST /api/auth/refresh\nrouter.post('/refresh', async (req, res, next) => {\n  // ... 25 lines: read cookie, verify refresh token, rotate, issue new access token\n});\n\n// POST /api/auth/forgot-password\nrouter.post('/forgot-password', async (req, res, next) => {\n  // ... 20 lines: find user, generate reset token, send email\n});\n\n// POST /api/auth/reset-password\nrouter.post('/reset-password', async (req, res, next) => {\n  // ... 20 lines: verify reset token, hash new password, update user\n});\n\nexport default router;", 5800);
 
-  // Turn 2: Middleware + validation
   M("user", "Nice work! Now I need auth middleware for protected routes and input validation with Zod schemas. Also, let's add rate limiting on the login endpoint.", 260);
   M("assistant", "I'll create the auth middleware first — it'll verify JWT tokens, attach the user to the request, and handle token expiration gracefully.", 190);
   M("toolResult", "import { Request, Response, NextFunction } from 'express';\nimport { verifyToken, generateAccessToken } from '../auth/utils';\nimport { User } from '../models/User';\n\n// Extend Express Request type\ndeclare global {\n  namespace Express {\n    interface Request {\n      user?: { id: string; email: string; role: string };\n    }\n  }\n}\n\nexport async function authenticate(req: Request, res: Response, next: NextFunction) {\n  try {\n    const authHeader = req.headers.authorization;\n    if (!authHeader?.startsWith('Bearer ')) {\n      return res.status(401).json({ error: 'Missing or invalid authorization header' });\n    }\n\n    const token = authHeader.slice(7);\n\n    // Check if token is blacklisted\n    const isBlacklisted = await TokenBlacklist.exists({ token });\n    if (isBlacklisted) {\n      return res.status(401).json({ error: 'Token has been revoked' });\n    }\n\n    const payload = verifyToken(token);\n    const user = await User.findById(payload.sub).select('-password -refreshToken');\n\n    if (!user) {\n      return res.status(401).json({ error: 'User not found' });\n    }\n\n    req.user = { id: user.id, email: user.email, role: user.role };\n    next();\n  } catch (err) {\n    if (err instanceof jwt.TokenExpiredError) {\n      return res.status(401).json({ error: 'Token expired', code: 'TOKEN_EXPIRED' });\n    }\n    if (err instanceof jwt.JsonWebTokenError) {\n      return res.status(401).json({ error: 'Invalid token', code: 'INVALID_TOKEN' });\n    }\n    next(err);\n  }\n}\n\nexport function requireRole(...roles: string[]) {\n  return (req: Request, res: Response, next: NextFunction) => {\n    if (!req.user || !roles.includes(req.user.role)) {\n      return res.status(403).json({ error: 'Insufficient permissions' });\n    }\n    next();\n  };\n}\n\n// ... rate limiting implementation per user/IP with Redis-backed sliding window", 4500);
   M("assistant", "Now let me create the Zod validation schemas for all auth endpoints and wire up the rate limiter.", 160);
   M("toolResult", "import { z } from 'zod';\n\nexport const signupSchema = z.object({\n  email: z.string().email('Invalid email format'),\n  password: z.string().min(8, 'Password must be at least 8 characters')\n    .regex(/[A-Z]/, 'Must contain uppercase')\n    .regex(/[0-9]/, 'Must contain a number'),\n  name: z.string().min(1).max(100),\n});\n\nexport const loginSchema = z.object({\n  email: z.string().email(),\n  password: z.string().min(1),\n});\n\nexport const resetPasswordSchema = z.object({\n  token: z.string().min(1),\n  newPassword: z.string().min(8),\n});\n\nexport const forgotPasswordSchema = z.object({\n  email: z.string().email(),\n});\n\nexport function validate<T>(schema: z.ZodSchema<T>) {\n  return (req: Request, res: Response, next: NextFunction) => {\n    const result = schema.safeParse(req.body);\n    if (!result.success) {\n      return res.status(400).json({\n        error: 'Validation failed',\n        details: result.error.flatten().fieldErrors,\n      });\n    }\n    req.body = result.data;\n    next();\n  };\n}", 2900);
 
-  // Turn 3: Email sending
   M("user", "Great! Now let's implement the email service — we need transactional emails for signup confirmation, password reset, and welcome emails. Use SendGrid as the provider.", 230);
   M("assistant", "I'll create the email service abstraction first (so we can swap providers later), then implement the SendGrid adapter.", 150);
   M("toolResult", "import sgMail from '@sendgrid/mail';\n\nexport interface EmailOptions {\n  to: string;\n  subject: string;\n  html: string;\n  text?: string;\n}\n\nexport interface EmailProvider {\n  send(options: EmailOptions): Promise<void>;\n}\n\nclass SendGridProvider implements EmailProvider {\n  constructor(apiKey: string) {\n    sgMail.setApiKey(apiKey);\n  }\n\n  async send(options: EmailOptions): Promise<void> {\n    await sgMail.send({\n      to: options.to,\n      from: process.env.EMAIL_FROM || 'noreply@example.com',\n      subject: options.subject,\n      html: options.html,\n      text: options.text || options.html.replace(/<[^>]*>/g, ''),\n    });\n  }\n}\n\nclass ConsoleProvider implements EmailProvider {\n  async send(options: EmailOptions) {\n    console.log(`[EMAIL] To: ${options.to} | Subject: ${options.subject}`);\n  }\n}\n\nexport function createEmailProvider(): EmailProvider {\n  const apiKey = process.env.SENDGRID_API_KEY;\n  return apiKey ? new SendGridProvider(apiKey) : new ConsoleProvider();\n}\n\nexport async function sendWelcomeEmail(email: string, name: string): Promise<void> {\n  const provider = createEmailProvider();\n  await provider.send({\n    to: email,\n    subject: `Welcome to Our Platform, ${name}!`,\n    html: `<h1>Welcome!</h1><p>Hi ${name}, thanks for signing up. Let us know if you need anything.</p>`,\n  });\n}\n\nexport async function sendPasswordResetEmail(email: string, token: string): Promise<void> {\n  const provider = createEmailProvider();\n  const resetUrl = `${process.env.APP_URL}/reset-password?token=${token}`;\n  await provider.send({\n    to: email,\n    subject: 'Password Reset Request',\n    html: `<p>Reset your password: <a href=\"${resetUrl}\">${resetUrl}</a></p><p>This link expires in 1 hour.</p>`,\n  });\n}", 3500);
 
-  // Turn 4: Database migration
   M("user", "We need a database migration for the users table — add email_verified, verification_token, last_login_at, and failed_login_attempts columns.", 200);
   M("assistant", "I'll create the migration file and update the User model to include the new fields.", 120);
   M("toolResult", "import { Migration } from '../db/migrate';\n\nexport const up: Migration = async (db) => {\n  await db.query(`\n    ALTER TABLE users\n    ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT false,\n    ADD COLUMN IF NOT EXISTS verification_token VARCHAR(255),\n    ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP WITH TIME ZONE,\n    ADD COLUMN IF NOT EXISTS failed_login_attempts INTEGER DEFAULT 0,\n    ADD COLUMN IF NOT EXISTS locked_until TIMESTAMP WITH TIME ZONE,\n    ADD COLUMN IF NOT EXISTS refresh_token VARCHAR(255),\n    ADD COLUMN IF NOT EXISTS refresh_token_expires_at TIMESTAMP WITH TIME ZONE\n  `);\n\n  await db.query(`\n    CREATE INDEX IF NOT EXISTS idx_users_email_verified ON users(email_verified);\n    CREATE INDEX IF NOT EXISTS idx_users_refresh_token ON users(refresh_token);\n    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_verification_token ON users(verification_token) WHERE verification_token IS NOT NULL;\n  `);\n};\n\nexport const down: Migration = async (db) => {\n  await db.query(`\n    ALTER TABLE users\n    DROP COLUMN IF EXISTS email_verified,\n    DROP COLUMN IF EXISTS verification_token,\n    DROP COLUMN IF EXISTS last_login_at,\n    DROP COLUMN IF EXISTS failed_login_attempts,\n    DROP COLUMN IF EXISTS locked_until,\n    DROP COLUMN IF EXISTS refresh_token,\n    DROP COLUMN IF EXISTS refresh_token_expires_at\n  `);\n};", 3200);
   M("assistant", "Migration is ready. Now let me update the User model to handle the new fields and add account locking logic.", 140);
   M("toolResult", "import mongoose, { Schema, Document } from 'mongoose';\n\nexport interface IUser extends Document {\n  email: string;\n  password: string;\n  name: string;\n  role: 'user' | 'admin';\n  emailVerified: boolean;\n  verificationToken: string | null;\n  lastLoginAt: Date | null;\n  failedLoginAttempts: number;\n  lockedUntil: Date | null;\n  refreshToken: string | null;\n  refreshTokenExpiresAt: Date | null;\n  isLocked(): boolean;\n  recordLoginFailure(): Promise<void>;\n  recordLoginSuccess(): Promise<void>;\n}\n\nconst userSchema = new Schema<IUser>({\n  email: { type: String, required: true, unique: true, lowercase: true, trim: true },\n  password: { type: String, required: true, select: false },\n  name: { type: String, required: true },\n  role: { type: String, enum: ['user', 'admin'], default: 'user' },\n  emailVerified: { type: Boolean, default: false },\n  verificationToken: { type: String, default: null },\n  lastLoginAt: { type: Date, default: null },\n  failedLoginAttempts: { type: Number, default: 0 },\n  lockedUntil: { type: Date, default: null },\n  refreshToken: { type: String, default: null, select: false },\n  refreshTokenExpiresAt: { type: Date, default: null, select: false },\n}, { timestamps: true });\n\nconst MAX_FAILED_ATTEMPTS = 5;\nconst LOCK_DURATION_MS = 15 * 60 * 1000; // 15 minutes\n\nuserSchema.methods.isLocked = function (): boolean {\n  if (!this.lockedUntil) return false;\n  if (Date.now() > this.lockedUntil.getTime()) {\n    this.lockedUntil = null;\n    this.failedLoginAttempts = 0;\n    return false;\n  }\n  return true;\n};\n\nuserSchema.methods.recordLoginFailure = async function (): Promise<void> {\n  this.failedLoginAttempts += 1;\n  if (this.failedLoginAttempts >= MAX_FAILED_ATTEMPTS) {\n    this.lockedUntil = new Date(Date.now() + LOCK_DURATION_MS);\n  }\n  await this.save();\n};\n\nuserSchema.methods.recordLoginSuccess = async function (): Promise<void> {\n  this.lastLoginAt = new Date();\n  this.failedLoginAttempts = 0;\n  this.lockedUntil = null;\n  await this.save();\n};\n\nexport const User = mongoose.model<IUser>('User', userSchema);", 5000);
 
-  // Turn 5: Tests
   M("user", "Excellent! Now let's write comprehensive tests for everything — auth routes, middleware, email service, and the User model. I want at least 80% coverage.", 210);
   M("assistant", "I'll start with the auth route integration tests, then the middleware unit tests, and finally the email service tests.", 140);
   M("toolResult", "import { describe, it, expect, beforeAll, afterAll } from 'bun:test';\nimport request from 'supertest';\nimport { createApp } from '../src/app';\nimport { User } from '../src/models/User';\nimport { hashPassword } from '../src/auth/utils';\n\nconst app = createApp({ dbUri: process.env.TEST_DB_URI });\n\ndescribe('POST /api/auth/signup', () => {\n  beforeAll(async () => {\n    await User.deleteMany({});\n  });\n\n  it('should create a new user with valid data', async () => {\n    const res = await request(app)\n      .post('/api/auth/signup')\n      .send({ email: 'test@example.com', password: 'StrongP4ss!', name: 'Test User' });\n\n    expect(res.status).toBe(201);\n    expect(res.body.accessToken).toBeDefined();\n    expect(res.body.user.email).toBe('test@example.com');\n    expect(res.body.user.password).toBeUndefined();\n  });\n\n  it('should reject duplicate emails', async () => {\n    const res = await request(app)\n      .post('/api/auth/signup')\n      .send({ email: 'test@example.com', password: 'StrongP4ss!', name: 'Test User' });\n    expect(res.status).toBe(409);\n  });\n\n  it('should reject weak passwords', async () => {\n    const cases = [\n      { password: 'short', expectedError: 'at least 8' },\n      { password: 'nouppercase1', expectedError: 'uppercase' },\n      { password: 'NOLOWERCASE1', expectedError: 'lowercase' },\n      { password: 'NoNumbersHere', expectedError: 'number' },\n    ];\n    for (const { password } of cases) {\n      const res = await request(app)\n        .post('/api/auth/signup')\n        .send({ email: `test+${Date.now()}@example.com`, password, name: 'Test' });\n      expect(res.status).toBe(400);\n    }\n  });\n\n  it('should reject missing fields', async () => {\n    const res = await request(app)\n      .post('/api/auth/signup')\n      .send({ email: 'test@example.com' });\n    expect(res.status).toBe(400);\n  });\n});\n\ndescribe('POST /api/auth/login', () => {\n  beforeAll(async () => {\n    await User.create({\n      email: 'login-test@example.com',\n      password: await hashPassword('CorrectP4ss'),\n      name: 'Login Test',\n    });\n  });\n\n  it('should login with correct credentials', async () => {\n    const res = await request(app)\n      .post('/api/auth/login')\n      .send({ email: 'login-test@example.com', password: 'CorrectP4ss' });\n    expect(res.status).toBe(200);\n    expect(res.body.accessToken).toBeDefined();\n  });\n\n  it('should reject wrong password', async () => {\n    const res = await request(app)\n      .post('/api/auth/login')\n      .send({ email: 'login-test@example.com', password: 'WrongP4ss' });\n    expect(res.status).toBe(401);\n  });\n\n  it('should lock account after 5 failed attempts', async () => {\n    for (let i = 0; i < 5; i++) {\n      await request(app)\n        .post('/api/auth/login')\n        .send({ email: 'login-test@example.com', password: 'WrongP4ss' });\n    }\n    const res = await request(app)\n      .post('/api/auth/login')\n      .send({ email: 'login-test@example.com', password: 'CorrectP4ss' });\n    expect(res.status).toBe(423);\n    expect(res.body.error).toContain('locked');\n  });\n});\n\ndescribe('Auth Middleware', () => {\n  it('should reject requests without token', async () => {\n    const res = await request(app).get('/api/protected');\n    expect(res.status).toBe(401);\n  });\n\n  it('should reject expired tokens', async () => {\n    const expiredToken = jwt.sign({ sub: 'test' }, JWT_SECRET, { expiresIn: '0s' });\n    const res = await request(app)\n      .get('/api/protected')\n      .set('Authorization', `Bearer ${expiredToken}`);\n    expect(res.status).toBe(401);\n    expect(res.body.code).toBe('TOKEN_EXPIRED');\n  });\n});", 7200);
 
-  // Turn 6: Code review feedback
   M("user", "I reviewed the code. Two things to fix: (1) the refresh token cookie should use `__Host-` prefix for security, and (2) we need request ID tracking via `X-Request-Id` header for audit logging. Also, add OpenAPI/Swagger docs.", 270);
   M("assistant", "Good catches. Let me fix the cookie prefix first, then add the request ID middleware, and finally set up Swagger documentation.", 160);
   M("toolResult", "// Fixed cookie configuration\nres.cookie('__Host-refreshToken', refreshToken, {\n  httpOnly: true,\n  secure: true,\n  sameSite: 'strict',\n  maxAge: 7 * 24 * 60 * 60 * 1000,\n  path: '/api/auth/refresh',\n});\n\n// Request ID middleware\nimport { v4 as uuidv4 } from 'uuid';\n\nexport function requestIdMiddleware(req: Request, res: Response, next: NextFunction) {\n  const requestId = req.headers['x-request-id'] as string || uuidv4();\n  req.requestId = requestId;\n  res.setHeader('X-Request-Id', requestId);\n  next();\n}\n\n// Swagger setup\nimport swaggerJsdoc from 'swagger-jsdoc';\nimport swaggerUi from 'swagger-ui-express';\n\nconst swaggerSpec = swaggerJsdoc({\n  definition: {\n    openapi: '3.0.0',\n    info: { title: 'Auth API', version: '1.0.0' },\n    servers: [{ url: '/api' }],\n  },\n  apis: ['./src/routes/*.ts'],\n});\n\napp.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));\n\n/**\n * @openapi\n * /auth/signup:\n *   post:\n *     tags: [Auth]\n *     summary: Register a new user\n *     requestBody:\n *       required: true\n *       content:\n *         application/json:\n *           schema:\n *             type: object\n *             required: [email, password, name]\n *             properties:\n *               email:\n *                 type: string\n *                 format: email\n *               password:\n *                 type: string\n *                 minLength: 8\n *               name:\n *                 type: string\n *     responses:\n *       201:\n *         description: User created\n *       409:\n *         description: User already exists\n */\nrouter.post('/signup', validate(signupSchema), signupHandler);", 3800);
 
-  // Turn 7: Edge cases
   M("user", "Almost done. Let's handle edge cases: concurrent refresh token races, token reuse detection, and graceful shutdown for database connections. Plus add health check and metrics endpoints.", 250);
   M("assistant", "I'll handle these one by one — starting with the refresh token rotation using database transactions to prevent races.", 140);
   M("toolResult", "// Refresh token with race protection\nasync function rotateRefreshToken(userId: string, oldToken: string): Promise<{ accessToken: string; refreshToken: string }> {\n  const session = await mongoose.startSession();\n  session.startTransaction();\n\n  try {\n    const user = await User.findById(userId).select('+refreshToken').session(session);\n    if (!user) throw new AppError(404, 'User not found');\n\n    // Token reuse detection: if the presented token doesn't match the stored one,\n    // this is a reused token — revoke all tokens (potential theft)\n    if (user.refreshToken !== oldToken) {\n      user.refreshToken = null;\n      user.refreshTokenExpiresAt = null;\n      await user.save({ session });\n      await session.commitTransaction();\n      throw new AppError(401, 'Token reused — all sessions revoked for security');\n    }\n\n    const accessToken = generateAccessToken(userId);\n    const refreshToken = generateRefreshToken();\n\n    user.refreshToken = refreshToken;\n    user.refreshTokenExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);\n    await user.save({ session });\n\n    await session.commitTransaction();\n    return { accessToken, refreshToken };\n  } catch (err) {\n    await session.abortTransaction();\n    throw err;\n  } finally {\n    session.endSession();\n  }\n}\n\n// Graceful shutdown\nprocess.on('SIGTERM', async () => {\n  console.log('SIGTERM received — closing HTTP server and DB connections...');\n  server.close(async () => {\n    await mongoose.disconnect();\n    await redis.quit();\n    console.log('Shutdown complete');\n    process.exit(0);\n  });\n});\n\n// Health check\nrouter.get('/health', (req, res) => {\n  res.json({\n    status: 'ok',\n    uptime: process.uptime(),\n    timestamp: new Date().toISOString(),\n    checks: {\n      db: mongoose.connection.readyState === 1 ? 'ok' : 'error',\n      redis: redis.status === 'ready' ? 'ok' : 'error',\n    },\n  });\n});\n\n// Metrics\nimport prometheus from 'prom-client';\nconst httpRequestDuration = new prometheus.Histogram({\n  name: 'http_request_duration_seconds',\n  help: 'Request duration in seconds',\n  labelNames: ['method', 'route', 'status'],\n});\n\napp.use((req, res, next) => {\n  const end = httpRequestDuration.startTimer();\n  res.on('finish', () => {\n    end({ method: req.method, route: req.route?.path || req.path, status: res.statusCode.toString() });\n  });\n  next();\n});\n\nrouter.get('/metrics', async (req, res) => {\n  res.set('Content-Type', prometheus.register.contentType);\n  res.end(await prometheus.register.metrics());\n});", 6000);
 
-  // Turn 8: Docker & deployment
   M("user", "Last thing — let's dockerize this and add the CI pipeline config. We're deploying to Fly.io with a PostgreSQL database.", 180);
   M("assistant", "I'll create the Dockerfile, docker-compose for local dev, the Fly.io config, and a GitHub Actions CI pipeline.", 140);
   M("toolResult", "# Dockerfile\nFROM oven/bun:1 AS builder\nWORKDIR /app\nCOPY package.json bun.lock ./\nRUN bun install --frozen-lockfile\nCOPY . .\nRUN bun run build\n\nFROM oven/bun:1-slim AS runner\nWORKDIR /app\nRUN addgroup --system app && adduser --system --ingroup app app\nCOPY --from=builder /app/dist ./dist\nCOPY --from=builder /app/node_modules ./node_modules\nCOPY --from=builder /app/package.json ./\nUSER app\nENV NODE_ENV=production\nEXPOSE 3000\nCMD [\"bun\", \"dist/index.js\"]\n\n# docker-compose.yml\nversion: '3.8'\nservices:\n  app:\n    build: .\n    ports: ['3000:3000']\n    environment:\n      - DATABASE_URL=postgres://user:pass@db:5432/auth\n      - REDIS_URL=redis://redis:6379\n    depends_on: [db, redis]\n  db:\n    image: postgres:16-alpine\n    environment:\n      POSTGRES_USER: user\n      POSTGRES_PASSWORD: pass\n      POSTGRES_DB: auth\n    volumes: [pgdata:/var/lib/postgresql/data]\n  redis:\n    image: redis:7-alpine\nvolumes:\n  pgdata:\n\n# fly.toml\napp = 'auth-service'\nprimary_region = 'iad'\n\n[build]\n  builder = 'dockerfile'\n\n[env]\n  NODE_ENV = 'production'\n  PORT = '3000'\n\n[[services]]\n  internal_port = 3000\n  protocol = 'tcp'\n\n  [[services.ports]]\n    handlers = ['http']\n    port = 80\n\n  [[services.ports]]\n    handlers = ['tls', 'http']\n    port = 443\n\n  [services.concurrency]\n    type = 'connections'\n    hard_limit = 25\n    soft_limit = 20\n\n# .github/workflows/ci.yml\nname: CI\non: [push, pull_request]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    services:\n      postgres:\n        image: postgres:16-alpine\n        env:\n          POSTGRES_USER: test\n          POSTGRES_PASSWORD: test\n        ports: ['5432:5432']\n      redis:\n        image: redis:7-alpine\n        ports: ['6379:6379']\n    steps:\n      - uses: actions/checkout@v4\n      - uses: oven-sh/setup-bun@v1\n      - run: bun install --frozen-lockfile\n      - run: bun test --coverage\n      - run: bun run lint\n      - run: bun run typecheck", 4800);
@@ -141,10 +98,7 @@ function generateSession(): SessionEntry[] {
   return entries;
 }
 
-// === 摘要生成 (模拟): 实际场景中由 LLM 产出，这里用启发式方法生成摘要文本 ===
-
 function generateSimulatedSummary(entries: SessionEntry[], start: number, end: number): string {
-  // Pair each user message with the FIRST assistant response that follows it
   const turns: { user: string; assistant?: string }[] = [];
 
   for (let i = start; i < end; i++) {
@@ -189,14 +143,6 @@ function generateTurnPrefixSummary(entries: SessionEntry[], start: number, end: 
   return parts.join("\n");
 }
 
-// === Token 估算 (启发式): 英文约 4 字符/token — 精度不重要，仅用于演示 ===
-
-function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 4);
-}
-
-// === 扫描合法切割点: 只选 user/assistant，跳过 toolResult (toolResult 必须紧跟 tool call) ===
-
 function findValidCutPoints(entries: SessionEntry[], start: number, end: number): number[] {
   const points: number[] = [];
   for (let i = start; i < end; i++) {
@@ -204,13 +150,11 @@ function findValidCutPoints(entries: SessionEntry[], start: number, end: number)
     if (entry.type === "compaction") { points.push(i); continue; }
     if (!entry.message) continue;
     const role = entry.message.role;
-    if (role === "toolResult") continue; // never cut at toolResult — must follow its tool call
+    if (role === "toolResult") continue;
     if (role === "user" || role === "assistant") points.push(i);
   }
   return points;
 }
-
-// === 查找 Turn 起点: 当切割点落在 assistant 消息上，向前查找最近的 user 消息作为 turn 边界 ===
 
 function findTurnStart(entries: SessionEntry[], index: number, start: number): number {
   for (let i = index; i >= start; i--) {
@@ -219,16 +163,6 @@ function findTurnStart(entries: SessionEntry[], index: number, start: number): n
   }
   return -1;
 }
-
-// === 核心算法 findCutPoint: 反向累积 token → 找到合法切割点 → 检测 Split Turn ===
-//
-// 流程:
-//   1. 扫描所有合法切割点 (跳过 toolResult)
-//   2. 从最新消息反向遍历，逐条累加 token 估算值
-//   3. 当累积量 >= keepRecentTokens 时停止
-//   4. 找到最近的合法切割点作为分界
-//   5. 如果切割点不是 user 消息，向前查找最近的 user → 标记为 Split Turn
-//   6. Split Turn 时，turn 前半部分单独摘要，剩余部分保留原文
 
 function findCutPoint(
   entries: SessionEntry[],
@@ -245,7 +179,6 @@ function findCutPoint(
   let cutIndex = cutpoints[0];
   const visited: number[] = [];
 
-  // Walk backwards from newest, accumulating token estimates
   for (let i = end - 1; i >= start; i--) {
     const e = entries[i];
     if (e.type !== "message" || !e.message) continue;
@@ -253,17 +186,15 @@ function findCutPoint(
     visited.push(i);
 
     if (accumulated >= keepRecentTokens) {
-      // Find closest valid cut point at or after this entry
       let found = false;
       for (const cp of cutpoints) {
         if (cp >= i) { cutIndex = cp; found = true; break; }
       }
-      if (!found) cutIndex = cutpoints[cutpoints.length - 1]; // fallback: newest valid cut point
+      if (!found) cutIndex = cutpoints[cutpoints.length - 1];
       break;
     }
   }
 
-  // Back-scan: include non-message entries (settings changes, labels) before cut
   while (cutIndex > start) {
     const prev = entries[cutIndex - 1];
     if (prev.type === "compaction") break;
@@ -284,8 +215,6 @@ function findCutPoint(
     cutpoints,
   };
 }
-
-// === 格式化工具: token 数字显示、文本截断、角色标签 ===
 
 function fmtTok(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
