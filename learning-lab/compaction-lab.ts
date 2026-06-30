@@ -1,5 +1,36 @@
 #!/usr/bin/env bun
 
+/**
+ * Context Compaction Algorithm — 互动演示
+ * ==========================================
+ *
+ * 这是一个教学脚本，逐步展示 LLM 编码 Agent 中「上下文压缩」算法的完整流程。
+ *
+ * 运行方式:
+ *   bun run learning-lab/compaction-lab.ts
+ *
+ * 核心问题: 当对话上下文超出模型窗口时，需要对旧消息做摘要压缩。
+ * 本算法解决三个关键决策:
+ *   1. 切割点选择 — 只在合法的边界切割（user/assistant 消息，绝不切割 toolResult）
+ *   2. Split Turn 检测 — 切割点落在 assistant 消息中间时，需要拆分 turn 并单独摘要前半部分
+ *   3. 摘要策略 — 旧消息 → LLM 摘要，新消息 → 保留原文，摘要 + 新消息 = 新上下文
+ *
+ * 操作方式:
+ *   [Space]  逐步推进算法阶段
+ *   [q]      退出并打印摘要
+ *   [s]      切换策略 (context-full / handoff)
+ *   [↑↓/jk] 滚动会话列表
+ *
+ * 结构:
+ *   1. ANSI 终端控制 + 颜色常量
+ *   2. 类型定义 (消息、条目、切割结果)
+ *   3. 模拟会话生成器 (生成一段长对话用于演示)
+ *   4. 摘要生成 (模拟 LLM 产出摘要文本)
+ *   5. 核心算法 (token 估算、切割点扫描、turn 边界查找、主切割逻辑)
+ *   6. 渲染引擎 (左右分栏 TUI)
+ *   7. 主循环 (阶段机 + 键盘处理 + 动画)
+ */
+
 const CSI = "\x1b[";
 const cursorTo = (r: number, c: number) => `${CSI}${r};${c}H`;
 const CLR_LINE = `${CSI}K`, CLR_SCREEN = `${CSI}J`;
@@ -26,7 +57,7 @@ class Terminal {
   at(r: number, c: number, t: string) { process.stdout.write(cursorTo(r, c) + CLR_LINE + t); }
 }
 
-// === Types ===
+// === 类型定义: 模拟 LLM 会话的消息和条目结构 ===
 
 type MsgRole = "user" | "assistant" | "toolResult";
 
@@ -51,7 +82,7 @@ interface CutPointResult {
   cutpoints: number[];
 }
 
-// === Demo session generator: simulates a long coding session ===
+// === 模拟会话生成: 构造一段包含 8 个 turn 的长对话，用于触发上下文溢出 ===
 
 function generateSession(): SessionEntry[] {
   const entries: SessionEntry[] = [];
@@ -110,7 +141,7 @@ function generateSession(): SessionEntry[] {
   return entries;
 }
 
-// === Simulated summary generation (what LLM would produce) ===
+// === 摘要生成 (模拟): 实际场景中由 LLM 产出，这里用启发式方法生成摘要文本 ===
 
 function generateSimulatedSummary(entries: SessionEntry[], start: number, end: number): string {
   // Pair each user message with the FIRST assistant response that follows it
@@ -158,13 +189,13 @@ function generateTurnPrefixSummary(entries: SessionEntry[], start: number, end: 
   return parts.join("\n");
 }
 
-// === Core Algorithm: token estimation (heuristic) ===
+// === Token 估算 (启发式): 英文约 4 字符/token — 精度不重要，仅用于演示 ===
 
 function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }
 
-// === Core Algorithm: find valid cut points ===
+// === 扫描合法切割点: 只选 user/assistant，跳过 toolResult (toolResult 必须紧跟 tool call) ===
 
 function findValidCutPoints(entries: SessionEntry[], start: number, end: number): number[] {
   const points: number[] = [];
@@ -179,7 +210,7 @@ function findValidCutPoints(entries: SessionEntry[], start: number, end: number)
   return points;
 }
 
-// === Core Algorithm: find turn start ===
+// === 查找 Turn 起点: 当切割点落在 assistant 消息上，向前查找最近的 user 消息作为 turn 边界 ===
 
 function findTurnStart(entries: SessionEntry[], index: number, start: number): number {
   for (let i = index; i >= start; i--) {
@@ -189,7 +220,15 @@ function findTurnStart(entries: SessionEntry[], index: number, start: number): n
   return -1;
 }
 
-// === Core Algorithm: find cut point ===
+// === 核心算法 findCutPoint: 反向累积 token → 找到合法切割点 → 检测 Split Turn ===
+//
+// 流程:
+//   1. 扫描所有合法切割点 (跳过 toolResult)
+//   2. 从最新消息反向遍历，逐条累加 token 估算值
+//   3. 当累积量 >= keepRecentTokens 时停止
+//   4. 找到最近的合法切割点作为分界
+//   5. 如果切割点不是 user 消息，向前查找最近的 user → 标记为 Split Turn
+//   6. Split Turn 时，turn 前半部分单独摘要，剩余部分保留原文
 
 function findCutPoint(
   entries: SessionEntry[],
@@ -246,7 +285,7 @@ function findCutPoint(
   };
 }
 
-// === Formatting ===
+// === 格式化工具: token 数字显示、文本截断、角色标签 ===
 
 function fmtTok(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -267,7 +306,7 @@ function roleLabel(role: MsgRole): string {
 }
 
 
-// === Rendering ===
+// === 渲染引擎: 左右分栏 TUI — 左栏显示会话条目，右栏显示算法状态 ===
 
 type Phase = "show_all" | "finding_cutpoints" | "walking_back" | "cut_found" | "split_check" | "result";
 type Strategy = "context-full" | "handoff";
@@ -433,7 +472,13 @@ function render(term: Terminal, st: RenderState) {
 
       const m = e.message;
 
-      // Determine coloring based on phase
+      //
+      // 颜色标记规则 (各阶段不同):
+      //   show_all:        白色=user  青色=assistant  灰色=toolResult
+      //   finding_cutpoints: ◆绿色=可切割  ✕红色=toolResult(不可切割)  灰色=其他
+      //   walking_back:     ←青色=当前检查项  黄色=已累积  灰色=保留区/历史
+      //   cut_found / split_check: ▸青色=切割线  绿色=保留  黄色=turn前缀  灰色=历史
+      //   result:          摘要区域替换为 LLM 生成的摘要文本
       if (phase === "finding_cutpoints" && result) {
         // Highlight valid cut points
         if (result.cutpoints.includes(i)) {
@@ -574,7 +619,14 @@ function hdrBox(term: Terminal, r: number, c1: number, c2: number, box: typeof B
   term.at(r + 2, c1, color(box.bl + hline + box.br));
 }
 
-// === Main ===
+// === 主循环: 阶段机驱动的互动演示 ===
+//
+// 阶段流转 (按 Space 推进):
+//   show_all → finding_cutpoints → walking_back → cut_found → split_check → result → show_all
+//
+// Split Turn 说明:
+//   理想切割点在 user 消息上 (完整 turn 边界)。如果落在 assistant 消息上,
+//   需要将前半部分 (user → 该 assistant 之前的消息) 单独摘要，保证 toolResult 不孤立。
 
 async function main() {
   const entries = generateSession();
@@ -588,7 +640,7 @@ async function main() {
 
   let phase: Phase = "show_all";
   let strategy: Strategy = "context-full";
-  let result: CutPointResult | null = null;
+  let result!: CutPointResult | null;
   let scrollOffset = 0;
   let walkStep = 0;
   let highlightEntry = -1;
@@ -658,6 +710,8 @@ async function main() {
     }
 
     // Space: advance phase
+    // 阶段机: 每按一次 Space 推进一个阶段
+    // 从 walking_back 进入时会启动异步动画 (walkAnimation)，不等用户按键直接推进到 cut_found
     if (s === " ") {
       switch (phase) {
         case "show_all":
@@ -706,6 +760,8 @@ async function main() {
     }
   };
 
+  // 异步动画: 从最新消息逐条反向高亮，展示 token 累积过程
+  // 当累积量 >= KEEP_TOKENS 时自动停止并推进到 cut_found 阶段
   async function walkAnimation() {
     if (!result || done) return;
 
