@@ -234,9 +234,6 @@ function roleLabel(role: MsgRole): string {
   }
 }
 
-
-// === 渲染引擎: 左右分栏 TUI — 左栏显示会话条目，右栏显示算法状态 ===
-
 type Phase = "show_all" | "finding_cutpoints" | "walking_back" | "cut_found" | "split_check" | "result";
 type Strategy = "context-full" | "handoff";
 
@@ -249,10 +246,10 @@ interface RenderState {
   keepTokens: number;
   totalTokens: number;
   scrollOffset: number;
-  walkStep: number; // for walk animation
-  highlightEntry: number; // entry being examined in backward walk
-  historySummary: string; // simulated summary for result phase
-  turnPrefixSummary: string; // simulated turn-prefix summary for result phase
+  walkStep: number;
+  highlightEntry: number;
+  historySummary: string;
+  turnPrefixSummary: string;
 }
 
 const TOTAL_STEPS = 6;
@@ -271,12 +268,9 @@ function render(term: Terminal, st: RenderState) {
   term.cls();
 
   const { entries, result, contextWindow, keepTokens, totalTokens, phase, scrollOffset, walkStep, highlightEntry, strategy } = st;
-
-  // Layout: left 48 cols for entry list, right side for algorithm info
   const listW = Math.min(52, Math.floor(cols * 0.55));
   const infoX = listW + 2;
 
-  // === Top bar ===
   const stepNum = Object.keys(STEP_LABELS).indexOf(phase) + 1;
   const stepLabel = STEP_LABELS[phase];
   term.at(1, 1, S.accent(S.bold(` Context Compaction — 上下文压缩算法演示 `)) +
@@ -284,7 +278,6 @@ function render(term: Terminal, st: RenderState) {
   term.at(2, 1, S.dim("━".repeat(cols - 1)));
   term.at(3, 1, S.dim(`[Space]下一步  [q]退出  [s]切换策略  [↑↓/jk]滚动`));
 
-  // === Context gauge ===
   const overflow = totalTokens > contextWindow;
   const barLabel = overflow
     ? S.red(`Context: ${fmtTok(totalTokens)} / ${fmtTok(contextWindow)}  OVERFLOW!`)
@@ -292,7 +285,6 @@ function render(term: Terminal, st: RenderState) {
   term.at(4, 2, barLabel);
   term.at(4, barLabel.length + 3, `Keep budget: ${fmtTok(keepTokens)}  |  Strategy: ${strategy === "context-full" ? "context-full" : "handoff"}`);
 
-  // === Entry list header ===
   const listHeaderY = 5;
   const isResultPhase = phase === "result" && result;
   const listTitle = isResultPhase ? " Compaction Result — 压缩结果 " : " Session Entries ";
@@ -301,7 +293,6 @@ function render(term: Terminal, st: RenderState) {
   const listStartY = listHeaderY + 3;
   const listEndY = rows - 3;
 
-  // Determine which entries are kept/summarized/prefix based on phase
   const showCut = (phase === "cut_found" || phase === "split_check" || phase === "result") && result;
   const keptStart = showCut ? result.firstKeptIndex : -1;
   const prefixStart = showCut && result.isSplitTurn ? result.turnStartIndex : -1;
