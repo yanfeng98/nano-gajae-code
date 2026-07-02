@@ -8,8 +8,7 @@ import { TEMPLATE } from "../../src/export/html/template.generated";
 // if the replacement is a plain string instead of a function. That spliced the
 // closing HTML tags into the middle of a regex string and produced
 // `Uncaught SyntaxError: Invalid or unexpected token` at runtime.
-// The fix is to pass the replacement as a function in
-// scripts/generate-template.ts (and the mirror in template.macro.ts).
+// The fix is to pass the replacement as a function in scripts/generate-template.ts.
 describe("HTML export template script inlining", () => {
 	function extractScript(): string {
 		const match = TEMPLATE.match(/<script>([\s\S]*?)<\/script>\s*<\/body>/);

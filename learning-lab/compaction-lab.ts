@@ -298,15 +298,12 @@ function render(term: Terminal, st: RenderState) {
   const prefixStart = showCut && result.isSplitTurn ? result.turnStartIndex : -1;
   const prefixEnd = showCut && result.isSplitTurn ? result.firstKeptIndex : -1;
 
-  // Render entry list
   let ry = listStartY;
   const displayStart = Math.max(0, Math.min(scrollOffset, entries.length - (listEndY - listStartY)));
   const displayEnd = Math.min(entries.length, displayStart + (listEndY - listStartY));
 
-  // === Result phase: render summary block instead of old entries ===
   if (isResultPhase) {
     if (st.historySummary) {
-      // Render history summary (replaces all summarized entries)
       const summaryLines = st.historySummary.split("\n");
       const boxW = listW - 4;
       term.at(ry, 2, S.dim("┌" + "─".repeat(boxW) + "┐"));
@@ -326,7 +323,6 @@ function render(term: Terminal, st: RenderState) {
       ry++;
     }
 
-    // Show turn prefix summary if split turn
     if (st.turnPrefixSummary) {
       ry++;
       const prefixLines = st.turnPrefixSummary.split("\n");
@@ -348,7 +344,6 @@ function render(term: Terminal, st: RenderState) {
       ry++;
     }
 
-    // Separator between summary and kept entries
     ry++;
     const sepLabel = " Kept Region (保留原文) ";
     const sepW = Math.max(0, listW - 4);
@@ -357,7 +352,6 @@ function render(term: Terminal, st: RenderState) {
     term.at(ry, 2, S.accent(S.bold(sepPad + sepLabel + sepPad)));
     ry++;
 
-    // Render kept entries (from firstKeptIndex)
     for (let i = keptStart; i < entries.length && ry < listEndY; i++) {
       const e = entries[i];
       if (!e || e.type === "compaction") continue;
@@ -376,7 +370,6 @@ function render(term: Terminal, st: RenderState) {
       ry++;
     }
   } else {
-    // === Non-result phases: normal entry list ===
     for (let i = displayStart; i < displayEnd && ry < listEndY; i++) {
       const e = entries[i];
       if (!e || ry >= listEndY) break;
@@ -392,15 +385,7 @@ function render(term: Terminal, st: RenderState) {
 
       const m = e.message;
 
-      //
-      // 颜色标记规则 (各阶段不同):
-      //   show_all:        白色=user  青色=assistant  灰色=toolResult
-      //   finding_cutpoints: ◆绿色=可切割  ✕红色=toolResult(不可切割)  灰色=其他
-      //   walking_back:     ←青色=当前检查项  黄色=已累积  灰色=保留区/历史
-      //   cut_found / split_check: ▸青色=切割线  绿色=保留  黄色=turn前缀  灰色=历史
-      //   result:          摘要区域替换为 LLM 生成的摘要文本
       if (phase === "finding_cutpoints" && result) {
-        // Highlight valid cut points
         if (result.cutpoints.includes(i)) {
           color = m.role === "user" ? S.green : m.role === "assistant" ? S.yellow : S.white;
           marker = S.green("◆ ");
@@ -411,7 +396,6 @@ function render(term: Terminal, st: RenderState) {
           color = S.dim;
         }
       } else if (phase === "walking_back" && result) {
-        // Highlight entries being visited in backward walk
         if (highlightEntry >= 0 && i === highlightEntry) {
           color = S.accent;
           marker = S.accent("← ");
@@ -438,7 +422,6 @@ function render(term: Terminal, st: RenderState) {
           color = S.dim;
         }
       } else {
-        // show_all
         color = m.role === "user" ? S.white : m.role === "assistant" ? S.accent : S.dim;
       }
 
@@ -451,13 +434,11 @@ function render(term: Terminal, st: RenderState) {
     }
   }
 
-  // Scroll indicator (only for non-result phases since result shows all kept entries)
   if (!isResultPhase && (displayStart > 0 || displayEnd < entries.length)) {
     const pos = `${displayStart + 1}-${displayEnd} / ${entries.length}`;
     term.at(listEndY, 2, S.dim(`  ↑ scroll  [↑↓/jk]  (${pos})`));
   }
 
-  // === Right panel: algorithm info ===
   let ix = infoX;
   let iy = listHeaderY;
 
@@ -482,7 +463,6 @@ function render(term: Terminal, st: RenderState) {
     iy++;
   }
 
-  // Strategy explanation
   iy++;
   if (strategy === "context-full") {
     term.at(iy, ix, S.accent(S.bold("Strategy: context-full"))); iy++;
@@ -499,7 +479,6 @@ function render(term: Terminal, st: RenderState) {
     term.at(iy, ix, S.dim("  4. force toolChoice:none")); iy++;
   }
 
-  // Phase description
   iy += 2;
   const stepNum2 = Object.keys(STEP_LABELS).indexOf(phase) + 1;
   const phaseDescs: Record<Phase, string> = {
@@ -521,7 +500,6 @@ function render(term: Terminal, st: RenderState) {
     }
   }
 
-  // Bottom status bar
   term.at(rows, 1, S.gray("━".repeat(cols - 1)));
   const stepNum3 = Object.keys(STEP_LABELS).indexOf(phase) + 1;
   const statusParts: string[] = [];
