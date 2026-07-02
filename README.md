@@ -325,6 +325,79 @@ bun test packages/coding-agent/test/default-gjc-definitions.test.ts
 
 按包查看的项目地图请参见 [`docs/codebase-overview.md`](docs/codebase-overview.md)。
 
+### 魔改指南：重点模块与文件
+
+以下是按魔改目标分类的核心模块索引，帮助快速定位需要研究的代码。
+
+#### 核心必读（无论改什么都得先看懂）
+
+| 优先级 | 文件/模块 | 为什么重要 |
+|---|---|---|
+| **P0** | `packages/coding-agent/src/sdk.ts` | 整个 Agent 会话的组装工厂，所有组件在这里拼起来。理解它 = 理解系统骨架 |
+| **P0** | `packages/coding-agent/src/main.ts` | CLI 参数 → 会话配置的转换层，入口逻辑 |
+| **P0** | `packages/coding-agent/src/cli.ts` | 可执行入口，注册所有子命令，全局初始化 |
+| **P0** | `packages/agent/src/agent.ts` | Agent 核心类，状态管理、prompt/continue/abort API |
+| **P0** | `packages/agent/src/agent-loop.ts` | **主循环**：transform context → call model → execute tools → append results |
+
+#### 1. 修改 Agent 行为/决策逻辑
+
+| 重点文件 | 作用 |
+|---|---|
+| `packages/agent/src/agent-loop.ts` | 核心 turn loop，改这里 = 改 Agent 怎么思考和执行 |
+| `packages/coding-agent/src/prompts/` | 系统提示词、角色提示词（executor/architect/planner/critic），改这里 = 改 Agent 的"人设" |
+| `packages/coding-agent/src/defaults/` | 内置工作流技能（deep-interview/ralplan/ultragoal/team），改这里 = 改 Agent 的工作方法论 |
+| `packages/coding-agent/src/session/` | 会话管理（创建/恢复/持久化），改这里 = 改 Agent 怎么记住上下文 |
+
+#### 2. 增加/修改工具能力
+
+| 重点文件 | 作用 |
+|---|---|
+| `packages/coding-agent/src/tools/` | **所有内置工具**（bash/read/write/edit/find/search/browser/eval/LSP/task/cron 等） |
+| `packages/coding-agent/src/tools/index.ts` | 工具注册表，新增工具要在这里注册 |
+| `packages/coding-agent/src/extensibility/` | 插件/扩展/自定义命令/自定义工具/slash commands 系统 |
+
+#### 3. 更换/增加 LLM 提供商
+
+| 重点文件 | 作用 |
+|---|---|
+| `packages/ai/src/providers/` | 各 LLM 提供商实现（Anthropic/OpenAI/...） |
+| `packages/ai/src/stream.ts` | 流式响应调度，统一不同提供商的 streaming 事件 |
+| `packages/ai/src/model-registry.ts` | 模型注册和解析 |
+| `packages/coding-agent/src/config/` | 配置系统、模型选择、提示词模板 |
+
+#### 4. 修改终端 UI
+
+| 重点文件 | 作用 |
+|---|---|
+| `packages/tui/src/tui.ts` | TUI 框架核心，组件渲染、焦点管理、overlay |
+| `packages/tui/src/components/` | 各类终端组件（text/input/editor/markdown/select/diff 等） |
+| `packages/coding-agent/src/tui/` | TUI 模式的控制器，把 TUI 框架接入 Agent 会话 |
+
+#### 5. 修改底层性能/原生能力
+
+| 重点文件 | 作用 |
+|---|---|
+| `crates/pi-natives/src/lib.rs` | Rust N-API 入口，所有原生功能注册 |
+| `crates/pi-shell/` | Shell 执行原语（持久/一次性/流式/PTY） |
+| `crates/pi-ast/` | AST 操作 |
+| `packages/natives/` | JS 侧原生加载器，平台/CPU 检测、版本校验 |
+
+#### 6. 修改多 Agent 协作（Team 模式）
+
+| 重点文件 | 作用 |
+|---|---|
+| `packages/coding-agent/src/commands/team.ts` | Team 子命令，并行 tmux worker 调度 |
+| `packages/coding-agent/src/defaults/gjc/skills/team/SKILL.md` | Team 工作流的提示词/方法论 |
+
+#### 建议学习路径
+
+1. **先跑起来** → 在某个小项目里跑 `gjc`，体验完整流程（deep-interview → ralplan → ultragoal）
+2. **读 `agent-loop.ts`** → 理解一个 turn 怎么运转的（这是所有魔改的核心）
+3. **读 `sdk.ts`** → 理解所有组件怎么拼在一起
+4. **读 `tools/` 下 3-5 个你感兴趣的工具** → 理解工具的接口约定
+5. **读 `prompts/` 目录** → 理解系统提示词结构
+6. **然后根据你的魔改目标，深入上面表格对应的模块**
+
 ### 使用 Claude Code 技能
 
 GJC 支持从 `~/.claude/skills/`（用户级）和项目 `.claude/skills/`（项目级）发现 Claude Code 技能。
