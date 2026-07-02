@@ -517,19 +517,10 @@ function hdrBox(term: Terminal, r: number, c1: number, c2: number, box: typeof B
   term.at(r + 2, c1, color(box.bl + hline + box.br));
 }
 
-// === 主循环: 阶段机驱动的互动演示 ===
-//
-// 阶段流转 (按 Space 推进):
-//   show_all → finding_cutpoints → walking_back → cut_found → split_check → result → show_all
-//
-// Split Turn 说明:
-//   理想切割点在 user 消息上 (完整 turn 边界)。如果落在 assistant 消息上,
-//   需要将前半部分 (user → 该 assistant 之前的消息) 单独摘要，保证 toolResult 不孤立。
-
 async function main() {
   const entries = generateSession();
-  const CONTEXT_WINDOW = 30000; // 30K — low enough to trigger compaction with our session
-  const KEEP_TOKENS = 11200;  // tuned to produce a split-turn cut: lands on assistant #27, user #26 is turn prefix
+  const CONTEXT_WINDOW = 30000;
+  const KEEP_TOKENS = 11200;
   const totalTokens = entries.reduce((sum, e) => sum + (e.message?.tokens ?? 0), 0);
 
   const term = new Terminal();
@@ -579,7 +570,6 @@ async function main() {
 
   const doRender = () => render(term, renderS());
 
-  // Keyboard handling
   const handleKey = (k: Buffer) => {
     const s = k.toString();
     if (s === "q" || s === "\x03") {
@@ -593,7 +583,6 @@ async function main() {
       return;
     }
 
-    // Scroll
     if (s === "\x1b[A" || s === "k") {
       scrollOffset = Math.max(0, scrollOffset - 1);
       doRender();
@@ -607,9 +596,6 @@ async function main() {
       return;
     }
 
-    // Space: advance phase
-    // 阶段机: 每按一次 Space 推进一个阶段
-    // 从 walking_back 进入时会启动异步动画 (walkAnimation)，不等用户按键直接推进到 cut_found
     if (s === " ") {
       switch (phase) {
         case "show_all":
@@ -621,12 +607,10 @@ async function main() {
           walkStep = 0;
           highlightEntry = entries.length - 1;
           if (result) {
-            // Start async walk animation
             walkAnimation();
           }
-          return; // animation handles rendering
+          return;
         case "walking_back":
-          // Skip to end of walk
           phase = "cut_found";
           if (result) walkStep = result.cutPointIndices.length;
           highlightEntry = -1;
@@ -644,7 +628,6 @@ async function main() {
           phase = "result";
           break;
         case "result":
-          // Reset
           phase = "show_all";
           result = null;
           walkStep = 0;
@@ -658,8 +641,6 @@ async function main() {
     }
   };
 
-  // 异步动画: 从最新消息逐条反向高亮，展示 token 累积过程
-  // 当累积量 >= KEEP_TOKENS 时自动停止并推进到 cut_found 阶段
   async function walkAnimation() {
     if (!result || done) return;
 
@@ -670,7 +651,6 @@ async function main() {
       highlightEntry = indices[i]!;
       doRender();
 
-      // Check if we've exceeded the budget
       let acc = 0;
       for (let j = 0; j <= i; j++) {
         const ei = indices[j]!;
@@ -686,7 +666,6 @@ async function main() {
 
       await Bun.sleep(i < 5 ? 200 : 80);
     }
-    // Finished walk without hitting budget (shouldn't happen normally)
     phase = "cut_found";
     highlightEntry = -1;
     doRender();
@@ -695,7 +674,6 @@ async function main() {
   process.stdin.on("data", handleKey);
   doRender();
 
-  // Wait for quit
   await new Promise<void>((resolve) => {
     const check = setInterval(() => {
       if (done) {
@@ -709,7 +687,6 @@ async function main() {
   process.stdin.removeAllListeners("data");
   process.stdin.pause();
 
-  // Print final summary
   console.log(`\n${"=".repeat(55)}`);
   console.log(`  Context Compaction — 算法总结`);
   console.log(`${"=".repeat(55)}`);
@@ -731,7 +708,6 @@ async function main() {
     console.log(`  摘要: ${summarizedCount} entries (灰色 → 变为下方摘要)`);
     console.log("");
     if (historySummary) {
-      // Strip ANSI for clean terminal output
       const clean = historySummary.replace(/\x1b\[[0-9;]*m/g, "");
       console.log("  ── LLM 生成的摘要 (模拟) ──");
       for (const line of clean.split("\n")) {
