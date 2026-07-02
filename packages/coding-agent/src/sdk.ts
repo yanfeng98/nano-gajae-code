@@ -1,50 +1,3 @@
-/**
- * =============================================================================
- * sdk.ts — Agent 会话的组装工厂（SDK 入口）
- * =============================================================================
- *
- * 【定位】
- * 本文件是 `createAgentSession()` 的实现，负责将零散的组件（认证、模型、
- * 技能、规则、工具、系统提示词等）组装成一个可运行的 AgentSession。
- * 理解本文件 = 理解 GJC 的系统骨架。
- *
- * 【整体组装流程】（按 createAgentSession 内部执行顺序）
- *
- *   1. 初始化基础路径     cwd / agentDir / eventBus
- *   2. 认证与模型          discoverAuthStorage → ModelRegistry → credential disabled 监听
- *   3. 并行启动发现任务    workspace tree / context files / prompt templates / slash commands
- *                          这些任务独立于模型解析，提前启动以便后续 await 时已就绪
- *   4. 模型恢复/选择       已持久化的 session → 恢复模型 → settings 默认 → 第一个可用
- *   5. Thinking Level      从 session / settings / model 配置逐级 fallback
- *   6. 技能与规则          skills (embedded GJC defaults + filesystem) / rules / TTSR
- *   7. 异步任务管理器      仅顶层 session 创建，子 agent 继承父级
- *   8. ToolSession 构建    工具运行所需的共享上下文（cwd/model/lsp/secrets/artifacts...）
- *   9. 内置工具创建        bash/read/write/edit/find/search/LSP/eval...
- *  10. MCP / 图片 / 搜索   扩展工具链
- *  11. GJC 子技能工具     基于当前 skill + phase 加载对应的插件工具
- *  12. 扩展加载            内联 ExtensionFactory → registerProvider → registerTool
- *  13. 工具注册表组装      builtin + extension + resolve tool → Map<string, Tool>
- *  14. 系统提示词构建      rebuildSystemPrompt（含 memory/MCP instructions）
- *  15. Agent 实例化        new Agent({ initialState, streamFn, getApiKey, ... })
- *  16. AgentSession 组装   new AgentSession({ agent, sessionManager, skills, ... })
- *  17. 后置初始化          LSP warmup / Memory backend / MCP 回调 / 返回值
- *
- * 【关键设计决策】
- * - 模型恢复优先于 settings 默认值：保持 session 连续性
- * - 四个 GJC 默认技能 (deep-interview/ralplan/ultragoal/team) 内嵌于二进制，
- *   即使 .gjc 目录被误删也不会丢失
- * - 子 agent（subagent）继承父级的 AsyncJobManager / MCPManager / AgentRegistry，
- *   不重复创建，避免资源泄漏
- * - workspace tree 扫描有 5 秒超时：大仓库不阻塞启动，超时后由 system prompt fallback
- * - credential disabled 事件在 Agent 启动前就开始监听，防止遗漏
- * - TLS+H2 preconnect 在后台预热，节省首次请求的 100-300ms 握手时间
- */
-
-// =============================================================================
-// 核心框架依赖
-// =============================================================================
-
-// Agent 核心：Agent 类、消息/工具类型、上下文管理、意图追踪字段
 import {
 	Agent,
 	type AgentMessage,
@@ -54,7 +7,6 @@ import {
 	type ThinkingLevel,
 } from "@gajae-code/agent-core";
 
-// AI/模型层：凭证事件、消息/模型类型、流式响应调度
 import {
 	type CredentialDisabledEvent,
 	type Message,
@@ -64,10 +16,8 @@ import {
 	streamSimple,
 } from "@gajae-code/ai";
 
-// 终端 UI 组件类型
 import type { Component } from "@gajae-code/tui";
 
-// 通用工具：环境判断、路径、日志、事后清理、模板渲染、Snowflake ID
 import {
 	$flag,
 	getAgentDbPath,
@@ -79,16 +29,10 @@ import {
 	Snowflake,
 } from "@gajae-code/utils";
 
-// =============================================================================
-// 本地模块依赖（按功能域分组）
-// =============================================================================
-
-// --- 异步任务 & 能力加载 ---
 import { type AsyncJob, AsyncJobManager, isBackgroundJobSupportEnabled } from "./async";
 import { loadCapability } from "./capability";
 import { type Rule, ruleCapability, setActiveRules } from "./capability/rule";
 
-// --- 配置系统：模型注册/解析、提示词模板、Settings ---
 import { ModelRegistry } from "./config/model-registry";
 import {
 	formatModelString,
@@ -102,18 +46,13 @@ import { loadPromptTemplates as loadPromptTemplatesInternal, type PromptTemplate
 import { Settings, type SkillsSettings } from "./config/settings";
 import { resolveConfigValue } from "./config/resolve-config-value";
 
-// --- 默认技能（内嵌于二进制） & 项目发现 ---
 import "./discovery";
 import { getEmbeddedDefaultGjcSkills } from "./defaults/gjc-defaults";
 import { initializeWithSettings } from "./discovery";
 
-// --- Python 内核 ---
 import { disposeAllKernelSessions, disposeKernelSessionsByOwner } from "./eval/py/executor";
-
-// --- TTSR（触发式规则注入） ---
 import { TtsrManager } from "./export/ttsr";
 
-// --- 扩展系统：自定义命令/工具、插件运行器、技能、斜杠命令 ---
 import type { CustomCommandsLoadResult, LoadedCustomCommand } from "./extensibility/custom-commands";
 import type { CustomTool, CustomToolContext, CustomToolSessionEvent } from "./extensibility/custom-tools/types";
 import { CustomToolAdapter } from "./extensibility/custom-tools/wrapper";
@@ -134,22 +73,11 @@ import { loadActiveSubskillTools } from "./extensibility/gjc-plugins/tools";
 import { loadSkills, type Skill, type SkillWarning, setActiveSkills } from "./extensibility/skills";
 import type { FileSlashCommand } from "./extensibility/slash-commands";
 
-// --- 内部协议：local:// 用于子 agent artifact 共享 ---
 import { LocalProtocolHandler, type LocalProtocolOptions } from "./internal-urls";
-
-// --- LSP 集成 ---
 import { LSP_STARTUP_EVENT_CHANNEL, type LspStartupEvent } from "./lsp/startup-events";
-
-// --- Memory 后端 ---
 import { resolveMemoryBackend } from "./memory-backend";
-
-// --- 提示词模板（.md 文件） ---
 import asyncResultTemplate from "./prompts/tools/async-result.md" with { type: "text" };
-
-// --- Agent 注册表：多 Agent IRC 路由 ---
 import { AgentRegistry, MAIN_AGENT_ID } from "./registry/agent-registry";
-
-// --- MCP 运行时 ---
 import { MCPManager } from "./runtime-mcp";
 
 // --- 密钥管理 ---
