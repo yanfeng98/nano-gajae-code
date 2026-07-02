@@ -1,3 +1,50 @@
+/**
+ * =============================================================================
+ * sdk.ts — Agent 会话的组装工厂（SDK 入口）
+ * =============================================================================
+ *
+ * 【定位】
+ * 本文件是 `createAgentSession()` 的实现，负责将零散的组件（认证、模型、
+ * 技能、规则、工具、系统提示词等）组装成一个可运行的 AgentSession。
+ * 理解本文件 = 理解 GJC 的系统骨架。
+ *
+ * 【整体组装流程】（按 createAgentSession 内部执行顺序）
+ *
+ *   1. 初始化基础路径     cwd / agentDir / eventBus
+ *   2. 认证与模型          discoverAuthStorage → ModelRegistry → credential disabled 监听
+ *   3. 并行启动发现任务    workspace tree / context files / prompt templates / slash commands
+ *                          这些任务独立于模型解析，提前启动以便后续 await 时已就绪
+ *   4. 模型恢复/选择       已持久化的 session → 恢复模型 → settings 默认 → 第一个可用
+ *   5. Thinking Level      从 session / settings / model 配置逐级 fallback
+ *   6. 技能与规则          skills (embedded GJC defaults + filesystem) / rules / TTSR
+ *   7. 异步任务管理器      仅顶层 session 创建，子 agent 继承父级
+ *   8. ToolSession 构建    工具运行所需的共享上下文（cwd/model/lsp/secrets/artifacts...）
+ *   9. 内置工具创建        bash/read/write/edit/find/search/LSP/eval...
+ *  10. MCP / 图片 / 搜索   扩展工具链
+ *  11. GJC 子技能工具     基于当前 skill + phase 加载对应的插件工具
+ *  12. 扩展加载            内联 ExtensionFactory → registerProvider → registerTool
+ *  13. 工具注册表组装      builtin + extension + resolve tool → Map<string, Tool>
+ *  14. 系统提示词构建      rebuildSystemPrompt（含 memory/MCP instructions）
+ *  15. Agent 实例化        new Agent({ initialState, streamFn, getApiKey, ... })
+ *  16. AgentSession 组装   new AgentSession({ agent, sessionManager, skills, ... })
+ *  17. 后置初始化          LSP warmup / Memory backend / MCP 回调 / 返回值
+ *
+ * 【关键设计决策】
+ * - 模型恢复优先于 settings 默认值：保持 session 连续性
+ * - 四个 GJC 默认技能 (deep-interview/ralplan/ultragoal/team) 内嵌于二进制，
+ *   即使 .gjc 目录被误删也不会丢失
+ * - 子 agent（subagent）继承父级的 AsyncJobManager / MCPManager / AgentRegistry，
+ *   不重复创建，避免资源泄漏
+ * - workspace tree 扫描有 5 秒超时：大仓库不阻塞启动，超时后由 system prompt fallback
+ * - credential disabled 事件在 Agent 启动前就开始监听，防止遗漏
+ * - TLS+H2 preconnect 在后台预热，节省首次请求的 100-300ms 握手时间
+ */
+
+// =============================================================================
+// 核心框架依赖
+// =============================================================================
+
+// Agent 核心：Agent 类、消息/工具类型、上下文管理、意图追踪字段
 import {
 	Agent,
 	type AgentMessage,
@@ -6,6 +53,8 @@ import {
 	INTENT_FIELD,
 	type ThinkingLevel,
 } from "@gajae-code/agent-core";
+
+// AI/模型层：凭证事件、消息/模型类型、流式响应调度
 import {
 	type CredentialDisabledEvent,
 	type Message,
@@ -14,7 +63,11 @@ import {
 	type SimpleStreamOptions,
 	streamSimple,
 } from "@gajae-code/ai";
+
+// 终端 UI 组件类型
 import type { Component } from "@gajae-code/tui";
+
+// 通用工具：环境判断、路径、日志、事后清理、模板渲染、Snowflake ID
 import {
 	$flag,
 	getAgentDbPath,
@@ -26,9 +79,16 @@ import {
 	Snowflake,
 } from "@gajae-code/utils";
 
+// =============================================================================
+// 本地模块依赖（按功能域分组）
+// =============================================================================
+
+// --- 异步任务 & 能力加载 ---
 import { type AsyncJob, AsyncJobManager, isBackgroundJobSupportEnabled } from "./async";
 import { loadCapability } from "./capability";
 import { type Rule, ruleCapability, setActiveRules } from "./capability/rule";
+
+// --- 配置系统：模型注册/解析、提示词模板、Settings ---
 import { ModelRegistry } from "./config/model-registry";
 import {
 	formatModelString,
@@ -40,12 +100,20 @@ import {
 } from "./config/model-resolver";
 import { loadPromptTemplates as loadPromptTemplatesInternal, type PromptTemplate } from "./config/prompt-templates";
 import { Settings, type SkillsSettings } from "./config/settings";
-import "./discovery";
 import { resolveConfigValue } from "./config/resolve-config-value";
+
+// --- 默认技能（内嵌于二进制） & 项目发现 ---
+import "./discovery";
 import { getEmbeddedDefaultGjcSkills } from "./defaults/gjc-defaults";
 import { initializeWithSettings } from "./discovery";
+
+// --- Python 内核 ---
 import { disposeAllKernelSessions, disposeKernelSessionsByOwner } from "./eval/py/executor";
+
+// --- TTSR（触发式规则注入） ---
 import { TtsrManager } from "./export/ttsr";
+
+// --- 扩展系统：自定义命令/工具、插件运行器、技能、斜杠命令 ---
 import type { CustomCommandsLoadResult, LoadedCustomCommand } from "./extensibility/custom-commands";
 import type { CustomTool, CustomToolContext, CustomToolSessionEvent } from "./extensibility/custom-tools/types";
 import { CustomToolAdapter } from "./extensibility/custom-tools/wrapper";
@@ -65,12 +133,26 @@ import { resolveCurrentPhaseForParent } from "./extensibility/gjc-plugins/inject
 import { loadActiveSubskillTools } from "./extensibility/gjc-plugins/tools";
 import { loadSkills, type Skill, type SkillWarning, setActiveSkills } from "./extensibility/skills";
 import type { FileSlashCommand } from "./extensibility/slash-commands";
+
+// --- 内部协议：local:// 用于子 agent artifact 共享 ---
 import { LocalProtocolHandler, type LocalProtocolOptions } from "./internal-urls";
+
+// --- LSP 集成 ---
 import { LSP_STARTUP_EVENT_CHANNEL, type LspStartupEvent } from "./lsp/startup-events";
+
+// --- Memory 后端 ---
 import { resolveMemoryBackend } from "./memory-backend";
+
+// --- 提示词模板（.md 文件） ---
 import asyncResultTemplate from "./prompts/tools/async-result.md" with { type: "text" };
+
+// --- Agent 注册表：多 Agent IRC 路由 ---
 import { AgentRegistry, MAIN_AGENT_ID } from "./registry/agent-registry";
+
+// --- MCP 运行时 ---
 import { MCPManager } from "./runtime-mcp";
+
+// --- 密钥管理 ---
 import {
 	collectEnvSecrets,
 	deobfuscateSessionContext,
@@ -78,23 +160,39 @@ import {
 	obfuscateMessages,
 	SecretObfuscator,
 } from "./secrets";
+
+// --- 会话管理：AgentSession、认证存储/代理、消息转换、SessionManager ---
 import { AgentSession, type ForkContextSeed } from "./session/agent-session";
 import { resolveAuthBrokerConfig } from "./session/auth-broker-config";
 import { AuthBrokerClient, AuthStorage, RemoteAuthCredentialStore } from "./session/auth-storage";
 import { type CustomMessage, convertToLlm } from "./session/messages";
 import { SessionManager } from "./session/session-manager";
+
+// --- 引导提示 ---
 import { formatNoModelsAvailableFallback } from "./setup/model-onboarding-guidance";
+
+// --- SSH 连接/挂载管理 ---
 import { closeAllConnections } from "./ssh/connection-manager";
 import { unmountAll } from "./ssh/sshfs-mount";
+
+// --- 系统提示词 ---
 import {
 	type BuildSystemPromptResult,
 	buildSystemPrompt as buildSystemPromptInternal,
 	buildSystemPromptToolMetadata,
 	loadProjectContextFiles as loadContextFilesInternal,
 } from "./system-prompt";
+
+// --- 子任务输出管理 ---
 import { AgentOutputManager } from "./task/output-manager";
+
+// --- Thinking 级别解析 ---
 import { parseThinkingLevel, resolveThinkingLevelForModel, toReasoningEffort } from "./thinking";
+
+// --- 工具发现索引 ---
 import { collectDiscoverableTools, type DiscoverableTool } from "./tool-discovery/tool-index";
+
+// --- 内置工具：bash/read/write/edit/find/search/LSP/eval/web_search/... ---
 import {
 	BashTool,
 	BUILTIN_TOOLS,
@@ -121,12 +219,19 @@ import {
 	WriteTool,
 	warmupLspServers,
 } from "./tools";
+
+// --- 工具上下文 & 输出包装 & 事件总线 & 工具选择 ---
 import { ToolContextStore } from "./tools/context";
 import { getImageGenTools } from "./tools/image-gen";
 import { wrapToolWithMetaNotice } from "./tools/output-meta";
 import { EventBus } from "./utils/event-bus";
 import { buildNamedToolChoice, buildNamedToolChoiceResult } from "./utils/tool-choice";
+
+// --- 工作区扫描 ---
 import { buildWorkspaceTree, type WorkspaceTree } from "./workspace-tree";
+
+// --- 异步任务结果数据结构 ---
+// 每个已完成的异步任务在 yieldQueue 中的条目
 
 type AsyncResultEntry = {
 	jobId: string;
@@ -135,6 +240,7 @@ type AsyncResultEntry = {
 	durationMs: number | undefined;
 };
 
+// 异步任务完成通知中暴露给 Agent 的元数据（脱敏后的 job 摘要）
 type AsyncResultJobDetails = {
 	jobId: string;
 	type?: "bash" | "task";
@@ -142,15 +248,22 @@ type AsyncResultJobDetails = {
 	durationMs?: number;
 };
 
+// 批量异步任务完成通知的整体结构
 type AsyncResultDetails = {
 	jobs: AsyncResultJobDetails[];
 };
 
+// MCP 资源变更通知条目
 type McpNotificationEntry = {
 	serverName: string;
 	uri: string;
 };
 
+/**
+ * 将异步任务完成条目批量转换为 Agent 可见的消息。
+ * 使用 asyncResultTemplate 模板渲染，支持单任务和多任务两种格式。
+ * 返回 null 表示没有需要通知的任务。
+ */
 function buildAsyncResultBatchMessage(entries: AsyncResultEntry[]): CustomMessage<AsyncResultDetails> | null {
 	if (entries.length === 0) return null;
 	const jobs = entries.map(entry => ({
@@ -182,6 +295,10 @@ function buildAsyncResultBatchMessage(entries: AsyncResultEntry[]): CustomMessag
 	};
 }
 
+/**
+ * 将 MCP 资源变更通知批量转换为 Agent 可见的消息。
+ * 自动去重（同一 serverName + uri 只出现一次），引导 Agent 使用 read(path="mcp://<uri>") 查看。
+ */
 function buildMcpNotificationBatchMessage(entries: McpNotificationEntry[]): AgentMessage | null {
 	const resources: McpNotificationEntry[] = [];
 	const seen = new Set<string>();
@@ -205,7 +322,16 @@ function buildMcpNotificationBatchMessage(entries: McpNotificationEntry[]): Agen
 	};
 }
 
-// Types
+// =============================================================================
+// 核心类型定义
+// =============================================================================
+
+/**
+ * createAgentSession() 的配置选项 —— 整个 SDK 的中心配置对象。
+ *
+ * 几乎所有参数都有合理的默认值，最小调用只需 `createAgentSession()`。
+ * 下面的分组与 createAgentSession 内部的组装阶段对应。
+ */
 export interface CreateAgentSessionOptions {
 	/** Working directory for project-local discovery. Default: getProjectDir() */
 	cwd?: string;
@@ -320,7 +446,7 @@ export interface CreateAgentSessionOptions {
 	shouldPause?: () => boolean;
 }
 
-/** Result from createAgentSession */
+/** createAgentSession() 的返回值，包含组装完成的所有组件 */
 export interface CreateAgentSessionResult {
 	/** The created session */
 	session: AgentSession;
@@ -338,7 +464,10 @@ export interface CreateAgentSessionResult {
 	eventBus: EventBus;
 }
 
-// Re-exports
+// =============================================================================
+// Re-exports（对外的公共 API）
+// =============================================================================
+// 将内部模块的类型和工具类重新导出，方便外部调用者从一个入口获取所有需要的信息
 
 export type { PromptTemplate } from "./config/prompt-templates";
 export { Settings, type SkillsSettings } from "./config/settings";
@@ -369,13 +498,21 @@ export {
 	WriteTool,
 };
 
-// Helper Functions
+// =============================================================================
+// 辅助函数
+// =============================================================================
 
+/** 获取默认的 Agent 配置目录（~/.gjc/agent） */
 function getDefaultAgentDir(): string {
 	return getAgentDir();
 }
 
-// Discovery Functions
+// =============================================================================
+// Discovery 函数（各组件独立的发现逻辑）
+// =============================================================================
+// 这些函数负责从文件系统或远程服务发现各类资源（认证、模型、技能、规则、
+// 上下文文件、提示词模板、斜杠命令等）。它们被 createAgentSession 并行调用，
+// 也可以被外部调用者单独使用。
 
 /**
  * Create an AuthStorage instance.
@@ -510,19 +647,28 @@ function createCustomToolContext(ctx: ExtensionContext): CustomToolContext {
 	};
 }
 
+/**
+ * 类型守卫：判断一个工具是 CustomTool 还是已转换的 ToolDefinition。
+ *
+ * 已转换的工具会被打上 TOOL_DEFINITION_MARKER 标记；
+ * 没有这个标记的就是原始的 CustomTool，需要经过 customToolToDefinition 转换。
+ */
 function isCustomTool(tool: CustomTool | ToolDefinition): tool is CustomTool {
-	// To distinguish, we mark converted tools with a hidden symbol property.
-	// If the tool doesn't have this marker, it's a CustomTool that needs conversion.
 	return !(tool as any).__isToolDefinition;
 }
 
+/** 用于标记已转换的 ToolDefinition，防止 CustomTool 被重复转换 */
 const TOOL_DEFINITION_MARKER = Symbol("__isToolDefinition");
 
 /** Matches the truncation applied to per-server instructions inside `rebuildSystemPrompt`. */
 const MAX_MCP_INSTRUCTIONS_LENGTH = 4000;
 
+// SSH 和 Python 内核的资源清理注册（进程退出时自动执行）
+// 使用 postmortem 模块注册，确保异常退出时也能清理
+
 let sshCleanupRegistered = false;
 
+/** 关闭所有 SSH 连接和挂载，进程退出时调用 */
 async function cleanupSshResources(): Promise<void> {
 	const results = await Promise.allSettled([closeAllConnections(), unmountAll()]);
 	for (const result of results) {
@@ -532,6 +678,11 @@ async function cleanupSshResources(): Promise<void> {
 	}
 }
 
+/**
+ * 注册 SSH 资源清理回调（进程退出时自动执行）。
+ * 使用 postmortem 确保异常退出时也能断开 SSH 连接和卸载挂载点。
+ * 只注册一次（sshCleanupRegistered 标志位保护）。
+ */
 function registerSshCleanup(): void {
 	if (sshCleanupRegistered) return;
 	sshCleanupRegistered = true;
@@ -540,6 +691,10 @@ function registerSshCleanup(): void {
 
 let pythonCleanupRegistered = false;
 
+/**
+ * 注册 Python 内核清理回调。
+ * 确保进程退出时释放所有 Python 内核会话，避免僵尸进程。
+ */
 function registerPythonCleanup(): void {
 	if (pythonCleanupRegistered) return;
 	pythonCleanupRegistered = true;
@@ -553,6 +708,13 @@ function registerPythonCleanup(): void {
  * - `"off"` → never enable
  * - `"auto"` → enable for DeepSeek (prefix-caching provider)
  */
+/**
+ * 判断是否为当前 provider 启用 AppendOnly 上下文模式。
+ *
+ * 这是为 DeepSeek 等支持前缀缓存的 provider 做的优化：
+ * - AppendOnly 模式下，消息只追加不修改，保证前缀缓存命中率
+ * - "auto" 模式下仅对 deepseek 启用，因为其他 provider 可能不支持
+ */
 function resolveAppendOnlyMode(setting: "auto" | "on" | "off" | undefined, provider: string): boolean {
 	switch (setting ?? "auto") {
 		case "on":
@@ -564,6 +726,15 @@ function resolveAppendOnlyMode(setting: "auto" | "on" | "off" | undefined, provi
 	}
 }
 
+/**
+ * 将 CustomTool（扩展 API 风格）转换为 ToolDefinition（内部工具注册表风格）。
+ *
+ * 两种接口的区别：
+ * - CustomTool.execute(params, onUpdate, ctx, signal) — 扩展开发者友好的签名
+ * - ToolDefinition.execute(toolCallId, params, signal, onUpdate, ctx) — 内部统一的签名
+ *
+ * 此函数通过适配器闭包完成参数顺序和类型的转换，并用 Symbol 标记防止重复转换。
+ */
 function customToolToDefinition(tool: CustomTool): ToolDefinition {
 	const definition: ToolDefinition & { [TOOL_DEFINITION_MARKER]: true } = {
 		name: tool.name,
@@ -594,6 +765,17 @@ function customToolToDefinition(tool: CustomTool): ToolDefinition {
 	return definition;
 }
 
+/**
+ * 将 CustomTool 数组包装成一个 ExtensionFactory，使自定义工具以扩展形式注册。
+ *
+ * 这个工厂会：
+ * 1. 为每个 CustomTool 调用 api.registerTool() 注册到扩展 API
+ * 2. 为每个 CustomTool 的 onSession 回调订阅所有 session 生命周期事件
+ *    （start/switch/branch/tree/shutdown/compaction/retry/ttsr/todo）
+ *
+ * 这种设计让自定义工具能感知 Agent 会话的完整生命周期，
+ * 而不只是被动等待工具调用。
+ */
 function createCustomToolsExtension(tools: CustomTool[]): ExtensionFactory {
 	return api => {
 		for (const tool of tools) {
@@ -689,6 +871,11 @@ function createCustomToolsExtension(tools: CustomTool[]): ExtensionFactory {
  * Build LoadedCustomCommand entries for all MCP prompts across connected servers.
  * These are re-created whenever prompts change (setOnPromptsChanged callback).
  */
+/**
+ * 将 MCP 服务器暴露的 prompts 转换为 GJC 的斜杠命令。
+ * 每个 prompt 映射为 `服务器名:prompt名` 格式的命令，支持通过 args 传递参数。
+ * 命令在 MCP prompts 变更时通过 setOnPromptsChanged 回调自动刷新。
+ */
 function buildMCPPromptCommands(manager: MCPManager): LoadedCustomCommand[] {
 	const commands: LoadedCustomCommand[] = [];
 	for (const serverName of manager.getConnectedServers()) {
@@ -765,6 +952,13 @@ function buildMCPPromptCommands(manager: MCPManager): LoadedCustomCommand[] {
  * ```
  */
 
+/**
+ * 将内嵌的四个 GJC 默认技能合并到技能列表中。
+ *
+ * 四个默认技能（deep-interview / ralplan / ultragoal / team）是产品不变量，
+ * 即使 .gjc 目录被误删也不应丢失。此函数确保它们始终存在，
+ * 但如果用户已定义了同名技能，则以用户的为准（不覆盖）。
+ */
 function withEmbeddedDefaultGjcSkills(skills: Skill[]): Skill[] {
 	const byName = new Map(skills.map(skill => [skill.name, skill]));
 	for (const defaultSkill of getEmbeddedDefaultGjcSkills()) {
@@ -776,6 +970,9 @@ function withEmbeddedDefaultGjcSkills(skills: Skill[]): Skill[] {
 }
 
 export async function createAgentSession(options: CreateAgentSessionOptions = {}): Promise<CreateAgentSessionResult> {
+	// =========================================================================
+	// Stage 1: 初始化基础路径
+	// =========================================================================
 	const cwd = options.cwd ?? getProjectDir();
 	const agentDir = options.agentDir ?? getDefaultAgentDir();
 	const eventBus = options.eventBus ?? new EventBus();
@@ -783,9 +980,11 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	registerSshCleanup();
 	registerPythonCleanup();
 
-	// Pin authStorage to modelRegistry.authStorage: ModelRegistry.getApiKey() routes refresh
-	// failures through that instance, so any divergent storage handed to the bridge / mcpManager
-	// / session would silently miss credential_disabled events.
+	// =========================================================================
+	// Stage 2: 认证存储与模型注册表初始化
+	// =========================================================================
+	// 注意：authStorage 必须与 modelRegistry.authStorage 是同一个实例，
+	// 否则 getApiKey() 路由的 refresh 失败会绕过统一的 credential_disabled 事件。
 	const modelRegistry =
 		options.modelRegistry ??
 		new ModelRegistry(options.authStorage ?? (await logger.time("discoverModels", discoverAuthStorage, agentDir)));
@@ -795,15 +994,17 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			"options.authStorage and options.modelRegistry.authStorage must be the same instance when both are provided",
 		);
 	}
-	// Subscribe before any getApiKey() call so startup model probes can't fire a
-	// credential_disabled event past us. An embedder's constructor handler makes the
-	// listener set non-empty from construction, which defeats AuthStorage's no-listener
-	// buffer — so we can't rely on it to catch startup events for the extension runner.
+	// =========================================================================
+	// 提前订阅 credential_disabled 事件，防止启动阶段的凭证失效事件丢失
+	// =========================================================================
+	// 关键设计：在第一次 getApiKey() 调用之前订阅。
+	// extensionRunner 尚未创建，因此事件先暂存到 startupCredentialDisabledEvents 数组中，
+	// 等 extensionRunner 就绪后再批量转发。这保证了即使在启动探测期间发生的凭证失效
+	// 也不会被遗漏。
 	const startupCredentialDisabledEvents: CredentialDisabledEvent[] = [];
 	let credentialDisabledTarget: ExtensionRunner | undefined;
 	let unsubscribeCredentialDisabled: (() => void) | undefined = authStorage.onCredentialDisabled(event => {
 		if (credentialDisabledTarget) {
-			// Discard return: any handler error is routed through runner.onError listeners.
 			void credentialDisabledTarget.emitCredentialDisabled(event);
 		} else {
 			startupCredentialDisabledEvents.push(event);
@@ -825,9 +1026,11 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		: logger.time("buildWorkspaceTree", () => buildWorkspaceTree(cwd, { timeoutMs: STARTUP_SCAN_DEADLINE_MS }));
 	workspaceTreePromise.catch(() => {});
 
-	// Independent discoveries that depend only on cwd/agentDir — kicked off in parallel and awaited
-	// at their respective consumer sites. Their work can overlap with model resolution, secret loading,
-	// session-context build, tool creation, MCP discovery, and extension discovery.
+	// =========================================================================
+	// Stage 3: 并行启动独立发现任务（context files / prompts / slash commands）
+	// 这些任务只依赖 cwd/agentDir，与模型解析、密钥加载等后续阶段并行执行，
+	// 在各自消费者 await 时大概率已完成。
+	// =========================================================================
 	const contextFilesPromise = options.contextFiles
 		? Promise.resolve(options.contextFiles)
 		: logger.time("discoverContextFiles", discoverContextFiles, cwd, agentDir);
@@ -890,6 +1093,11 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	}
 	const secretsEnabled = obfuscator?.hasSecrets() === true;
 
+	// =========================================================================
+	// Stage 4: 密钥加载 & session 恢复检查
+	// =========================================================================
+	// 密钥必须在任何涉及 LLM 调用之前加载完成，因为后续的模型选择、
+	// 系统提示词构建、工具调用都可能暴露密钥。
 	// Check if session has existing data to restore
 	const existingSession = logger.time("loadSessionContext", () =>
 		deobfuscateSessionContext(sessionManager.buildSessionContext(), obfuscator),
@@ -913,6 +1121,10 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			modelRegistry,
 		}),
 	);
+	// =========================================================================
+	// Stage 5: 模型恢复/选择（优先级：显式传入 > session 恢复 > settings 默认 > 第一个可用）
+	// 跳过 settings 默认值的情况：用户通过 --model 明确指定了模型（即使没找到）
+	// =========================================================================
 	let model = options.model;
 	let modelFallbackMessage: string | undefined;
 	// If session has data, try to restore model from it.
@@ -946,6 +1158,9 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 
 	const taskDepth = options.taskDepth ?? 0;
 
+	// =========================================================================
+	// Stage 6: Thinking Level 解析（优先级：显式传入 > session 恢复 > settings > model 默认 > 全局默认）
+	// =========================================================================
 	let thinkingLevel = options.thinkingLevel;
 
 	// If session has data and includes a thinking entry, restore it
@@ -979,6 +1194,11 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		preconnectModelHost(model.baseUrl);
 	}
 
+	// =========================================================================
+	// Stage 7: 技能加载（内嵌 GJC 默认技能 + 可选的文件系统发现）
+	// =========================================================================
+	// 四个 GJC 工作流技能是产品不变量，即使 .gjc 被误删也不会丢失。
+	// 文件系统级别的技能发现受 skills.enabled 配置控制。
 	let skills: Skill[];
 	let skillWarnings: SkillWarning[];
 	if (options.skills !== undefined) {
@@ -1004,6 +1224,11 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		skillWarnings = [];
 	}
 
+	// =========================================================================
+	// Stage 8: 规则发现 & TTSR 初始化
+	// =========================================================================
+	// 规则分三类：TTSR 规则（条件触发）、alwaysApply 规则（始终生效）、
+	// rulebook 规则（有 description，由 Agent 自主查询）
 	// Discover rules and bucket them in one pass to avoid repeated scans over large rule sets.
 	const { ttsrManager, rulebookRules, alwaysApplyRules } = await logger.time("discoverTtsrRules", async () => {
 		const ttsrSettings = settings.getGroup("ttsr");
@@ -1056,11 +1281,18 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		}
 		return result;
 	};
+	// =========================================================================
+	// Stage 9: 等待上下文文件 & workspace tree（带 5 秒超时防止大仓库阻塞启动）
+	// =========================================================================
 	const [contextFiles, resolvedWorkspaceTree] = await Promise.all([
 		contextFilesPromise,
 		raceWithDeadline("buildWorkspaceTree", workspaceTreePromise),
 	]);
 
+	// =========================================================================
+	// Stage 10: 异步任务管理器 & Agent 注册表初始化
+	// =========================================================================
+	// 仅顶层 session 创建 AsyncJobManager；子 agent 通过 AsyncJobManager.instance() 继承父级
 	let agent: Agent;
 	let session!: AgentSession;
 	let hasSession = false;
@@ -1127,6 +1359,11 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			if (model) return formatModelString(model);
 			return undefined;
 		};
+		// =========================================================================
+		// Stage 11: ToolSession 构建 — 工具运行时所需的共享上下文
+		// =========================================================================
+		// ToolSession 是连接 SDK 和工具实现的桥梁。它提供工具执行时需要的
+		// 一切上下文：cwd、模型、LSP 配置、密钥、artifact、事件总线等。
 		const toolSession: ToolSession = {
 			get cwd() {
 				return sessionManager.getCwd();
@@ -1243,6 +1480,9 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			options.parentTaskPrefix ? { parentPrefix: options.parentTaskPrefix } : undefined,
 		);
 
+		// =========================================================================
+		// Stage 12: 内置工具创建 & MCP / 扩展工具收集
+		// =========================================================================
 		// Create built-in tools (already wrapped with meta notice formatting)
 		const builtinTools = await logger.time("createAllTools", createTools, toolSession, options.toolNames);
 
@@ -1340,6 +1580,10 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			}
 		}
 
+		// =========================================================================
+		// Stage 13: 扩展加载 & 提供商注册
+		// =========================================================================
+		// 处理扩展注册的提供商和模型，必须在 ExtensionRunner 创建之前完成
 		// Process provider registrations queued during extension loading.
 		// This must happen before the runner is created so that models registered by
 		// extensions are available for model selection on session resume / fallback.
@@ -1468,6 +1712,10 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 				.map(tool => CustomToolAdapter.wrap(tool, customToolContext));
 		}
 
+		// =========================================================================
+		// Stage 14: 工具注册表组装 — 将所有工具来源合并到统一的 Map
+		// =========================================================================
+		// 工具来源顺序：builtin → goal → extension → ExtensionToolWrapper 包装
 		// All built-in tools are active (conditional tools like git/ask return null from factory if disabled)
 		const toolRegistry = new Map<string, Tool>();
 		for (const tool of builtinTools) {
@@ -1685,6 +1933,10 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		});
 		hasRegistered = true;
 
+		// =========================================================================
+		// Stage 15: 系统提示词构建
+		// =========================================================================
+		// 包含 memory 指令、MCP 服务器指令、上下文文件、规则、技能设置等
 		const { systemPrompt } = await logger.time(
 			"buildSystemPrompt",
 			rebuildSystemPrompt,
@@ -1793,6 +2045,10 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			).seedNormalizedMessages(options.forkContextSeed.messages);
 		}
 
+		// =========================================================================
+		// Stage 16: Agent 实例化 — 创建核心 LLM Agent
+		// =========================================================================
+		// Agent 封装了 LLM 连接、流式响应、工具选择、重试策略等所有运行时行为
 		agent = new Agent({
 			initialState: {
 				systemPrompt,
@@ -1908,6 +2164,11 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			}
 		}
 
+		// =========================================================================
+		// Stage 17: AgentSession 组装 — 将 Agent + 所有元数据打包为完整的会话对象
+		// =========================================================================
+		// AgentSession 是最终暴露给调用者的接口，管理 session 生命周期、消息持久化、
+		// 技能状态、IRC 路由等
 		session = new AgentSession({
 			agent,
 			thinkingLevel,
@@ -1994,6 +2255,10 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		}
 
 
+		// =========================================================================
+		// Stage 18: 后置初始化 — LSP 预热 / Memory 后台任务 / MCP 回调绑定
+		// =========================================================================
+		// 这些操作不阻塞 Agent 启动，在后台并行执行
 		// Start LSP warmup in the background so startup does not block on language server initialization.
 		// Print/script invocations (`hasUI=false`) don't render the warmup status indicator AND typically
 		// finish before LSP servers would have stabilized — warming them just spends CPU parsing big
@@ -2085,6 +2350,9 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			});
 		}
 
+		// =========================================================================
+		// 所有组装步骤完成，返回组合体
+		// =========================================================================
 		return {
 			session,
 			extensionsResult,
@@ -2095,9 +2363,11 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			eventBus,
 		};
 	} catch (error) {
-		// Release the subscription if the throw happened after install but before the
-		// dispose-wrap took ownership. Idempotent with dispose() — Set.delete is a no-op
-		// for already-removed listeners.
+		// =========================================================================
+		// 错误处理：组装失败时清理已分配的资源
+		// =========================================================================
+		// 释放 credential-disabled 监听到期订阅，销毁已创建的 session 或
+		// 注销 agent 注册表条目，清理 Python 内核。
 		unsubscribeCredentialDisabled?.();
 		try {
 			if (hasSession) {
@@ -2120,6 +2390,14 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
  * primes DNS + TCP + TLS + H2 so the first real request reuses the warm
  * connection. Errors are swallowed: preconnect is an optimization, never a
  * hard dependency.
+ */
+/**
+ * 在 Agent 启动期间预热 TLS + H2 连接到模型 API 服务器。
+ *
+ * Bun 的 fetch.preconnect 会预处理 DNS + TCP + TLS + H2 的完整握手链路，
+ * 使后续第一个真正的 API 请求可以直接复用已建立的连接。
+ * 对于跨洋请求，这会节省 100-300ms 的串行握手延迟。
+ * 错误被静默忽略——预热是优化而非必要条件。
  */
 function preconnectModelHost(baseUrl: string | undefined): void {
 	if (!baseUrl) return;
