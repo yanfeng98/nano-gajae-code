@@ -48,59 +48,9 @@
 
 本文档对 Gajae-Code 项目中所有功能的默认启用/关闭状态、代码体量、可选性和移除影响进行全面分析，为魔改裁剪提供决策依据。
 
----
-
-## 概览
-
-| 维度 | 数据 |
-|------|------|
-| TypeScript 源文件数 | ~834 个 (仅 coding-agent) |
-| TypeScript 总行数 | ~252,800 行 |
-| Rust crate 数 | 5 个 (含 2 个 vendored，纯 Linux/Unix) |
-| `models.json` 大小 | 454 KB, ~21,666 行, 1030 个模型 |
-| AI Provider 数 | 14 个 (含 models.json 定义的) |
-| 已知 Provider 类型 | 19 个 |
-| 内置 Tool 数 | 31 个 (BUILTIN_TOOLS) + 3 个 (HIDDEN_TOOLS) |
-| Settings 配置项 | ~95 个 (已移除 4 power + 32 hindsight + 9 dead keys) |
-| 已移除代码行数 | ~125,000+ 行 (三十三轮) |
-| 运行模式 | 2 种 (interactive, print) |
-| CLI 子命令 | 14 个 |
-| 目标平台 | Linux x64 / Linux arm64 (仅 WSL2 + Ubuntu/CentOS) |
-
----
-
 ## 一、Settings 中默认关闭的功能
 
 以下是 `packages/coding-agent/src/config/settings-schema.ts` 中所有 `default: false` 或 `default: "off"` 的配置项，按功能分类。
-
-### 1.1 语音输入 (`stt.*`)
-
-| 配置项 | 默认值 | 代码位置 | 行数 |
-|--------|--------|---------|------|
-| `stt.enabled` | `false` | `packages/coding-agent/src/stt/` | ~6 文件 + Python 脚本 |
-| `stt.language` | `"en"` | 同上 | |
-| `stt.modelName` | `"base.en"` | Whisper 模型选择 | |
-
-**依赖**: whisper.cpp 本地模型下载（首次使用时）、Python `transcribe.py`
-**移除影响**: 无，默认关闭。删除 `stt/` 目录即可。
-
-### 1.2 记忆系统 (`memory.*` / `memories.*`)
-
-| 配置项 | 默认值 | 说明 |
-|--------|--------|------|
-| `memory.backend` | `"off"` | 记忆后端选择器：off/local |
-| `memories.enabled` | `false` | 旧版本地记忆流水线（已隐藏，仅用于迁移兼容） |
-
-> **Hindsight 远程记忆已于第三轮移除。**
-
-`memory.backend` 是整个记忆系统的总开关，默认 `"off"` 意味着：
-- **本地记忆流水线** (`memory.backend: "local"`) — 不启动
-
-相关代码目录（均保留）：
-| 目录 | 功能 | 行数（估算） |
-|------|------|-------------|
-| `packages/coding-agent/src/memories/` | 本地记忆流水线 (Phase 1+2) | ~1,700 行 |
-| `packages/coding-agent/src/memory-backend/` | 记忆后端抽象 (off/local) | ~200 行 |
 
 ### 1.3 可选工具（默认关闭）
 
