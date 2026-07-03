@@ -150,16 +150,12 @@ export interface PythonExecutionMessage {
 	excludeFromContext?: boolean;
 }
 
-/**
- * Message type for extension-injected messages via sendMessage().
- */
 export interface CustomMessage<T = unknown> {
 	role: "custom";
 	customType: string;
 	content: string | (TextContent | ImageContent)[];
 	display: boolean;
 	details?: T;
-	/** Who initiated this message for billing/attribution semantics. */
 	attribution?: MessageAttribution;
 	timestamp: number;
 }

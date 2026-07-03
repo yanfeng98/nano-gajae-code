@@ -80,7 +80,6 @@ import asyncResultTemplate from "./prompts/tools/async-result.md" with { type: "
 import { AgentRegistry, MAIN_AGENT_ID } from "./registry/agent-registry";
 import { MCPManager } from "./runtime-mcp";
 
-// --- 密钥管理 ---
 import {
 	collectEnvSecrets,
 	deobfuscateSessionContext,
@@ -89,38 +88,24 @@ import {
 	SecretObfuscator,
 } from "./secrets";
 
-// --- 会话管理：AgentSession、认证存储/代理、消息转换、SessionManager ---
 import { AgentSession, type ForkContextSeed } from "./session/agent-session";
 import { resolveAuthBrokerConfig } from "./session/auth-broker-config";
 import { AuthBrokerClient, AuthStorage, RemoteAuthCredentialStore } from "./session/auth-storage";
 import { type CustomMessage, convertToLlm } from "./session/messages";
 import { SessionManager } from "./session/session-manager";
-
-// --- 引导提示 ---
 import { formatNoModelsAvailableFallback } from "./setup/model-onboarding-guidance";
-
-// --- SSH 连接/挂载管理 ---
 import { closeAllConnections } from "./ssh/connection-manager";
 import { unmountAll } from "./ssh/sshfs-mount";
-
-// --- 系统提示词 ---
 import {
 	type BuildSystemPromptResult,
 	buildSystemPrompt as buildSystemPromptInternal,
 	buildSystemPromptToolMetadata,
 	loadProjectContextFiles as loadContextFilesInternal,
 } from "./system-prompt";
-
-// --- 子任务输出管理 ---
 import { AgentOutputManager } from "./task/output-manager";
-
-// --- Thinking 级别解析 ---
 import { parseThinkingLevel, resolveThinkingLevelForModel, toReasoningEffort } from "./thinking";
-
-// --- 工具发现索引 ---
 import { collectDiscoverableTools, type DiscoverableTool } from "./tool-discovery/tool-index";
 
-// --- 内置工具：bash/read/write/edit/find/search/LSP/eval/web_search/... ---
 import {
 	BashTool,
 	BUILTIN_TOOLS,
@@ -148,18 +133,12 @@ import {
 	warmupLspServers,
 } from "./tools";
 
-// --- 工具上下文 & 输出包装 & 事件总线 & 工具选择 ---
 import { ToolContextStore } from "./tools/context";
 import { getImageGenTools } from "./tools/image-gen";
 import { wrapToolWithMetaNotice } from "./tools/output-meta";
 import { EventBus } from "./utils/event-bus";
 import { buildNamedToolChoice, buildNamedToolChoiceResult } from "./utils/tool-choice";
-
-// --- 工作区扫描 ---
 import { buildWorkspaceTree, type WorkspaceTree } from "./workspace-tree";
-
-// --- 异步任务结果数据结构 ---
-// 每个已完成的异步任务在 yieldQueue 中的条目
 
 type AsyncResultEntry = {
 	jobId: string;
@@ -168,7 +147,6 @@ type AsyncResultEntry = {
 	durationMs: number | undefined;
 };
 
-// 异步任务完成通知中暴露给 Agent 的元数据（脱敏后的 job 摘要）
 type AsyncResultJobDetails = {
 	jobId: string;
 	type?: "bash" | "task";
@@ -176,22 +154,15 @@ type AsyncResultJobDetails = {
 	durationMs?: number;
 };
 
-// 批量异步任务完成通知的整体结构
 type AsyncResultDetails = {
 	jobs: AsyncResultJobDetails[];
 };
 
-// MCP 资源变更通知条目
 type McpNotificationEntry = {
 	serverName: string;
 	uri: string;
 };
 
-/**
- * 将异步任务完成条目批量转换为 Agent 可见的消息。
- * 使用 asyncResultTemplate 模板渲染，支持单任务和多任务两种格式。
- * 返回 null 表示没有需要通知的任务。
- */
 function buildAsyncResultBatchMessage(entries: AsyncResultEntry[]): CustomMessage<AsyncResultDetails> | null {
 	if (entries.length === 0) return null;
 	const jobs = entries.map(entry => ({
@@ -223,10 +194,6 @@ function buildAsyncResultBatchMessage(entries: AsyncResultEntry[]): CustomMessag
 	};
 }
 
-/**
- * 将 MCP 资源变更通知批量转换为 Agent 可见的消息。
- * 自动去重（同一 serverName + uri 只出现一次），引导 Agent 使用 read(path="mcp://<uri>") 查看。
- */
 function buildMcpNotificationBatchMessage(entries: McpNotificationEntry[]): AgentMessage | null {
 	const resources: McpNotificationEntry[] = [];
 	const seen = new Set<string>();
@@ -250,89 +217,43 @@ function buildMcpNotificationBatchMessage(entries: McpNotificationEntry[]): Agen
 	};
 }
 
-// =============================================================================
-// 核心类型定义
-// =============================================================================
-
-/**
- * createAgentSession() 的配置选项 —— 整个 SDK 的中心配置对象。
- *
- * 几乎所有参数都有合理的默认值，最小调用只需 `createAgentSession()`。
- * 下面的分组与 createAgentSession 内部的组装阶段对应。
- */
 export interface CreateAgentSessionOptions {
-	/** Working directory for project-local discovery. Default: getProjectDir() */
 	cwd?: string;
-	/** Global config directory. Default: ~/.gjc/agent */
 	agentDir?: string;
-	/** Spawns to allow. Default: "*" */
 	spawns?: string;
 
-	/** Auth storage for credentials. Default: discoverAuthStorage(agentDir) */
 	authStorage?: AuthStorage;
-	/** Model registry. Default: discoverModels(authStorage, agentDir) */
 	modelRegistry?: ModelRegistry;
-
-	/** Model to use. Default: from settings, else first available */
 	model?: Model;
-	/** Raw model pattern string (e.g. from --model CLI flag) to resolve after extensions load.
-	 * Used when model lookup is deferred because extension-provided models aren't registered yet. */
 	modelPattern?: string;
-	/** Thinking selector. Default: from settings, else unset */
 	thinkingLevel?: ThinkingLevel;
-	/** Runtime substitution metadata for the initial model_change session event. */
 	modelSubstitution?: { requestedModel: Model; reason: string };
-	/** Models available for cycling (Ctrl+P in interactive mode) */
 	scopedModels?: ScopedModelSelection[];
 
-	/** System prompt blocks. Array replaces default, function receives default blocks and returns final blocks. */
 	systemPrompt?: string[] | ((defaultPrompt: string[]) => string[]);
-	/** Optional provider-facing session identifier for prompt caches and sticky auth selection.
-	 * Keeps persisted session files isolated while reusing provider-side caches. */
 	providerSessionId?: string;
 
-	/** Custom tools to register (in addition to built-in tools). Accepts both CustomTool and ToolDefinition. */
 	customTools?: (CustomTool | ToolDefinition)[];
-	/** Explicit parent/phase used to load active GJC sub-skill tools for this session. */
 	gjcSubskillToolContext?: { parent: string; phase: string; sessionId?: string; cwd?: string };
-	/** Inline extensions (merged with discovery). */
 	extensions?: ExtensionFactory[];
-	/** Additional extension paths to load (merged with discovery). */
 	additionalExtensionPaths?: string[];
-	/** Disable extension discovery (explicit paths still load). */
 	disableExtensionDiscovery?: boolean;
-	/**
-	 * Pre-loaded extensions (skips file discovery).
-	 * @internal Used by CLI when extensions are loaded early to parse custom flags.
-	 */
 	preloadedExtensions?: LoadExtensionsResult;
 
-	/** Shared event bus for tool/extension communication. Default: creates new bus. */
 	eventBus?: EventBus;
 
-	/** Skills. Default: bundled GJC defaults, plus filesystem skills when enabled */
 	skills?: Skill[];
-	/** Rules. Default: discovered from multiple locations */
 	rules?: Rule[];
-	/** Context files (AGENTS.md content). Default: discovered walking up from cwd */
 	contextFiles?: Array<{ path: string; content: string }>;
-	/** Pre-built workspace tree (skips re-scanning; passed by parents to subagents). */
 	workspaceTree?: WorkspaceTree;
-	/** Prompt templates. Default: discovered from cwd/.gjc/prompts/ + agentDir/prompts/ */
 	promptTemplates?: PromptTemplate[];
-	/** File-based slash commands. Default: discovered from commands/ directories */
 	slashCommands?: FileSlashCommand[];
 
-	/** @deprecated MCP runtime discovery is quarantined and ignored. */
 	enableMCP?: boolean;
-	/** Existing MCP manager to reuse (skips discovery, propagates to toolSession). */
 	mcpManager?: MCPManager;
 
-	/** Enable LSP integration (tool, formatting, diagnostics, warmup). Default: true */
 	enableLsp?: boolean;
-	/** Skip Python kernel availability check and prelude warmup */
 	skipPythonPreflight?: boolean;
-	/** Tool names explicitly requested (enables disabled-by-default tools) */
 	toolNames?: string[];
 
 	/** Output schema for structured completion (subagents) */

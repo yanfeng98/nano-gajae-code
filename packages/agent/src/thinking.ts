@@ -1,10 +1,5 @@
 import { Effort } from "@gajae-code/ai/model-thinking";
 
-/**
- * Agent-local thinking selector.
- *
- * `off` disables reasoning, while `inherit` defers to a higher-level selector.
- */
 export const ThinkingLevel = {
 	Inherit: "inherit",
 	Off: "off",

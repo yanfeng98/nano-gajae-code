@@ -2,7 +2,6 @@ import { resolveOpenAICompat } from "./providers/openai-completions-compat";
 import type { Api, Model as ApiModel, ThinkingConfig } from "./types";
 import { isClaudeForcedToolChoiceIncapableModelId } from "./utils/tool-choice-capability";
 
-/** User-facing thinking levels, ordered least to most intensive. */
 export const enum Effort {
 	Minimal = "minimal",
 	Low = "low",
