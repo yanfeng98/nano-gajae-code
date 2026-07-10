@@ -1,6 +1,9 @@
 # Changelog
 
 ## [Unreleased]
+### Fixed
+
+- Prompt rendering now loads handlebars through a statically-traceable lazy `require("handlebars")` instead of a hardcoded `/$bunfs/root/node_modules/...` extra-entrypoint path, so compiled binaries cannot crash at startup when the extra entrypoint is missing from the bundle (#1939).
 
 ## [0.8.2] - 2026-07-06
 
