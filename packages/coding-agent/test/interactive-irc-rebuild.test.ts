@@ -94,6 +94,31 @@ describe("IRC rebuild projection", () => {
 		expect(helpers.getRenderedIrcInlineComponents().has("expired-during-rebuild")).toBe(false);
 	});
 
+	it("removes inline components that cross their deadline between projection and timer scheduling", () => {
+		vi.useFakeTimers({ now: 0 });
+		const { ctx, ledger, helpers, chatContainer } = makeContext();
+		ledger.observe(
+			{ observationId: "expires-mid-reconcile", kind: "incoming", from: "peer", to: "you", text: "hello", timestamp: 0 },
+			true,
+		);
+		helpers.renderSessionContext(emptyContext);
+		expect(chatContainer.children).toHaveLength(2);
+
+		// First Date.now() (projection snapshot) sees the record alive at 9_999;
+		// every later call (scheduling-time recheck) sees the deadline crossed.
+		const realNow = Date.now;
+		let calls = 0;
+		Date.now = () => (++calls === 1 ? 9_999 : 10_001);
+		try {
+			new EventController(ctx).reconcileIrcExpiryTimers(helpers.getRenderedIrcInlineComponents());
+		} finally {
+			Date.now = realNow;
+		}
+
+		expect(chatContainer.children).toHaveLength(0);
+		expect(helpers.getRenderedIrcInlineComponents().has("expires-mid-reconcile")).toBe(false);
+	});
+
 	it("keeps persisted IRC observations between surrounding messages across rebuilds", () => {
 		const { ledger, helpers, chatContainer } = makeContext();
 		ledger.observe(
