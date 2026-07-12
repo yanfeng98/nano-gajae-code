@@ -270,12 +270,14 @@ export const TERMINAL = (() => {
 			resolved.notifyProtocol,
 		);
 	}
-	// tmux and screen consume raw kitty/iTerm2 graphics escapes instead of
-	// forwarding them (no DCS passthrough wrapping is emitted), so a detected
-	// image protocol draws nothing while its out-of-band cursor writes corrupt
-	// the frame. Drop the protocol under a multiplexer unless one was forced
-	// explicitly; the runtime sixel probe re-enables sixel when the
-	// multiplexer proves end-to-end support via DA1.
+	// Multiplexers (tmux/screen/zellij) consume raw kitty/iTerm2 graphics
+	// escapes instead of forwarding them (no DCS passthrough wrapping is
+	// emitted), so a detected image protocol draws nothing while its
+	// out-of-band cursor writes corrupt the frame. Graphics are therefore
+	// unconditionally suppressed under a multiplexer; the runtime sixel probe
+	// never runs there (tmux advertises DA1 ";4" from compile-time support
+	// regardless of the attached client), and PI_FORCE_IMAGE_PROTOCOL=sixel
+	// is the only opt-in for chains that render sixel end-to-end.
 	if (resolved.imageProtocol && forcedImageProtocol === undefined && underMultiplexer) {
 		resolved = new TerminalInfo(resolved.id, null, resolved.trueColor, resolved.hyperlinks, resolved.notifyProtocol);
 	}
