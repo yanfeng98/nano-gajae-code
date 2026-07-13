@@ -184,7 +184,7 @@ describe("stable release policy", () => {
 		expect(hint).toContain("environment: website-release-sync-trigger");
 		expect(hint).toContain("GJ_RELEASE_SYNC_TRIGGER_APP_ID");
 		expect(hint).toContain("GJ_RELEASE_SYNC_TRIGGER_PRIVATE_KEY");
-		expect(hint).toContain("actions/create-github-app-token@a8d616148505873a6910f30e1d4a5f0c23a65f96");
+		expect(hint).toContain("actions/create-github-app-token@a8d616148505b5069dccd32f177bb87d7f39123b");
 		expect(hint).toContain("gh workflow run sync-release.yml");
 		expect(hint).toContain("--repo Yeachan-Heo/gajae-code-website");
 		expect(hint).toContain("--ref main");
