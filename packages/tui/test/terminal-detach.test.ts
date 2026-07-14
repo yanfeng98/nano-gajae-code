@@ -1,5 +1,10 @@
-import { describe, expect, it, vi } from "bun:test";
-import { ProcessTerminal, type Terminal, type TerminalAppearance } from "@gajae-code/tui/terminal";
+import { beforeEach, describe, expect, it, vi } from "bun:test";
+import {
+	__resetStdoutErrorHandlingForTest,
+	ProcessTerminal,
+	type Terminal,
+	type TerminalAppearance,
+} from "@gajae-code/tui/terminal";
 import { type Component, CURSOR_MARKER, TUI } from "@gajae-code/tui/tui";
 
 class StaticComponent implements Component {
@@ -141,6 +146,13 @@ function withStdoutProperty<T>(
 }
 
 describe("terminal detach handling", () => {
+	// The shared stdout-error dispatcher is module-global; a prior test that starts a
+	// terminal can leave a subscriber in the set (its grace-timer teardown is async),
+	// which would keep `size > 0` and prevent the next subscribe from re-arming the
+	// process.stdout listener. Reset to a clean slate before each test.
+	beforeEach(() => {
+		__resetStdoutErrorHandlingForTest();
+	});
 	it("swallows ProcessTerminal EIO writes and marks output unavailable", () => {
 		const terminal = new ProcessTerminal();
 		const originalIsTTY = process.stdout.isTTY;
@@ -193,22 +205,7 @@ describe("terminal detach handling", () => {
 		const writeSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 		const resumeSpy = vi.spyOn(process.stdin, "resume").mockImplementation(() => process.stdin);
 		const pauseSpy = vi.spyOn(process.stdin, "pause").mockImplementation(() => process.stdin);
-		// Wait for any prior test's shared stdout-error dispatcher to be torn down
-		// (STDOUT_ERROR_HANDLER_GRACE_MS = 250). Require the count to hold steady for
-		// longer than the grace window so a still-pending removal timer can't be
-		// mistaken for a stable baseline under CI load.
-		let beforeListeners = process.stdout.listenerCount("error");
-		let stableForMs = 0;
-		for (let waited = 0; waited < 8000 && stableForMs < 400; waited += 50) {
-			await Bun.sleep(50);
-			const current = process.stdout.listenerCount("error");
-			if (current === beforeListeners) {
-				stableForMs += 50;
-			} else {
-				beforeListeners = current;
-				stableForMs = 0;
-			}
-		}
+		const beforeListeners = process.stdout.listenerCount("error");
 
 		try {
 			withStdoutProperty("isTTY", true, () => {
@@ -244,18 +241,7 @@ describe("terminal detach handling", () => {
 		const writeSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 		const resumeSpy = vi.spyOn(process.stdin, "resume").mockImplementation(() => process.stdin);
 		const pauseSpy = vi.spyOn(process.stdin, "pause").mockImplementation(() => process.stdin);
-		let beforeListeners = process.stdout.listenerCount("error");
-		let stableForMs = 0;
-		for (let waited = 0; waited < 8000 && stableForMs < 400; waited += 50) {
-			await Bun.sleep(50);
-			const current = process.stdout.listenerCount("error");
-			if (current === beforeListeners) {
-				stableForMs += 50;
-			} else {
-				beforeListeners = current;
-				stableForMs = 0;
-			}
-		}
+		const beforeListeners = process.stdout.listenerCount("error");
 
 		try {
 			withStdoutProperty("isTTY", true, () => {

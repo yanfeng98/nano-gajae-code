@@ -187,6 +187,17 @@ function unsubscribeFromStdoutErrors(subscriber: (err: Error) => void): void {
 }
 
 /**
+ * Test-only: reset the shared stdout-error dispatcher to a clean slate.
+ * Used by tests to avoid cross-test leakage of the module-level subscriber set
+ * (a leaked subscriber otherwise keeps `size > 0`, so a later subscribe no longer
+ * re-arms the process.stdout listener). Not part of the public runtime contract.
+ */
+export function __resetStdoutErrorHandlingForTest(): void {
+	stdoutErrorSubscribers.clear();
+	process.stdout.removeListener("error", dispatchStdoutError);
+}
+
+/**
  * Real terminal using process.stdin/stdout
  */
 export class ProcessTerminal implements Terminal {
