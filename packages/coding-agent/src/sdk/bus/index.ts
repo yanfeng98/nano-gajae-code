@@ -1855,10 +1855,11 @@ function sdkControlSurface(
 	const cancelPendingPreflights = () => {
 		for (const cancel of pendingPreflightCancellations) cancel();
 	};
+	const isSessionBusy = () => isBusy() || ctx.isIdle?.() === false;
 	const awaitAbortReady = async () => {
 		cancelPendingPreflights();
 		await (ctx.abort as () => unknown)();
-		while (isBusy() || !ctx.isIdle()) {
+		while (isSessionBusy()) {
 			await Bun.sleep(10);
 		}
 	};
@@ -1870,12 +1871,12 @@ function sdkControlSurface(
 		rejectWhenBusy = false,
 		requesterConnectionId?: string,
 	) => {
-		if (forceFresh && (isBusy() || !ctx.isIdle())) {
+		if (forceFresh && isSessionBusy()) {
 			throw Object.assign(new Error("Previous turn did not finish aborting before replacement prompt submission."), {
 				code: "busy",
 			});
 		}
-		if (rejectWhenBusy && (isBusy() || !ctx.isIdle()))
+		if (rejectWhenBusy && isSessionBusy())
 			throw Object.assign(
 				new Error("turn.prompt is unavailable while the agent is busy; use turn.steer explicitly."),
 				{
