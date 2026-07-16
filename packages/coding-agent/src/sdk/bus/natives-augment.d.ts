@@ -30,7 +30,7 @@ declare module "@gajae-code/natives" {
 		onNegotiatedCapabilities(
 			callback: (err: null | Error, connectionId: string, capabilities: string[]) => void,
 		): void;
-		/** Directed send of a JSON text frame to one connection. */
+		/** Directed delivery of a validated, bounded JSON v3 envelope to one connection. */
 		sendTo(connectionId: string, json: string): void;
 		/** Register a correlated workflow-gate action_needed frame. */
 		registerWorkflowGateAsk(workflowJson: string, repliable: boolean): void;

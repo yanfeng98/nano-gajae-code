@@ -95,12 +95,20 @@ let warnedReasoningSummaryLevel = false;
 
 // ─── inbound parser helpers ─────────────────────────────────────────────────
 
-function extractReasoningTextFromItem(item: OpenAIResponsesReasoningItem): string {
-	// Prefer `summary[]` — mirrors real OpenAI and the openai-responses provider
-	// which writes the surfaced reasoning summary into `summary[].text`.
-	const fromSummary = (item.summary ?? []).map(c => c.text).join("");
-	if (fromSummary) return fromSummary;
-	return (item.content ?? []).map(c => c.text).join("");
+function reasoningContentFromItem(
+	item: OpenAIResponsesReasoningItem,
+): Pick<ThinkingContent, "thinking" | "provenance" | "summaryText" | "rawText"> {
+	// `summary[]` is provider-displayable; `content[]` is raw reasoning. Keep
+	// these channels distinct so a Responses gateway round-trip cannot relabel
+	// raw CoT as a summary merely because summary text is absent.
+	const summaryText = (item.summary ?? []).map(part => part.text).join("");
+	const rawText = (item.content ?? []).map(part => part.text).join("");
+	if (summaryText && rawText) {
+		return { thinking: summaryText, provenance: "mixed", summaryText, rawText };
+	}
+	if (summaryText) return { thinking: summaryText, provenance: "summary", summaryText };
+	if (rawText) return { thinking: rawText, provenance: "raw", rawText };
+	return { thinking: "" };
 }
 
 type InputBlockUnion =
@@ -335,10 +343,10 @@ export function parseRequest(body: unknown, headers?: Headers): ParsedRequest {
 			}
 			if (effectiveType === "reasoning") {
 				const reasoning = item as OpenAIResponsesReasoningItem;
-				const text = extractReasoningTextFromItem(reasoning);
+				const content = reasoningContentFromItem(reasoning);
 				const thinking: ThinkingContent = {
 					type: "thinking",
-					thinking: text,
+					...content,
 					thinkingSignature: JSON.stringify(reasoning),
 					...(reasoning.id ? { itemId: reasoning.id } : {}),
 				};

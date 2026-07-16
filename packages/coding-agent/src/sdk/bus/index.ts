@@ -4045,10 +4045,10 @@ export function createNotificationsExtension(
 		if (!Array.isArray(content)) return;
 		const block = content[event.contentIndex];
 		if (block?.type !== "thinking" || (block.provenance !== "summary" && block.provenance !== "mixed")) return;
-		// CoT boundary: emit ONLY the canonical provenance-marked summaryText. Never
+		// CoT boundary: emit ONLY the canonical provider-marked summaryText. Never
 		// fall back to the event payload, which could carry inconsistent/mutated text.
 		const text = block.summaryText;
-		if (text === undefined || text === "") return;
+		if (typeof text !== "string" || text === "") return;
 		try {
 			pushSessionFrame(rt, {
 				type: "reasoning_summary",

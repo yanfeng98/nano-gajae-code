@@ -52,7 +52,7 @@ use crate::{
 		WorkflowGateActionNeeded, WorkflowGateWireDiscriminator, capabilities,
 		serialize_workflow_gate_action_needed,
 	},
-	query::REQUEST_FRAME_BYTES,
+	query::{REQUEST_FRAME_BYTES, RESPONSE_CEILING_BYTES},
 };
 
 /// Configuration for a per-session notification server.
@@ -107,7 +107,11 @@ const CONNECTION_JOIN_GRACE: Duration = Duration::from_secs(1);
 #[derive(Debug)]
 enum DirectCommand {
 	Deliver(Box<ServerMessage>, Option<oneshot::Sender<bool>>),
-	RawJson(String),
+	DirectedFrame {
+		json:                   String,
+		connection_generation:  String,
+		requires_tool_activity: bool,
+	},
 	ReevaluateAsk,
 }
 
@@ -116,6 +120,88 @@ fn prepare_direct_ack(state: &ServerState, message: &ServerMessage) -> bool {
 		return true;
 	};
 	state.acks.lock().begin_dispatch(request.request_id())
+}
+
+/// Validate the host-to-client directed envelope before it enters a connection
+/// writer. The host can only direct typed v3 envelopes; raw WebSocket text is
+/// deliberately not an escape hatch around transport policy.
+fn validate_directed_frame(json: String) -> Option<(String, bool)> {
+	if json.len() > RESPONSE_CEILING_BYTES {
+		return None;
+	}
+	let frame: serde_json::Value = serde_json::from_str(&json).ok()?;
+	let object = frame.as_object()?;
+	let frame_type = object.get("type").and_then(serde_json::Value::as_str);
+	if frame_type != Some("event_replay_result") {
+		return Some((json, false));
+	}
+	if !object.get("id").is_some_and(serde_json::Value::is_string)
+		|| !object.get("ok").is_some_and(serde_json::Value::is_boolean)
+		|| !object
+			.get("generation")
+			.is_some_and(serde_json::Value::is_u64)
+		|| !object.get("lastSeq").is_some_and(serde_json::Value::is_u64)
+	{
+		return None;
+	}
+	let events = object.get("events")?.as_array()?;
+	if !events.iter().all(|event| {
+		event.as_object().is_some_and(|event| {
+			if event.get("type").and_then(serde_json::Value::as_str) != Some("event") {
+				return false;
+			}
+			let canonical = event
+				.get("generation")
+				.is_some_and(serde_json::Value::is_u64)
+				&& event.get("seq").is_some_and(serde_json::Value::is_u64);
+			let legacy = event.get("name").is_some_and(serde_json::Value::is_string)
+				&& event
+					.get("payload")
+					.is_some_and(serde_json::Value::is_object);
+			canonical || legacy
+		})
+	}) {
+		return None;
+	}
+	let requires_tool_activity = events.iter().any(|event| {
+		let event = event.as_object();
+		let kind = event
+			.and_then(|event| event.get("kind"))
+			.and_then(serde_json::Value::as_str);
+		let name = event
+			.and_then(|event| event.get("name"))
+			.and_then(serde_json::Value::as_str);
+		let payload_type = event
+			.and_then(|event| event.get("payload"))
+			.and_then(serde_json::Value::as_object)
+			.and_then(|payload| payload.get("type"))
+			.and_then(serde_json::Value::as_str);
+		[kind, name, payload_type]
+			.into_iter()
+			.flatten()
+			.any(|kind| matches!(kind, "tool_activity" | "reasoning_summary"))
+	});
+	Some((json, requires_tool_activity))
+}
+
+fn may_deliver_directed_frame(
+	state: &ServerState,
+	connection_id: &str,
+	connection_generation: &str,
+	requires_tool_activity: bool,
+) -> bool {
+	state
+		.connections
+		.lock()
+		.get(connection_id)
+		.is_some_and(|connection| {
+			connection.generation == connection_generation
+				&& (!requires_tool_activity
+					|| connection
+						.capabilities
+						.iter()
+						.any(|capability| capability == capabilities::TOOL_ACTIVITY_V1))
+		})
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -593,16 +679,28 @@ impl ServerHandle {
 		self.capability_rx.lock().take()
 	}
 
-	/// Send raw JSON to one connected client. Returns false after that client
-	/// has disconnected.
+	/// Send a validated JSON envelope to one connected v3 SDK client. Returns
+	/// false when the destination is no longer current, the envelope is invalid,
+	/// or it exceeds the transport frame bound.
 	pub fn send_to(&self, connection_id: &str, json: String) -> bool {
+		let Some((json, requires_tool_activity)) = validate_directed_frame(json) else {
+			return false;
+		};
 		let sender = self
 			.state
 			.connections
 			.lock()
 			.get(connection_id)
-			.map(|connection| connection.tx.clone());
-		sender.is_some_and(|sender| sender.send(DirectCommand::RawJson(json)).is_ok())
+			.map(|connection| (connection.tx.clone(), connection.generation.clone()));
+		sender.is_some_and(|(sender, connection_generation)| {
+			sender
+				.send(DirectCommand::DirectedFrame {
+					json,
+					connection_generation,
+					requires_tool_activity,
+				})
+				.is_ok()
+		})
 	}
 
 	/// Resolve an unclaimed legacy action. Claimed forward-mode replies require
@@ -1204,8 +1302,17 @@ async fn handle_conn(stream: TcpStream, state: Arc<ServerState>, cancel: Cancell
 							}
 							sent
 						},
-						DirectCommand::RawJson(json) => {
-							write.send(Message::Text(json)).await.is_ok()
+						DirectCommand::DirectedFrame {
+							json,
+							connection_generation,
+							requires_tool_activity,
+						} => {
+							may_deliver_directed_frame(
+								&state,
+								&connection_id,
+								&connection_generation,
+								requires_tool_activity,
+							) && write.send(Message::Text(json)).await.is_ok()
 						},
 						DirectCommand::ReevaluateAsk => true,
 					};
@@ -1278,8 +1385,17 @@ async fn handle_conn(stream: TcpStream, state: Arc<ServerState>, cancel: Cancell
 							break;
 						}
 					},
-					DirectCommand::RawJson(json) => {
-						if write.send(Message::Text(json)).await.is_err() {
+					DirectCommand::DirectedFrame {
+						json,
+						connection_generation,
+						requires_tool_activity,
+					} => {
+						if may_deliver_directed_frame(
+							&state,
+							&connection_id,
+							&connection_generation,
+							requires_tool_activity,
+						) && write.send(Message::Text(json)).await.is_err() {
 							break;
 						}
 					},

@@ -133,13 +133,14 @@ export function parseInThreadConfigCommand(text: string): ConfigCommandChange | 
 
 	switch (command) {
 		case "verbose":
-			return { verbosity: "verbose" };
+			return rest.length === 0 ? { verbosity: "verbose" } : undefined;
 		case "lean":
-			return { verbosity: "lean" };
+			return rest.length === 0 ? { verbosity: "lean" } : undefined;
 		case "verbosity":
-			if (arg === "lean" || arg === "verbose") return { verbosity: arg };
+			if (rest.length === 1 && (arg === "lean" || arg === "verbose")) return { verbosity: arg };
 			return undefined;
 		case "redact":
+			if (rest.length !== 1) return undefined;
 			if (arg === "on" || arg === "true" || arg === "1") return { redact: true };
 			if (arg === "off" || arg === "false" || arg === "0") return { redact: false };
 			return undefined;

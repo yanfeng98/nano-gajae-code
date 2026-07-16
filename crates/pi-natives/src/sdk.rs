@@ -542,14 +542,17 @@ impl NotificationServer {
 			.map_err(|error| Error::from_reason(error.to_string()))
 	}
 
-	/// Send raw JSON to one connected v3 SDK client.
+	/// Send a validated, bounded JSON envelope to one connected v3 SDK client.
 	#[napi]
 	pub fn send_to(&self, connection_id: String, json: String) -> Result<()> {
 		let handle = self.handle()?;
 		if handle.send_to(&connection_id, json) {
 			Ok(())
 		} else {
-			Err(Error::from_reason("SDK connection is not available"))
+			Err(Error::from_reason(
+				"SDK connection is unavailable or directed frame is invalid, oversized, or \
+				 unauthorized",
+			))
 		}
 	}
 
