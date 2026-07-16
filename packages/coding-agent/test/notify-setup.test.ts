@@ -1112,7 +1112,7 @@ test("Discord setup prompts missing values and commits them atomically", async (
 				prompts.push([label, masked]);
 				return values.shift() ?? "";
 			},
-			ensureProviderDaemon: async () => "already-running",
+			ensureProviderDaemon: async () => "attached",
 		},
 	);
 	expect(prompts).toEqual([

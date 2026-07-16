@@ -260,7 +260,8 @@ export class CustomProviderWizardComponent extends Container {
 	}
 
 	#saveInputAndProceed(): void {
-		const value = this.#input?.getValue().trim() ?? "";
+		if (!(this.#input instanceof Input)) return;
+		const value = this.#input.getValue().trim();
 		if (!value) return;
 		if (this.#step === "provider-id") {
 			this.#state.providerId = value;
