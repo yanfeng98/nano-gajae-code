@@ -2273,7 +2273,10 @@ export class SelectorController {
 								if (handledCandidates || (secondCandidates.length === 0 && secondSourceFailures.length === 0)) {
 									let persisted = false;
 									try {
-										persisted = await stateStore.write({ initialImportResolution: "accepted" });
+										persisted = await stateStore.write({
+											initialImportResolution: "accepted",
+											lastImportVersion: VERSION,
+										});
 									} catch {
 										logger.warn("Credential auto-import state persistence failed", {
 											classification: "state-write-failed",

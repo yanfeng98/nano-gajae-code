@@ -1174,7 +1174,10 @@ describe("bare /login external credential import gate", () => {
 				expect(first.settingsReads).toEqual(["read"]);
 				expect(firstDiscoveryReads).toBe(confirm ? 2 : 1);
 				expect(await readCredentialAutoImportState(agentDir)).toEqual({
-					state: { initialImportResolution: resolution },
+					state: {
+						initialImportResolution: resolution,
+						...(resolution === "accepted" ? { lastImportVersion: VERSION } : {}),
+					},
 					problems: [],
 					unreadable: false,
 				});

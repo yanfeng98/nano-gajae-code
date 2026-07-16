@@ -1,6 +1,6 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { getAgentDir, logger } from "@gajae-code/utils";
+import { getAgentDbPath, getAgentDir, logger } from "@gajae-code/utils";
 import { YAML } from "bun";
 import { type ModelsConfig, ModelsConfigSchema } from "../config/models-config-schema";
 import { AuthStorage } from "../session/auth-storage";
@@ -263,7 +263,7 @@ export async function addApiCompatibleProvider(input: ProviderSetupInput): Promi
 	if (validated.credentialSource === "env") {
 		provider.apiKeyEnv = validated.apiKey;
 	} else {
-		const authStorage = await AuthStorage.create(path.join(path.dirname(modelsPath), "agent.db"));
+		const authStorage = await AuthStorage.create(getAgentDbPath(path.dirname(modelsPath)));
 		try {
 			await authStorage.set(validated.providerId, { type: "api_key", key: validated.apiKey });
 		} finally {

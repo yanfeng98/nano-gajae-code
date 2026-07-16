@@ -775,7 +775,9 @@ export class AuthStorage {
 	 */
 	static async create(dbPath: string, options: AuthStorageOptions = {}): Promise<AuthStorage> {
 		const store = await SqliteAuthCredentialStore.open(dbPath);
-		return new AuthStorage(store, options);
+		const storage = new AuthStorage(store, options);
+		await storage.reload();
+		return storage;
 	}
 
 	/**
