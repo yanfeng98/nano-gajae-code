@@ -1,19 +1,27 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as path from "node:path";
-import { Agent } from "@gajae-code/agent-core";
+import { Agent, type AgentToolContext } from "@gajae-code/agent-core";
 import type { AssistantMessage } from "@gajae-code/ai";
 import { getBundledModel } from "@gajae-code/ai/models";
 import { ModelRegistry } from "@gajae-code/coding-agent/config/model-registry";
 import { Settings } from "@gajae-code/coding-agent/config/settings";
 import { modeStatePath } from "@gajae-code/coding-agent/gjc-runtime/session-layout";
+import * as skillState from "@gajae-code/coding-agent/hooks/skill-state";
 import { ensureWorkflowSkillActivationState } from "@gajae-code/coding-agent/hooks/skill-state";
+import { initTheme } from "@gajae-code/coding-agent/modes/theme/theme";
 import { AgentSession } from "@gajae-code/coding-agent/session/agent-session";
 import { AuthStorage } from "@gajae-code/coding-agent/session/auth-storage";
 import { SessionManager } from "@gajae-code/coding-agent/session/session-manager";
+import type { ToolSession } from "@gajae-code/coding-agent/tools";
+import { AskTool } from "@gajae-code/coding-agent/tools/ask";
 import { TempDir } from "@gajae-code/utils";
 import { createAssistantMessage } from "./helpers/agent-session-setup";
 
 const REMINDER_MARKER = "deep-interview workflow is still active";
+
+beforeAll(async () => {
+	await initTheme(false);
+});
 
 describe("AgentSession deep-interview continuation", () => {
 	let tempDir: TempDir;
@@ -356,5 +364,162 @@ describe("AgentSession deep-interview continuation", () => {
 
 		expect(continueSpy).not.toHaveBeenCalled();
 		expect(developerReminders()).toHaveLength(0);
+	});
+	it("persists a real Ask answer before the later ordinary terminal stop and canonically appends its reminder", async () => {
+		await activateWorkflow("deep-interview");
+		const ask = new AskTool({
+			cwd: tempDir.path(),
+			hasUI: true,
+			settings: Settings.isolated(),
+			getSessionFile: () => null,
+			getSessionSpawns: () => "*",
+			getSessionId: () => sessionManager.getSessionId(),
+		} as ToolSession);
+		const context = {
+			hasUI: true,
+			ui: {
+				select: async (_prompt: string, options: string[]) => options.find(option => option.includes("Timeline")),
+			},
+			abort: () => {},
+		} as unknown as AgentToolContext;
+		await ask.execute(
+			"answered-round",
+			{
+				questions: [
+					{
+						id: "constraints",
+						question: "Which constraint matters most?",
+						options: [{ label: "Budget" }, { label: "Timeline" }],
+						deepInterview: { round: 1, component: "Scope", dimension: "Constraints", ambiguity: 0.42 },
+					},
+				],
+			},
+			undefined,
+			undefined,
+			context,
+		);
+
+		const state = JSON.parse(
+			await Bun.file(modeStatePath(tempDir.path(), sessionManager.getSessionId(), "deep-interview")).text(),
+		);
+		expect(state.state.rounds).toEqual([
+			expect.objectContaining({ round: 1, question_id: "constraints", selected_options: ["Timeline"] }),
+		]);
+		const continued = Promise.withResolvers<void>();
+		vi.spyOn(session.agent, "continue").mockImplementation(async () => continued.resolve());
+		const assistant = { ...createAssistantMessage("The round is answered."), timestamp: 1 };
+		session.agent.emitExternalEvent({ type: "turn_start" });
+		session.agent.emitExternalEvent({ type: "message_end", message: assistant });
+		session.agent.emitExternalEvent({ type: "agent_end", messages: [assistant] });
+		await continued.promise;
+		const entries = sessionManager
+			.getEntries()
+			.filter((entry): entry is Extract<typeof entry, { type: "message" }> => entry.type === "message");
+		expect(entries.findIndex(entry => entry.message === assistant)).toBeLessThan(
+			entries.findIndex(
+				entry =>
+					entry.message.role === "developer" && JSON.stringify(entry.message.content).includes(REMINDER_MARKER),
+			),
+		);
+	});
+
+	it("atomically commits only two overlapping ordinary-stop reservations", async () => {
+		await activateWorkflow("deep-interview");
+		setActiveGoal();
+		const gate = Promise.withResolvers<void>();
+		const threeReads = Promise.withResolvers<void>();
+		let reads = 0;
+		vi.spyOn(skillState, "buildSkillStopOutput").mockImplementation(async () => {
+			if (++reads === 3) threeReads.resolve();
+			await gate.promise;
+			return { decision: "block", stopReason: "gjc_skill_deep_interview_interviewing" };
+		});
+		const twoContinues = Promise.withResolvers<void>();
+		let continuations = 0;
+		vi.spyOn(session.agent, "continue").mockImplementation(async () => {
+			if (++continuations === 2) twoContinues.resolve();
+		});
+		for (const timestamp of [1, 2, 3]) {
+			const assistant = { ...createAssistantMessage(`stop ${timestamp}`), timestamp };
+			session.agent.emitExternalEvent({ type: "turn_start" });
+			session.agent.emitExternalEvent({ type: "message_end", message: assistant });
+			session.agent.emitExternalEvent({ type: "agent_end", messages: [assistant] });
+		}
+		await threeReads.promise;
+		gate.resolve();
+		await twoContinues.promise;
+		await session.waitForIdle();
+		expect(continuations).toBe(2);
+		expect(developerReminders()).toHaveLength(2);
+		expect(goalReminders()).toHaveLength(0);
+	});
+
+	it("claims genuine ingress exactly once while synthetic and agent-attributed streaming inputs cannot supersede", async () => {
+		await activateWorkflow("deep-interview");
+		vi.spyOn(session.agent, "continue").mockResolvedValue();
+		const promptSpy = vi.spyOn(session.agent, "prompt").mockResolvedValue();
+		let isStreaming = false;
+		Object.defineProperty(session, "isStreaming", { configurable: true, get: () => isStreaming });
+		const rows = [
+			["synthetic", false, () => session.prompt("synthetic", { synthetic: true, streamingBehavior: "steer" })],
+			[
+				"agent-attributed",
+				false,
+				() => session.prompt("agent-attributed", { attribution: "agent", streamingBehavior: "followUp" }),
+			],
+			["direct", true, () => session.prompt("direct")],
+			["stream-steer", true, () => session.prompt("stream-steer", { streamingBehavior: "steer" })],
+			["stream-follow-up", true, () => session.prompt("stream-follow-up", { streamingBehavior: "followUp" })],
+			["busy-default", true, () => session.sendUserMessage("busy-default")],
+			["explicit-steer", true, () => session.sendUserMessage("explicit-steer", { deliverAs: "steer" })],
+			["explicit-follow-up", true, () => session.sendUserMessage("explicit-follow-up", { deliverAs: "followUp" })],
+			["public-steer", true, () => session.steer("public-steer")],
+			["public-follow-up", true, () => session.followUp("public-follow-up")],
+			[
+				"custom-skill",
+				true,
+				() =>
+					session.sendCustomMessage({
+						customType: "skill",
+						content: "custom-skill",
+						display: true,
+						attribution: "user",
+					}),
+			],
+		] as const;
+		for (const [index, [name, genuine, ingress]] of rows.entries()) {
+			isStreaming = name !== "direct";
+			const remindersBefore = developerReminders().length;
+			const settled = Promise.withResolvers<void>();
+			let unsubscribe = () => {};
+			unsubscribe = session.subscribe(event => {
+				if (event.type !== "agent_end") return;
+				unsubscribe();
+				settled.resolve();
+			});
+			const assistant = { ...createAssistantMessage(name), timestamp: index + 1 };
+			session.agent.emitExternalEvent({ type: "turn_start" });
+			session.agent.emitExternalEvent({ type: "message_end", message: assistant });
+			await ingress();
+			isStreaming = false;
+			session.agent.emitExternalEvent({ type: "agent_end", messages: [assistant] });
+			await settled.promise;
+			await session.waitForIdle();
+			expect(developerReminders().length - remindersBefore, name).toBe(genuine ? 0 : 1);
+		}
+		expect(promptSpy).toHaveBeenCalledTimes(1);
+		expect(session.getQueuedMessages().steering).toEqual([
+			"synthetic",
+			"stream-steer",
+			"busy-default",
+			"explicit-steer",
+			"public-steer",
+		]);
+		expect(session.getQueuedMessages().followUp).toEqual([
+			"agent-attributed",
+			"stream-follow-up",
+			"explicit-follow-up",
+			"public-follow-up",
+		]);
 	});
 });
