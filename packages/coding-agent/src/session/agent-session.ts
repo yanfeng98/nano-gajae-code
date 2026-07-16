@@ -72,6 +72,7 @@ import {
 import type {
 	AssistantMessage,
 	Context,
+	DeveloperMessage,
 	Effort,
 	ImageContent,
 	Message,
@@ -229,7 +230,7 @@ import { requestGjcWorkerIntegrationAttempt } from "../gjc-runtime/team-runtime"
 import { GoalRuntime } from "../goals/runtime";
 import type { Goal, GoalModeState } from "../goals/state";
 import type { HindsightSessionState } from "../hindsight/state";
-import { ensureWorkflowSkillActivationState } from "../hooks/skill-state";
+import { buildSkillStopOutput, ensureWorkflowSkillActivationState } from "../hooks/skill-state";
 import { type LocalProtocolOptions, resolveLocalUrlToPath } from "../internal-urls";
 import { shutdownAll as shutdownAllLspClients } from "../lsp/client";
 import { resolveMemoryBackend } from "../memory-backend";
@@ -357,6 +358,7 @@ import type {
 import {
 	createReadonlySessionManager,
 	getLatestCompactionEntry,
+	getSessionMessageEntryId,
 	getSessionMessageObservationId,
 	transferSessionMessageIdentity,
 } from "./session-manager";
@@ -1417,6 +1419,14 @@ export class AgentSession {
 	#fallbackInvocationId = 0;
 	// Todo completion reminder state
 	#todoReminderCount = 0;
+	#deepInterviewUserIntentEpoch = 0;
+	#deepInterviewTurnOwnerEpoch = 0;
+	#deepInterviewGenuineUserMessageEpochs = new WeakMap<object, number>();
+	#deepInterviewPreclaimedCustomInputEpochs = new WeakMap<object, number>();
+	#deepInterviewAssistantIdentities = new WeakMap<object, string>();
+	#nextDeepInterviewAssistantFallbackId = 0;
+	#handledDeepInterviewAssistantIds = new Set<string>();
+	#deepInterviewContinuationBudget = { epoch: 0, committed: 0, reserved: 0 };
 	#lastGoalReminderAssistantTimestamp: number | undefined = undefined;
 	#suppressNextGoalReminderAfterAbortGoalId: string | undefined = undefined;
 	#todoPhases: TodoPhase[] = [];
@@ -2616,9 +2626,21 @@ export class AgentSession {
 		// a later raw listener cannot revive a cancelled/replaced continuation.
 		const maintenanceGeneration =
 			event.type === "agent_end" && event.stopReason === "maintenance" ? this.#promptGeneration : undefined;
+		// Same pre-yield capture for ordinary agent_end stops: the deep-interview
+		// continuation check reads durable stop-state asynchronously and must stay
+		// bound to the generation that produced this stop.
+		const agentEndGeneration = event.type === "agent_end" ? this.#promptGeneration : undefined;
 		const maintenanceWasDisposed = this.#isDisposed;
+		const agentEndOwnerEpoch = event.type === "agent_end" ? this.#deepInterviewTurnOwnerEpoch : undefined;
 		// When a user message starts, check if it's from either queue and remove it BEFORE emitting
 		// This ensures the UI sees the updated queue state
+		if (event.type === "message_start") {
+			const epoch = this.#deepInterviewGenuineUserMessageEpochs.get(event.message);
+			if (epoch !== undefined) {
+				this.#deepInterviewContinuationBudget = { epoch, committed: 0, reserved: 0 };
+				this.#deepInterviewTurnOwnerEpoch = epoch;
+			}
+		}
 		if (event.type === "message_start" && event.message.role === "user") {
 			const messageText = this.#getUserMessageText(event.message);
 			if (messageText) {
@@ -2725,6 +2747,7 @@ export class AgentSession {
 			}
 		}
 
+		if (event.type === "turn_start") this.#deepInterviewTurnOwnerEpoch = this.#deepInterviewUserIntentEpoch;
 		if (event.type === "turn_start" && this.#goalRuntime.shouldTrackTurnBaseline()) {
 			const usage = this.getSessionStats().tokens;
 			this.#goalRuntime.onTurnStart(`turn-${++this.#goalTurnCounter}`, {
@@ -3129,6 +3152,12 @@ export class AgentSession {
 			}
 			if (msg.stopReason !== "error" && msg.stopReason !== "aborted") {
 				if (this.#enforceRewindBeforeYield()) {
+					return;
+				}
+				if (
+					(await this.#checkActiveDeepInterviewCompletion(msg, agentEndGeneration, agentEndOwnerEpoch)) !==
+					"not_applicable"
+				) {
 					return;
 				}
 				if (await this.#checkGoalCompletion(msg)) {
@@ -5775,6 +5804,7 @@ export class AgentSession {
 			throw Object.assign(new Error("skill.invoke args must be a string."), { code: "invalid_input" });
 		const skill = this.skills.find(candidate => candidate.name === skillName);
 		if (!skill) throw Object.assign(new Error(`Skill ${skillName} was not found.`), { code: "invalid_input" });
+		const deepInterviewUserIntentEpoch = this.#claimDeepInterviewUserIntent();
 		const activation = await resolveSubskillActivationForSkillInvocation({
 			cwd: this.sessionManager.getCwd(),
 			sessionId: this.sessionId,
@@ -5787,13 +5817,15 @@ export class AgentSession {
 			cwd: this.sessionManager.getCwd(),
 			sessionId: this.sessionId,
 		});
-		await this.promptCustomMessage({
+		const skillPromptMessage = {
 			customType: SKILL_PROMPT_MESSAGE_TYPE,
 			content: built.message,
 			display: true,
 			details: built.details,
-			attribution: "user",
-		});
+			attribution: "user" as const,
+		};
+		this.#deepInterviewPreclaimedCustomInputEpochs.set(skillPromptMessage, deepInterviewUserIntentEpoch);
+		await this.promptCustomMessage(skillPromptMessage);
 		return {
 			name: skill.name,
 			path: skill.filePath,
@@ -6305,6 +6337,9 @@ export class AgentSession {
 		const expandedText = expandPromptTemplates ? expandPromptTemplate(text, [...this.#promptTemplates]) : text;
 		assertImagePlaceholdersHavePayload(expandedText, options?.images);
 		const workflowIntentDiff = options?.synthetic ? null : buildWorkflowIntentDiff(expandedText);
+		const claimsGenuineUserIntent = !options?.synthetic && options?.attribution !== "agent";
+		const deepInterviewUserIntentEpoch =
+			claimsGenuineUserIntent && !this.isStreaming ? this.#claimDeepInterviewUserIntent() : undefined;
 
 		// If streaming, queue via steer() or followUp() based on option
 		if (this.isStreaming) {
@@ -6314,9 +6349,10 @@ export class AgentSession {
 			if (options.streamingBehavior === "followUp") {
 				await this.#queueFollowUp(expandedText, options?.images, {
 					forceOneAtATime: options.followUpQueuePolicy === "sequential",
+					claimsGenuineUserIntent,
 				});
 			} else {
-				await this.#queueSteer(expandedText, options?.images);
+				await this.#queueSteer(expandedText, options?.images, { claimsGenuineUserIntent });
 			}
 			if (workflowIntentDiff) {
 				this.sessionManager.appendCustomEntry(WORKFLOW_INTENT_DIFF_CUSTOM_TYPE, workflowIntentDiff);
@@ -6352,6 +6388,8 @@ export class AgentSession {
 						timestamp: Date.now(),
 					}
 				: { role: "user" as const, content: userContent, attribution: promptAttribution, timestamp: Date.now() };
+			if (deepInterviewUserIntentEpoch !== undefined)
+				this.#deepInterviewGenuineUserMessageEpochs.set(message, deepInterviewUserIntentEpoch);
 			await this.refreshGjcSubskillTools();
 
 			if (eagerTodoPrelude?.toolChoice) {
@@ -6453,11 +6491,20 @@ export class AgentSession {
 						.filter((content): content is TextContent => content.type === "text")
 						.map(content => content.text)
 						.join("");
+		const claimsGenuineUserIntent = message.attribution === "user";
+		const preclaimedUserIntentEpoch = this.#deepInterviewPreclaimedCustomInputEpochs.get(message);
+		this.#deepInterviewPreclaimedCustomInputEpochs.delete(message);
+		const deepInterviewUserIntentEpoch =
+			claimsGenuineUserIntent && !this.isStreaming
+				? (preclaimedUserIntentEpoch ?? this.#claimDeepInterviewUserIntent())
+				: preclaimedUserIntentEpoch;
 
 		if (this.isStreaming) {
 			if (!options?.streamingBehavior) {
 				throw new AgentBusyError();
 			}
+			if (preclaimedUserIntentEpoch !== undefined)
+				this.#deepInterviewPreclaimedCustomInputEpochs.set(message, preclaimedUserIntentEpoch);
 			await this.sendCustomMessage(message, {
 				deliverAs: options.streamingBehavior,
 				followUpQueuePolicy: options.followUpQueuePolicy,
@@ -6478,6 +6525,8 @@ export class AgentSession {
 				attribution: message.attribution ?? "agent",
 				timestamp: Date.now(),
 			};
+			if (deepInterviewUserIntentEpoch !== undefined)
+				this.#deepInterviewGenuineUserMessageEpochs.set(customMessage, deepInterviewUserIntentEpoch);
 
 			await this.#syncSkillPromptActiveStateSafely(customMessage, true);
 			try {
@@ -6910,7 +6959,7 @@ export class AgentSession {
 
 		const expandedText = expandPromptTemplate(text, [...this.#promptTemplates]);
 		assertImagePlaceholdersHavePayload(expandedText, images);
-		await this.#queueSteer(expandedText, images);
+		await this.#queueSteer(expandedText, images, { claimsGenuineUserIntent: true });
 	}
 
 	/**
@@ -6929,26 +6978,29 @@ export class AgentSession {
 		assertImagePlaceholdersHavePayload(expandedText, images);
 		await this.#queueFollowUp(expandedText, images, {
 			forceOneAtATime: options?.followUpQueuePolicy === "sequential",
+			claimsGenuineUserIntent: true,
 		});
 	}
 
 	/**
 	 * Internal: Queue a steering message (already expanded, no extension command check).
 	 */
-	async #queueSteer(text: string, images?: ImageContent[]): Promise<void> {
+	async #queueSteer(
+		text: string,
+		images?: ImageContent[],
+		options?: { claimsGenuineUserIntent?: boolean },
+	): Promise<void> {
 		assertImagePlaceholdersHavePayload(text, images);
 		const displayText = text || (images && images.length > 0 ? "[Image]" : "");
 		this.#steeringMessages.push(this.#createQueuedDisplayEntry(displayText));
 		const content: (TextContent | ImageContent)[] = [{ type: "text", text }];
-		if (images && images.length > 0) {
-			content.push(...images);
+		if (images && images.length > 0) content.push(...images);
+		const message = { role: "user" as const, content, attribution: "user" as const, timestamp: Date.now() };
+		if (options?.claimsGenuineUserIntent) {
+			const epoch = this.#claimDeepInterviewUserIntent();
+			this.#deepInterviewGenuineUserMessageEpochs.set(message, epoch);
 		}
-		this.agent.steer({
-			role: "user",
-			content,
-			attribution: "user",
-			timestamp: Date.now(),
-		});
+		this.agent.steer(message);
 		// A live agent loop polls the steering queue at every tool/turn boundary
 		// and consumes this message on its own. But when a steer is queued while no
 		// loop is actively running — e.g. the session still reports busy only
@@ -6967,23 +7019,22 @@ export class AgentSession {
 	/**
 	 * Internal: Queue a follow-up message (already expanded, no extension command check).
 	 */
-	async #queueFollowUp(text: string, images?: ImageContent[], options?: { forceOneAtATime?: boolean }): Promise<void> {
+	async #queueFollowUp(
+		text: string,
+		images?: ImageContent[],
+		options?: { forceOneAtATime?: boolean; claimsGenuineUserIntent?: boolean },
+	): Promise<void> {
 		assertImagePlaceholdersHavePayload(text, images);
 		const displayText = text || (images && images.length > 0 ? "[Image]" : "");
 		this.#followUpMessages.push(this.#createQueuedDisplayEntry(displayText));
 		const content: (TextContent | ImageContent)[] = [{ type: "text", text }];
-		if (images && images.length > 0) {
-			content.push(...images);
+		if (images && images.length > 0) content.push(...images);
+		const message = { role: "user" as const, content, attribution: "user" as const, timestamp: Date.now() };
+		if (options?.claimsGenuineUserIntent) {
+			const epoch = this.#claimDeepInterviewUserIntent();
+			this.#deepInterviewGenuineUserMessageEpochs.set(message, epoch);
 		}
-		this.agent.followUp(
-			{
-				role: "user",
-				content,
-				attribution: "user",
-				timestamp: Date.now(),
-			},
-			options?.forceOneAtATime ? { forceOneAtATime: true } : undefined,
-		);
+		this.agent.followUp(message, options?.forceOneAtATime ? { forceOneAtATime: true } : undefined);
 		// When fully idle AND the session is in a resumable assistant-ended state,
 		// schedule an immediate continue so the queued follow-up is delivered
 		// without waiting for the next user turn. We gate on isStreaming (model
@@ -7146,6 +7197,12 @@ export class AgentSession {
 			attribution: message.attribution ?? "agent",
 			timestamp: Date.now(),
 		};
+		const preclaimedUserIntentEpoch = this.#deepInterviewPreclaimedCustomInputEpochs.get(message);
+		this.#deepInterviewPreclaimedCustomInputEpochs.delete(message);
+		if (appMessage.attribution === "user") {
+			const epoch = preclaimedUserIntentEpoch ?? this.#claimDeepInterviewUserIntent();
+			this.#deepInterviewGenuineUserMessageEpochs.set(appMessage, epoch);
+		}
 		if (this.isStreaming) {
 			if (options?.deliverAs === "nextTurn") {
 				this.#queueHiddenNextTurnMessage(appMessage, options?.triggerTurn ?? false);
@@ -7290,12 +7347,12 @@ export class AgentSession {
 		}
 
 		if (options?.deliverAs === "followUp") {
-			await this.#queueFollowUp(text, images);
+			await this.#queueFollowUp(text, images, { claimsGenuineUserIntent: true });
 			options.onPreflightAccepted?.();
 			return;
 		}
 		if (options?.deliverAs === "steer") {
-			await this.#queueSteer(text, images);
+			await this.#queueSteer(text, images, { claimsGenuineUserIntent: true });
 			options.onPreflightAccepted?.();
 			return;
 		}
@@ -7306,7 +7363,7 @@ export class AgentSession {
 		// in-flight compaction internally, and #queueSteer would otherwise park
 		// the message in the steering queue with no turn to consume it.
 		if (this.isStreaming) {
-			await this.#queueSteer(text, images);
+			await this.#queueSteer(text, images, { claimsGenuineUserIntent: true });
 			options?.onPreflightAccepted?.();
 			return;
 		}
@@ -9877,6 +9934,94 @@ export class AgentSession {
 		});
 		this.#scheduleAgentContinue({ generation: this.#promptGeneration });
 		return true;
+	}
+	#claimDeepInterviewUserIntent(): number {
+		return ++this.#deepInterviewUserIntentEpoch;
+	}
+
+	#deepInterviewAssistantIdentity(message: AssistantMessage): string {
+		const existingIdentity = this.#deepInterviewAssistantIdentities.get(message);
+		if (existingIdentity) return existingIdentity;
+		const entryId = getSessionMessageEntryId(message);
+		const identity = entryId ? `entry:${entryId}` : `object:${++this.#nextDeepInterviewAssistantFallbackId}`;
+		this.#deepInterviewAssistantIdentities.set(message, identity);
+		return identity;
+	}
+
+	async #checkActiveDeepInterviewCompletion(
+		assistantMessage: AssistantMessage,
+		agentEndGeneration: number | undefined,
+		ownerEpoch: number | undefined,
+	): Promise<"not_applicable" | "continued" | "superseded" | "already_handled"> {
+		const identity = this.#deepInterviewAssistantIdentity(assistantMessage);
+		if (this.#handledDeepInterviewAssistantIds.has(identity)) return "already_handled";
+
+		const output = await buildSkillStopOutput({
+			cwd: this.sessionManager.getCwd(),
+			sessionId: this.sessionManager.getSessionId(),
+			sessionFile: this.sessionManager.getSessionFile(),
+		});
+		if (
+			agentEndGeneration === undefined ||
+			ownerEpoch === undefined ||
+			this.#isDisposed ||
+			agentEndGeneration !== this.#promptGeneration ||
+			ownerEpoch !== this.#deepInterviewUserIntentEpoch
+		) {
+			this.#handledDeepInterviewAssistantIds.add(identity);
+			return "superseded";
+		}
+		const stopReason = typeof output?.stopReason === "string" ? output.stopReason : "";
+		if (output?.decision !== "block") return "not_applicable";
+		if (stopReason !== "gjc_skill_deep_interview_interviewing") {
+			if (!stopReason.startsWith("gjc_skill_deep_interview_")) return "not_applicable";
+			this.#handledDeepInterviewAssistantIds.add(identity);
+			return "already_handled";
+		}
+		if (this.#handledDeepInterviewAssistantIds.has(identity)) return "already_handled";
+		this.#handledDeepInterviewAssistantIds.add(identity);
+
+		const budget = this.#deepInterviewContinuationBudget;
+		if (budget.epoch !== ownerEpoch) return "superseded";
+		if (budget.committed + budget.reserved >= 2) return "already_handled";
+		budget.reserved++;
+		let committed = false;
+		try {
+			if (
+				this.#isDisposed ||
+				agentEndGeneration !== this.#promptGeneration ||
+				ownerEpoch !== this.#deepInterviewUserIntentEpoch
+			) {
+				return "superseded";
+			}
+			budget.reserved--;
+			budget.committed++;
+			committed = true;
+			const reminder = [
+				"<system-reminder>",
+				`You stopped while the GJC deep-interview workflow is still active (stop gate: ${stopReason}).`,
+				"Continue the active round immediately: score and persist the answered round, report progress, then use the ask tool for the next question.",
+				"Only stop after crystallizing the spec, recording a handoff, or explicitly cancelling the workflow.",
+				`(Continuation ${budget.committed}/2 for this prompt)`,
+				"</system-reminder>",
+			].join("\n");
+			const reminderMessage: DeveloperMessage = {
+				role: "developer",
+				content: [{ type: "text", text: reminder }],
+				attribution: "agent",
+				timestamp: Date.now(),
+			};
+			this.agent.appendMessage(reminderMessage);
+			this.sessionManager.appendMessage(reminderMessage);
+			this.#scheduleAgentContinue({
+				generation: agentEndGeneration,
+				skipCompactionCheck: true,
+				shouldContinue: () => ownerEpoch === this.#deepInterviewUserIntentEpoch,
+			});
+			return "continued";
+		} finally {
+			if (!committed) budget.reserved--;
+		}
 	}
 	/**
 	 * Check if agent stopped with incomplete todos and prompt to continue.
