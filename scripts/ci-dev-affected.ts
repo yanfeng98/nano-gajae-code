@@ -402,24 +402,11 @@ async function getChangedPaths(): Promise<string[]> {
 	await requireCommitObject(head, "source head");
 	const range = `${base}..${head}`;
 	const diff = await $`git diff --name-only -z ${range}`.cwd(repoRoot).quiet().nothrow();
-	if (diff.exitCode === 0) {
-		return new TextDecoder().decode(diff.stdout).split("\0").filter(Boolean).sort();
+	if (diff.exitCode !== 0) {
+		const stderr = diff.stderr.toString().trim();
+		throw new Error(`Failed to compute changed paths for ${range}: ${stderr}`);
 	}
-
-	const stderr = diff.stderr.toString().trim();
-	const eventName = Bun.env.GITHUB_EVENT_NAME?.trim();
-	const baseSha = Bun.env.GITHUB_BASE_SHA?.trim();
-	if (eventName === "pull_request" && baseSha && stderr.includes("no merge base")) {
-		await requireCommitObject(baseSha, "pull request base");
-		const directDiff = await $`git diff --name-only -z ${baseSha} ${head}`.cwd(repoRoot).quiet().nothrow();
-		if (directDiff.exitCode === 0) {
-			console.error(`ci-dev-affected: no merge base for ${range}; using exact base/head tree diff`);
-			return new TextDecoder().decode(directDiff.stdout).split("\0").filter(Boolean).sort();
-		}
-		const directStderr = directDiff.stderr.toString().trim();
-		throw new Error(`Failed to compute changed paths for ${baseSha}..${head}: ${directStderr}`);
-	}
-	throw new Error(`Failed to compute changed paths for ${range}: ${stderr}`);
+	return new TextDecoder().decode(diff.stdout).split("\0").filter(Boolean).sort();
 }
 
 async function requireCommitObject(ref: string, label: string): Promise<void> {
