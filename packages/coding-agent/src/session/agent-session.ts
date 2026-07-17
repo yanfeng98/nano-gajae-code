@@ -1614,6 +1614,8 @@ export class AgentSession {
 	};
 	#promptInFlightCount = 0;
 	#agentEventHandlersInFlight = 0;
+	#agentEventHandlersSettled: Promise<void> | undefined;
+	#resolveAgentEventHandlersSettled: (() => void) | undefined;
 	#queuedExtensionEventCount = 0;
 	#extensionTurnGeneration = 0;
 	#closedExtensionTurnGeneration: number | undefined;
@@ -2564,12 +2566,22 @@ export class AgentSession {
 
 	#trackAgentEvent = async (event: AgentEvent): Promise<void> => {
 		this.#agentEventHandlersInFlight++;
+		if (this.#agentEventHandlersInFlight === 1) {
+			const settled = Promise.withResolvers<void>();
+			this.#agentEventHandlersSettled = settled.promise;
+			this.#resolveAgentEventHandlersSettled = settled.resolve;
+		}
 		try {
 			await this.#handleAgentEvent(event);
 		} catch (error) {
 			logger.warn("Agent event handler failed", { event: event.type, error: String(error) });
 		} finally {
 			this.#agentEventHandlersInFlight = Math.max(0, this.#agentEventHandlersInFlight - 1);
+			if (this.#agentEventHandlersInFlight === 0) {
+				this.#resolveAgentEventHandlersSettled?.();
+				this.#agentEventHandlersSettled = undefined;
+				this.#resolveAgentEventHandlersSettled = undefined;
+			}
 			this.#flushPendingAgentEnd();
 		}
 	};
@@ -3511,6 +3523,10 @@ export class AgentSession {
 			}
 			if (this.#postPromptTasksPromise) {
 				await this.#postPromptTasksPromise;
+				continue;
+			}
+			if (this.#agentEventHandlersSettled) {
+				await this.#agentEventHandlersSettled;
 				continue;
 			}
 			// Tracked post-prompt tasks cover deferred continuations scheduled from
