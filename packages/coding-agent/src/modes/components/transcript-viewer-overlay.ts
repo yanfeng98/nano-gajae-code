@@ -134,7 +134,10 @@ export class TranscriptViewerOverlay extends Container {
 		this.#viewportHeight = Math.max(5, (process.stdout.rows || 40) - header.length - footer.length - 5);
 		this.#contentOrigin = header.length + 2;
 		const maxScroll = Math.max(0, this.#lines.length - this.#viewportHeight);
-		if (this.#followTailPending) this.#scrollOffset = maxScroll;
+		if (this.#followTailPending) {
+			this.#scrollOffset = maxScroll;
+			this.#followTailPending = false;
+		}
 		this.#scrollOffset = Math.max(0, Math.min(this.#scrollOffset, maxScroll));
 		const visible = this.#lines.slice(this.#scrollOffset, this.#scrollOffset + this.#viewportHeight);
 		const lines = [
@@ -191,12 +194,14 @@ export class TranscriptViewerOverlay extends Container {
 			return;
 		}
 		if (keyData === "g") {
+			this.#followTailPending = false;
 			this.#selected = 0;
 			this.#scrollOffset = 0;
 			this.#requestRender();
 			return;
 		}
 		if (keyData === "G") {
+			this.#followTailPending = false;
 			this.#selected = Math.max(0, count - 1);
 			this.#scrollOffset = this.#lines.length;
 			this.#requestRender();
@@ -230,6 +235,7 @@ export class TranscriptViewerOverlay extends Container {
 	}
 
 	#scroll(keyData: string): void {
+		this.#followTailPending = false;
 		if (keyData === "j" || matchesKey(keyData, "down") || matchesKey(keyData, "pageDown"))
 			this.#scrollOffset += PAGE_SIZE;
 		if (keyData === "k" || matchesKey(keyData, "up") || matchesKey(keyData, "pageUp"))
@@ -256,14 +262,10 @@ export class TranscriptViewerOverlay extends Container {
 		this.#requestRender();
 	}
 	#page(direction: 1 | -1): void {
-		const previous = this.#selected;
-		const next = Math.max(0, Math.min(previous + direction * 5, this.#entries.length - 1));
-		if (next === previous) {
-			this.#scrollOffset += direction * PAGE_SIZE;
-			this.#requestRender();
-			return;
-		}
-		this.#move(next - previous);
+		this.#followTailPending = false;
+		this.#selected = Math.max(0, Math.min(this.#selected + direction * 5, this.#entries.length - 1));
+		this.#scrollOffset += direction * PAGE_SIZE;
+		this.#requestRender();
 	}
 	#toggleExpand(): void {
 		const entry = this.#entries[this.#selected];

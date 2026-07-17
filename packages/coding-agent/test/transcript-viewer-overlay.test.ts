@@ -241,6 +241,10 @@ test("reconciles missing IDs by position and keeps followed tail content visible
 	viewer.refresh();
 	expect(viewer.selectedEntryId).toBe("appended");
 	expect(viewer.render(100).join("\n")).toContain("appended content");
+	viewer.handleInput("\x1b[5~");
+	const paged = viewer.render(100).join("\n");
+	expect(paged).not.toContain("appended content");
+	expect(viewer.render(100).join("\n")).toBe(paged);
 
 	entries = [entryForOverlay("first", "first"), entryForOverlay("last", "last")];
 	const positioned = new TranscriptViewerOverlay({ getEntries: () => entries, onClose: () => {} });
