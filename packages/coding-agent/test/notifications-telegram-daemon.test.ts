@@ -4158,7 +4158,13 @@ describe("telegram daemon connection-drop resilience (repro-first)", () => {
 		expect(FakeWs.instances[0]!.sent.map(frame => JSON.parse(frame)).find(frame => frame.type === "hello")).toEqual({
 			type: "hello",
 			protocolVersion: 3,
-			capabilities: ["client_ping_pong", "ask_controls_v1", "ask_selected_ack_v1", "tool_activity_v1"],
+			capabilities: [
+				"client_ping_pong",
+				"ask_controls_v1",
+				"ask_selected_ack_v1",
+				"tool_activity_v1",
+				"ephemeral_turn_v1",
+			],
 		});
 		// The native server advertises the ping/pong capability so ack-based
 		// liveness can start; then the link goes half-open (no further frames,
