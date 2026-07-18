@@ -4115,13 +4115,10 @@ describe("telegram daemon", () => {
 	});
 });
 
-describe("telegram daemon connection-drop resilience (repro-first)", () => {
-	// Phase 1 / AC-1: half-open daemon->session WebSocket. The socket stays
-	// readyState OPEN, accepts send(), and never dispatches 'close'. On current
-	// code there is no per-session liveness, so a stale half-open socket lives in
-	// the sessions map forever and scanRoots() (which skips when sessions.has(id))
-	// never reconnects. This test asserts the DESIRED post-fix recovery and is
-	// therefore RED on current code.
+describe("telegram daemon connection-drop resilience", () => {
+	// AC-1/AC-2: model a half-open daemon-to-session WebSocket that stays OPEN,
+	// accepts send(), and never dispatches close. The liveness fence must evict it
+	// and let scanRoots() reconnect the current endpoint.
 	test("AC-1/AC-2: half-open session socket is detected and reconnected", async () => {
 		FakeWs.instances = [];
 		const agentDir = tempAgentDir();
