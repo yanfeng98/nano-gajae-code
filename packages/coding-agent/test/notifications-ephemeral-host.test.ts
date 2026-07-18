@@ -147,6 +147,44 @@ describe("EphemeralTurnHost", () => {
 		expect(delivered).toEqual([]);
 		staleHost.dispose();
 	});
+	it("fences active work and ignores inbound turns and cancellations while notifications are disabled", async () => {
+		const pending = Promise.withResolvers<{ replyText: string }>();
+		let executions = 0;
+		let activeSignal: AbortSignal | undefined;
+		const host = new EphemeralTurnHost(
+			(connectionId, frame) => sent.push({ connectionId, frame }),
+			async (_question, signal) => {
+				executions++;
+				activeSignal = signal;
+				return await pending.promise;
+			},
+		);
+		configure(host);
+		const active = request({ requestId: "active" });
+		host.handle("owner", active);
+		expect(executions).toBe(1);
+
+		host.disable();
+		expect(activeSignal?.aborted).toBe(true);
+		host.handle("disabled", request({ requestId: "disabled" }));
+		host.handle("disabled", { ...active, type: "ephemeral_turn_cancel", reason: "daemon_shutdown" });
+		pending.resolve({ replyText: "stale" });
+		await flush();
+		expect(executions).toBe(1);
+		expect(sent).toEqual([]);
+
+		host.enable();
+		host.handle("reenabled", request({ requestId: "reenabled" }));
+		await flush();
+		expect(executions).toBe(2);
+		expect(sent).toEqual([
+			expect.objectContaining({
+				connectionId: "reenabled",
+				frame: expect.objectContaining({ requestId: "reenabled", status: "ok", text: "stale" }),
+			}),
+		]);
+		host.dispose();
+	});
 
 	it("terminalizes immediately when authenticated cancellation or session loss aborts the controller", async () => {
 		let signal: AbortSignal | undefined;

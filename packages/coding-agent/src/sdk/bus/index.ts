@@ -873,6 +873,8 @@ interface SessionRuntime {
 	disposeGateTerminalController: () => void;
 	disposeAckRecoveryParticipant: () => void;
 	disposeGateEmitterListener: () => void;
+	/** Aborts and fences side turns while notification delivery is disabled. */
+	disableEphemeralTurns: () => void;
 	waitForGateResolutionQuiescence: () => Promise<void>;
 	trackGateResolution: <T>(resolution: Promise<T>) => Promise<T>;
 	workflowGate?: WorkflowGateEmitter;
@@ -930,8 +932,6 @@ interface SessionRuntime {
 	cancelPostmortemCleanup: () => void;
 	/** Disposes side-turn resources when their owning logical session becomes unavailable. */
 	abortEphemeralTurns: () => void;
-	/** Aborts active side turns while keeping the host usable after notifications are re-enabled. */
-	cancelEphemeralTurns: () => void;
 }
 
 const SENSITIVE_MODEL_LABEL =
@@ -2432,6 +2432,7 @@ export class EphemeralTurnHost {
 	#tombstones = new Map<string, EphemeralTurnTombstone>();
 	#expiryTimer: NodeJS.Timeout | undefined;
 	#disposed = false;
+	#enabled = true;
 	#now: () => number;
 	#sendTo: (connectionId: string, frame: Record<string, unknown>) => void;
 	#execute: (question: string, signal: AbortSignal) => Promise<{ replyText: string }>;
@@ -2453,6 +2454,20 @@ export class EphemeralTurnHost {
 		this.#authority = { ...authority };
 	}
 
+	disable(): void {
+		if (this.#disposed) return;
+		this.#enabled = false;
+		for (const active of this.#active.values()) active.controller.abort("session_unavailable");
+		this.#terminalEvents.clear();
+		this.#tombstones.clear();
+		if (this.#expiryTimer) clearTimeout(this.#expiryTimer);
+		this.#expiryTimer = undefined;
+	}
+
+	enable(): void {
+		if (!this.#disposed) this.#enabled = true;
+	}
+
 	dispose(): void {
 		this.#disposed = true;
 		for (const active of this.#active.values()) active.controller.abort("session_unavailable");
@@ -2463,6 +2478,7 @@ export class EphemeralTurnHost {
 	}
 
 	handle(connectionId: string, frame: Record<string, unknown>): boolean {
+		if (!this.#enabled) return frame.type === "ephemeral_turn" || frame.type === "ephemeral_turn_cancel";
 		if (frame.type === "ephemeral_turn") return this.#start(connectionId, frame);
 		if (frame.type === "ephemeral_turn_cancel") return this.#cancel(connectionId, frame);
 		return false;
@@ -2606,7 +2622,7 @@ export class EphemeralTurnHost {
 		clearTimeout(active.deadline);
 		active.controller.signal.removeEventListener("abort", active.abortListener);
 		this.#active.delete(key);
-		if (this.#disposed) return;
+		if (this.#disposed || !this.#enabled) return;
 		const terminalTextIsValid =
 			typeof text === "string" &&
 			text.trim().length > 0 &&
@@ -2822,7 +2838,7 @@ export function createNotificationsExtension(
 		}
 		if (reason === "notifications" && rt.host.started) {
 			rt.notificationsActive = false;
-			rt.cancelEphemeralTurns();
+			rt.disableEphemeralTurns();
 			try {
 				rt.disposeAnswerSource();
 			} catch {}
@@ -3439,7 +3455,7 @@ export function createNotificationsExtension(
 			gatePresentations,
 			stopping: false,
 			abortEphemeralTurns: () => {},
-			cancelEphemeralTurns: () => {},
+			disableEphemeralTurns: () => {},
 			cancelPostmortemCleanup: () => {},
 
 			redact,
@@ -3494,7 +3510,7 @@ export function createNotificationsExtension(
 			return await options.runEphemeralTurn(prompt.render(btwUserPrompt, { question }), signal);
 		});
 		initializedRuntime.abortEphemeralTurns = () => ephemeralTurns.dispose();
-		initializedRuntime.cancelEphemeralTurns = () => ephemeralTurns.sessionUnavailable(id);
+		initializedRuntime.disableEphemeralTurns = () => ephemeralTurns.disable();
 		try {
 			server.onSdkFrame((err, inbound) => {
 				if (err || !inbound) return;
@@ -3758,8 +3774,10 @@ export function createNotificationsExtension(
 				}
 				if (
 					(inbound.kind === "ephemeral_turn" || inbound.kind === "ephemeral_turn_cancel") &&
-					runtime?.notificationsActive
-				) {
+					!runtime?.notificationsActive
+				)
+					return;
+				if (inbound.kind === "ephemeral_turn" || inbound.kind === "ephemeral_turn_cancel") {
 					ephemeralTurns.handle(authenticatedInbound.connectionId, {
 						type: authenticatedInbound.kind,
 						sessionId: authenticatedInbound.sessionId,
@@ -3968,6 +3986,7 @@ export function createNotificationsExtension(
 			initializedRuntime.enableNotifications = () => {
 				const runtime = startedRuntime;
 				if (runtime.notificationsActive) return;
+				ephemeralTurns.enable();
 				runtime.notificationsActive = true;
 				runtime.disposeAnswerSource = registerInteractiveAnswerSource(
 					runtime.id,
