@@ -4416,12 +4416,7 @@ export function createNotificationsExtension(
 
 	const startAndReconcileSession = async (ctx: ExtensionContext): Promise<void> => {
 		const result = await startSession(ctx);
-		if (result.status === "started" || result.status === "already") {
-			await controller.reconcileCurrentSession(ctx);
-			return;
-		}
-		if (!lifecycleStartupCapability && result.status === "failed")
-			throw new Error(`notifications: SDK startup failed: ${result.failure?.message ?? "Unknown startup failure."}`);
+		if (result.status === "started" || result.status === "already") await controller.reconcileCurrentSession(ctx);
 	};
 
 	api.on("session_start", async (_event, ctx) => {
