@@ -7,6 +7,8 @@ import { createMockModel } from "@gajae-code/ai/providers/mock";
 import { AssistantMessageEventStream } from "@gajae-code/ai/utils/event-stream";
 import { ModelRegistry } from "@gajae-code/coding-agent/config/model-registry";
 import { Settings } from "@gajae-code/coding-agent/config/settings";
+import { ExtensionRunner } from "@gajae-code/coding-agent/extensibility/extensions/runner";
+import type { Extension } from "@gajae-code/coding-agent/extensibility/extensions/types";
 import { AgentSession, type AgentSessionEvent } from "@gajae-code/coding-agent/session/agent-session";
 import { AuthStorage } from "@gajae-code/coding-agent/session/auth-storage";
 import { SessionManager } from "@gajae-code/coding-agent/session/session-manager";
@@ -25,7 +27,7 @@ function lastAssistant(session: AgentSession): AssistantMessage {
 
 /**
  * Resilient-retry contract (deep-interview spec):
- *  - transient + unknown/no-code errors retry forever (past retry.maxRetries),
+ *  - configured transient + unknown/no-code errors retry according to the legacy policy,
  *    capped at retry.maxDelayMs (ceiling, not give-up);
  *  - clearly-terminal coded errors (auth/400/not-found) surface immediately;
  *  - retry.enabled=false surfaces immediately;
@@ -86,7 +88,10 @@ describe("AgentSession resilient retry", () => {
 		errorMessage?: string;
 		errorStatus?: number;
 		errorKind?: AssistantMessage["errorKind"];
+		transportFailure?: AssistantMessage["transportFailure"];
 		recoveredContent?: string;
+		partialContent?: string;
+		bareDefault?: boolean;
 	}): AgentSession {
 		const model = getBundledModel("anthropic", "claude-sonnet-4-5");
 		if (!model) throw new Error("Expected bundled Anthropic test model to exist");
@@ -107,7 +112,7 @@ describe("AgentSession resilient retry", () => {
 				queueMicrotask(() => {
 					const message: AssistantMessage = {
 						role: "assistant",
-						content: [],
+						content: options.partialContent ? [{ type: "text", text: options.partialContent }] : [],
 						api: requestedModel.api,
 						provider: requestedModel.provider,
 						model: requestedModel.id,
@@ -123,6 +128,7 @@ describe("AgentSession resilient retry", () => {
 						...(options.errorMessage === undefined ? {} : { errorMessage: options.errorMessage }),
 						...(options.errorStatus === undefined ? {} : { errorStatus: options.errorStatus }),
 						...(options.errorKind === undefined ? {} : { errorKind: options.errorKind }),
+						...(options.transportFailure === undefined ? {} : { transportFailure: options.transportFailure }),
 						timestamp: Date.now(),
 					};
 					stream.push({ type: "start", partial: message });
@@ -133,9 +139,13 @@ describe("AgentSession resilient retry", () => {
 		});
 		const settings = Settings.isolated({
 			"compaction.enabled": false,
-			"retry.baseDelayMs": 1,
-			"retry.maxDelayMs": 10,
-			"retry.maxRetries": 1,
+			...(options.bareDefault
+				? {}
+				: {
+						"retry.baseDelayMs": 1,
+						"retry.maxDelayMs": 10,
+						"retry.maxRetries": 1,
+					}),
 		});
 		settings.setModelRole("default", `${model.provider}/${model.id}`);
 		return new AgentSession({ agent, sessionManager: SessionManager.inMemory(), settings, modelRegistry });
@@ -180,23 +190,52 @@ describe("AgentSession resilient retry", () => {
 	function buildBareRetrySession(options: {
 		responses: Array<{ throw: string } | { content: string[] }>;
 		requestedModels?: string[];
+		onStreamStart?: (agent: Agent) => void;
+		extensionRunner?: ExtensionRunner;
 	}): AgentSession {
 		const model = getBundledModel("anthropic", "claude-sonnet-4-5");
 		if (!model) throw new Error("Expected bundled Anthropic test model to exist");
 		const mock = createMockModel({ responses: options.responses });
 		const requestedModels = options.requestedModels ?? [];
+		const sessionManager = SessionManager.inMemory();
 		const agent = new Agent({
 			getApiKey: provider => `${provider}-test-key`,
 			initialState: { model, systemPrompt: ["Test"], tools: [], messages: [] },
 			streamFn: (requestedModel, context, opts) => {
 				requestedModels.push(`${requestedModel.provider}/${requestedModel.id}`);
+				options.onStreamStart?.(agent);
 				return mock.stream(requestedModel, context, opts);
 			},
 		});
 		// Only compaction is disabled; no retry.* keys are seeded.
 		const settings = Settings.isolated({ "compaction.enabled": false });
 		settings.setModelRole("default", `${model.provider}/${model.id}`);
-		return new AgentSession({ agent, sessionManager: SessionManager.inMemory(), settings, modelRegistry });
+		return new AgentSession({
+			agent,
+			sessionManager,
+			settings,
+			modelRegistry,
+			extensionRunner: options.extensionRunner,
+		});
+	}
+	function createExtensionRunner(handlers = new Map<string, Array<() => Promise<void>>>()) {
+		const extension: Extension = {
+			path: "test-extension",
+			resolvedPath: "test-extension",
+			handlers: handlers as Extension["handlers"],
+			tools: new Map(),
+			messageRenderers: new Map(),
+			commands: new Map(),
+			flags: new Map(),
+			shortcuts: new Map(),
+		};
+		return new ExtensionRunner(
+			handlers.size === 0 ? [] : [extension],
+			{ flagValues: new Map(), pendingProviderRegistrations: [] } as never,
+			tempDir.path(),
+			SessionManager.inMemory(),
+			modelRegistry,
+		);
 	}
 	function track(s: AgentSession) {
 		const retryStartEvents: AutoRetryStartEvent[] = [];
@@ -434,15 +473,15 @@ describe("AgentSession resilient retry", () => {
 			resolveEnded = r;
 		});
 		session.subscribe(event => {
-			if (event.type === "auto_retry_start") resolveStarted();
+			if (event.type === "auto_retry_start") {
+				resolveStarted();
+				session?.retryNow();
+			}
 			if (event.type === "auto_retry_end") resolveEnded();
 		});
 
 		const prompt = session.prompt("trigger retry then retry-now").catch(() => {});
 		await started;
-		// Let the backoff wait be entered and the abort controller be assigned.
-		await Bun.sleep(50);
-		session.retryNow();
 		await ended;
 		await prompt;
 		await session.waitForIdle();
@@ -468,14 +507,15 @@ describe("AgentSession resilient retry", () => {
 			resolveEnded = r;
 		});
 		session.subscribe(event => {
-			if (event.type === "auto_retry_start") resolveStarted();
+			if (event.type === "auto_retry_start") {
+				resolveStarted();
+				session?.abortRetry();
+			}
 			if (event.type === "auto_retry_end") resolveEnded();
 		});
 
 		const prompt = session.prompt("trigger retry then cancel").catch(() => {});
 		await started;
-		await Bun.sleep(50);
-		session.abortRetry();
 		await ended;
 		await prompt;
 		await session.waitForIdle();
@@ -716,7 +756,7 @@ describe("AgentSession resilient retry", () => {
 		const requestedModels: string[] = [];
 		session = buildBareRetrySession({
 			responses: [
-				{ throw: "Anthropic stream timed out while waiting for the first event" },
+				{ throw: "Example Provider Watchdog stream timed out while waiting for the first event" },
 				{ content: ["recovered"] },
 			],
 			requestedModels,
@@ -732,6 +772,53 @@ describe("AgentSession resilient retry", () => {
 		expect(retryEndEvents).toHaveLength(1);
 		expect(retryEndEvents[0]).toMatchObject({ success: true });
 		expect(lastAssistant(session).stopReason).toBe("stop");
+	});
+	it("retries a bare-default watchdog with an empty extension runner", async () => {
+		const requestedModels: string[] = [];
+		session = buildBareRetrySession({
+			responses: [
+				{ throw: "Example Provider Watchdog stream timed out while waiting for the first event" },
+				{ content: ["recovered"] },
+			],
+			requestedModels,
+			extensionRunner: createExtensionRunner(),
+		});
+		vi.spyOn(scheduler, "wait").mockResolvedValue(undefined);
+		const { retryStartEvents, retryEndEvents } = track(session);
+
+		await session.prompt("bare-config empty extension watchdog");
+		await session.waitForIdle();
+
+		expect(retryStartEvents).toHaveLength(1);
+		expect(requestedModels).toHaveLength(2);
+		expect(retryEndEvents).toEqual([expect.objectContaining({ success: true })]);
+		expect(lastAssistant(session).stopReason).toBe("stop");
+	});
+	it("does not replay a bare-default watchdog after an extension hook participates", async () => {
+		let hookCalls = 0;
+		const requestedModels: string[] = [];
+		session = buildBareRetrySession({
+			responses: [
+				{ throw: "Example Provider Watchdog stream timed out while waiting for the first event" },
+				{ content: ["should-not-reach"] },
+			],
+			requestedModels,
+			extensionRunner: createExtensionRunner(
+				new Map([["agent_start", [async () => {
+					hookCalls++;
+				}]]]),
+			),
+		});
+		vi.spyOn(scheduler, "wait").mockResolvedValue(undefined);
+		const { retryStartEvents } = track(session);
+
+		await session.prompt("bare-config extension hook watchdog");
+		await session.waitForIdle();
+
+		expect(hookCalls).toBe(1);
+		expect(retryStartEvents).toHaveLength(0);
+		expect(requestedModels).toHaveLength(1);
+		expect(lastAssistant(session).stopReason).toBe("error");
 	});
 
 	it("retries provider stream idle stalls under a bare default config (single model)", async () => {
@@ -753,6 +840,107 @@ describe("AgentSession resilient retry", () => {
 		expect(requestedModels).toHaveLength(2);
 		expect(retryEndEvents[0]).toMatchObject({ success: true });
 		expect(lastAssistant(session).stopReason).toBe("stop");
+	});
+	it("fails closed on structured watchdog error facts and partial output under bare defaults", async () => {
+		for (const options of [
+			{ transportFailure: { kind: "transport", status: 503 } },
+			{ partialContent: "already visible" },
+		] as const) {
+			session = buildStatusErrorSession({
+				errorMessage: "Example Provider Watchdog stream timed out while waiting for the first event",
+				bareDefault: true,
+				...options,
+				recoveredContent: "should-not-reach",
+			});
+			vi.spyOn(scheduler, "wait").mockResolvedValue(undefined);
+			const { retryStartEvents } = track(session);
+
+			await session.prompt("bare-config unsafe watchdog");
+			await session.waitForIdle();
+
+			expect(retryStartEvents).toHaveLength(0);
+			expect(lastAssistant(session).stopReason).toBe("error");
+			await session.dispose();
+			session = undefined;
+		}
+	});
+
+	it("does not replay a bare-default watchdog after a counted tool execution", async () => {
+		const requestedModels: string[] = [];
+		session = buildBareRetrySession({
+			responses: [
+				{ throw: "Example Provider Watchdog stream timed out while waiting for the first event" },
+				{ content: ["should-not-reach"] },
+			],
+			requestedModels,
+			onStreamStart: agent => {
+				agent.emitExternalEvent({
+					type: "tool_execution_start",
+					toolCallId: "counted-tool",
+					toolName: "bash",
+					args: { command: "true" },
+				});
+			},
+		});
+		vi.spyOn(scheduler, "wait").mockResolvedValue(undefined);
+		const { retryStartEvents } = track(session);
+
+		await session.prompt("bare-config counted tool watchdog");
+		await session.waitForIdle();
+
+		expect(retryStartEvents).toHaveLength(0);
+		expect(requestedModels).toHaveLength(1);
+		expect(lastAssistant(session).stopReason).toBe("error");
+	});
+
+	it("resets replay safety for a cancel-and-submit replacement prompt", async () => {
+		const requestedModels: string[] = [];
+		session = buildBareRetrySession({
+			responses: [
+				{ content: ["superseded"] },
+				{ throw: "Example Provider Watchdog stream timed out while waiting for the first event" },
+				{ content: ["replacement recovered"] },
+			],
+			requestedModels,
+		});
+		vi.spyOn(scheduler, "wait").mockResolvedValue(undefined);
+		const { retryStartEvents, retryEndEvents } = track(session);
+
+		await session.prompt("original");
+		await session.waitForIdle();
+		expect(await session.cancelAndSubmit("replacement")).toEqual({ kind: "submitted" });
+		await session.waitForIdle();
+
+		expect(retryStartEvents).toHaveLength(1);
+		expect(retryEndEvents).toEqual([expect.objectContaining({ success: true })]);
+		expect(requestedModels).toHaveLength(3);
+		expect(lastAssistant(session).stopReason).toBe("stop");
+	});
+	it("fails closed on non-canonical watchdog prose under bare defaults", async () => {
+		const nearMisses = [
+			"stream timed out while waiting for the first event",
+			"Error: Provider stream timed out while waiting for the first event",
+			"Provider stream timed out while waiting for the first event.",
+			"Provider stream timeout waiting for first event",
+		];
+		for (const errorMessage of nearMisses) {
+			const requestedModels: string[] = [];
+			session = buildBareRetrySession({
+				responses: [{ throw: errorMessage }, { content: ["should-not-reach"] }],
+				requestedModels,
+			});
+			vi.spyOn(scheduler, "wait").mockResolvedValue(undefined);
+			const { retryStartEvents } = track(session);
+
+			await session.prompt("bare-config watchdog near miss");
+			await session.waitForIdle();
+
+			expect(retryStartEvents).toHaveLength(0);
+			expect(requestedModels).toHaveLength(1);
+			expect(lastAssistant(session).stopReason).toBe("error");
+			await session.dispose();
+			session = undefined;
+		}
 	});
 
 	it("still fails closed on generic unknown errors under a bare default config", async () => {
