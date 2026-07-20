@@ -28,12 +28,36 @@ export type PublicUrlResult = PublicUrlAccepted | PublicUrlRejected;
 /** Resolver seam so tests can inject DNS results without real lookups. */
 export type AddressResolver = (hostname: string) => Promise<string[]>;
 
+type ProxyEnvironment = Record<string, string | undefined>;
+
+export type GuardedPublicFetchResult =
+	| { ok: true; response: Response; logicalUrl: URL; wireUrl: URL }
+	| { ok: false; reason: string; logicalUrl: string };
+
 const defaultResolver: AddressResolver = async hostname => {
 	const records = await dns.lookup(hostname, { all: true, verbatim: true });
 	return records.map(record => record.address);
 };
 
 const BLOCKED_HOSTNAMES = new Set(["localhost", "localhost.localdomain", "0.0.0.0", ""]);
+const PROXY_ENV_KEYS = ["HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy"] as const;
+
+export function hasConfiguredProxy(env: ProxyEnvironment): boolean {
+	return PROXY_ENV_KEYS.some(key => Boolean(env[key]));
+}
+
+async function resolveWithSignal(resolver: AddressResolver, hostname: string, signal?: AbortSignal): Promise<string[]> {
+	if (!signal) return resolver(hostname);
+	if (signal.aborted) throw signal.reason;
+	const { promise, reject } = Promise.withResolvers<never>();
+	const onAbort = () => reject(signal.reason);
+	signal.addEventListener("abort", onAbort, { once: true });
+	try {
+		return await Promise.race([resolver(hostname), promise]);
+	} finally {
+		signal.removeEventListener("abort", onAbort);
+	}
+}
 
 function isBlockedHostname(hostname: string): boolean {
 	const normalized = hostname.toLowerCase().replace(/\.$/, "");
@@ -108,7 +132,7 @@ export function isPrivateOrSpecialAddress(address: string): boolean {
  */
 export async function validatePublicHttpUrl(
 	rawUrl: string,
-	options: { resolver?: AddressResolver } = {},
+	options: { resolver?: AddressResolver; signal?: AbortSignal } = {},
 ): Promise<PublicUrlResult> {
 	const resolver = options.resolver ?? defaultResolver;
 
@@ -128,18 +152,20 @@ export async function validatePublicHttpUrl(
 		return { ok: false, reason: "localhost or internal host" };
 	}
 
-	const literalFamily = net.isIP(url.hostname);
+	const hostname = url.hostname.replace(/^\[|\]$/g, "");
+	const literalFamily = net.isIP(hostname);
 	if (literalFamily !== 0) {
-		if (isPrivateOrSpecialAddress(url.hostname)) {
+		if (isPrivateOrSpecialAddress(hostname)) {
 			return { ok: false, reason: "private, loopback, link-local, or reserved IP literal" };
 		}
-		return { ok: true, url, addresses: [url.hostname] };
+		return { ok: true, url, addresses: [hostname] };
 	}
 
 	let addresses: string[];
 	try {
-		addresses = await resolver(url.hostname);
+		addresses = await resolveWithSignal(resolver, hostname, options.signal);
 	} catch {
+		if (options.signal?.aborted) return { ok: false, reason: "host resolution aborted" };
 		return { ok: false, reason: "host could not be resolved" };
 	}
 	if (addresses.length === 0) {
@@ -149,6 +175,47 @@ export async function validatePublicHttpUrl(
 		return { ok: false, reason: "host resolves to a private or reserved address" };
 	}
 	return { ok: true, url, addresses };
+}
+
+export async function guardedPublicFetch(
+	rawUrl: string,
+	init: BunFetchRequestInit = {},
+	options: { resolver?: AddressResolver } = {},
+): Promise<GuardedPublicFetchResult> {
+	if (Object.hasOwn(init, "proxy") || Object.hasOwn(init, "unix") || hasConfiguredProxy(process.env)) {
+		return { ok: false, reason: "proxy or Unix-socket routing is not allowed", logicalUrl: rawUrl };
+	}
+
+	const signal = init.signal ?? undefined;
+	const guard = await validatePublicHttpUrl(rawUrl, { resolver: options.resolver, signal });
+	if (signal?.aborted) throw signal.reason;
+	if (!guard.ok) return { ok: false, reason: guard.reason, logicalUrl: rawUrl };
+
+	const logicalUrl = guard.url;
+	const headers = new Headers(init.headers);
+	headers.delete("host");
+	headers.set("Host", logicalUrl.host);
+	const hostname = logicalUrl.hostname.replace(/^\[|\]$/g, "");
+	const tls =
+		logicalUrl.protocol === "https:"
+			? { rejectUnauthorized: true, ...(net.isIP(hostname) === 0 ? { serverName: hostname } : {}) }
+			: undefined;
+	let lastError: unknown;
+	for (const address of guard.addresses) {
+		if (hasConfiguredProxy(process.env)) {
+			return { ok: false, reason: "proxy routing appeared during resolution", logicalUrl: rawUrl };
+		}
+		const wireUrl = new URL(logicalUrl);
+		wireUrl.hostname = net.isIP(address) === 6 ? `[${address}]` : address;
+		try {
+			const response = await fetch(wireUrl, { ...init, headers, redirect: "manual", keepalive: false, tls });
+			return { ok: true, response, logicalUrl, wireUrl };
+		} catch (error) {
+			if (signal?.aborted) throw signal.reason;
+			lastError = error;
+		}
+	}
+	throw lastError;
 }
 
 export async function validatePublicHttpUrlForInsane(
