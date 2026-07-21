@@ -28,7 +28,9 @@ export async function startProductionSdkHost(
 	) => { registered: true; result: Promise<unknown> } | { registered: false; reason: "authority_unavailable" };
 	triggerGate: (
 		spec: Parameters<
-			NonNullable<ReturnType<Awaited<ReturnType<typeof createAgentSession>>["session"]["getWorkflowGateEmitter"]>>["emitGate"]
+			NonNullable<
+				ReturnType<Awaited<ReturnType<typeof createAgentSession>>["session"]["getWorkflowGateEmitter"]>
+			>["emitGate"]
 		>[0],
 	) => { registered: true; result: Promise<unknown> } | { registered: false; reason: "authority_unavailable" };
 	stop: () => Promise<void>;

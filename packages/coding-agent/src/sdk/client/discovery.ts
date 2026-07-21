@@ -46,12 +46,20 @@ function parseEndpoint(sessionId: string, file: string, value: unknown): SdkSess
 	if (typeof endpoint.url !== "string" || !endpoint.url)
 		throw new SdkDiscoveryError(file, "SDK endpoint discovery record is invalid.");
 	const stale = typeof endpoint.stale === "boolean" ? endpoint.stale : undefined;
-	const pid = typeof endpoint.pid === "number" && Number.isInteger(endpoint.pid) && endpoint.pid > 0 ? endpoint.pid : undefined;
+	const pid =
+		typeof endpoint.pid === "number" && Number.isInteger(endpoint.pid) && endpoint.pid > 0 ? endpoint.pid : undefined;
 	if (endpoint.token !== undefined && typeof endpoint.token !== "string")
 		throw new SdkDiscoveryError(file, "SDK endpoint discovery record is invalid.");
 	const token = endpoint.token ?? "";
 	if (!token && stale !== true) throw new SdkDiscoveryError(file, "SDK endpoint discovery record is invalid.");
-	return { sessionId, url: endpoint.url, token, ...(pid === undefined ? {} : { pid }), ...(stale === undefined ? {} : { stale }), path: file };
+	return {
+		sessionId,
+		url: endpoint.url,
+		token,
+		...(pid === undefined ? {} : { pid }),
+		...(stale === undefined ? {} : { stale }),
+		path: file,
+	};
 }
 
 function discoveryError(file: string, error: unknown): SdkDiscoveryError {

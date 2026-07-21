@@ -38,7 +38,9 @@ function sendTransportError(socket: net.Socket, error: TransportError): void {
 }
 
 /** Serves authenticated SDK JSONL clients over a private Unix-domain socket. */
-export async function startSocketServe(options: ServeOptions & { socketPath: string; webSocketFactory?: RelayOptions["webSocketFactory"] }): Promise<ServeHandle> {
+export async function startSocketServe(
+	options: ServeOptions & { socketPath: string; webSocketFactory?: RelayOptions["webSocketFactory"] },
+): Promise<ServeHandle> {
 	await validateSocketPath(options.socketPath);
 	const pairs = new Set<RelayPair>();
 	const sockets = new Set<net.Socket>();
@@ -81,11 +83,13 @@ export async function startSocketServe(options: ServeOptions & { socketPath: str
 			for (const socket of sockets) socket.destroy();
 			const pairResults = await Promise.allSettled([...pairs].map(pair => pair.close()));
 			for (const result of pairResults) {
-				if (result.status === "rejected") errors.push(result.reason instanceof Error ? result.reason : new Error(String(result.reason)));
+				if (result.status === "rejected")
+					errors.push(result.reason instanceof Error ? result.reason : new Error(String(result.reason)));
 			}
 			const connectionResults = await Promise.allSettled([...connectionTasks]);
 			for (const result of connectionResults) {
-				if (result.status === "rejected") errors.push(result.reason instanceof Error ? result.reason : new Error(String(result.reason)));
+				if (result.status === "rejected")
+					errors.push(result.reason instanceof Error ? result.reason : new Error(String(result.reason)));
 			}
 			let displacedPath: string | undefined;
 			if (server?.listening && ownedIdentity) {
@@ -101,7 +105,9 @@ export async function startSocketServe(options: ServeOptions & { socketPath: str
 			}
 			if (server?.listening) {
 				try {
-					await new Promise<void>((resolve, reject) => server?.close(error => error ? reject(error) : resolve()));
+					await new Promise<void>((resolve, reject) =>
+						server?.close(error => (error ? reject(error) : resolve())),
+					);
 				} catch (error) {
 					errors.push(error instanceof Error ? error : new Error(String(error)));
 				}

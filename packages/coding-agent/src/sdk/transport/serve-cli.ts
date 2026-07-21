@@ -1,12 +1,7 @@
 import { CliParseError } from "@gajae-code/utils/cli";
 import { listSdkSessionEndpoints } from "../client/discovery";
 import { type SdkEndpointSelectionError, selectLiveEndpoint } from "../client/liveness";
-import {
-	DEFAULT_PENDING_CEILING_BYTES,
-	MIN_PENDING_CEILING_BYTES,
-	startSocketServe,
-	startStdioServe,
-} from "./index";
+import { DEFAULT_PENDING_CEILING_BYTES, MIN_PENDING_CEILING_BYTES, startSocketServe, startStdioServe } from "./index";
 
 type ServeMode = { kind: "stdio" } | { kind: "socket"; socketPath: string };
 
@@ -80,7 +75,10 @@ export async function runSdkServe(argv: string[]): Promise<void> {
 	const parsed = parseServeArguments(argv);
 	if (parsed.mode.kind === "socket" && process.platform === "win32")
 		throw new Error("unsupported_platform: --socket is unavailable on Windows.");
-	const pendingCeilingBytes = resolveServePendingCeiling(parsed.pendingCeiling, process.env.GJC_SDK_SERVE_PENDING_CEILING_BYTES);
+	const pendingCeilingBytes = resolveServePendingCeiling(
+		parsed.pendingCeiling,
+		process.env.GJC_SDK_SERVE_PENDING_CEILING_BYTES,
+	);
 	const discovered = await listSdkSessionEndpoints(process.cwd());
 	const selected = selectLiveEndpoint(discovered.endpoints, parsed.sessionId);
 	if (isSelectionError(selected)) {
@@ -88,7 +86,10 @@ export async function runSdkServe(argv: string[]): Promise<void> {
 		throw new Error(`${selected.code}${sessionHint}`);
 	}
 	const options = { url: selected.url, token: selected.token, pendingCeilingBytes };
-	const handle = parsed.mode.kind === "stdio" ? await startStdioServe(options) : await startSocketServe({ ...options, socketPath: parsed.mode.socketPath });
+	const handle =
+		parsed.mode.kind === "stdio"
+			? await startStdioServe(options)
+			: await startSocketServe({ ...options, socketPath: parsed.mode.socketPath });
 	const stop = () => {
 		void handle.close();
 	};

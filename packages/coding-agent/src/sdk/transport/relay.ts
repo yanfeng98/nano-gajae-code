@@ -74,7 +74,9 @@ function waitForWebSocketDrain(ws: WebSocket, isClosed: () => boolean): Promise<
 /** Starts a dedicated raw-WebSocket relay for exactly one downstream stream. */
 export async function startRelayPair(options: RelayOptions): Promise<RelayPair> {
 	if (options.signal?.aborted) throw new RelayOpenAbortedError();
-	const ws = options.webSocketFactory?.(upstreamUrl(options.url, options.token)) ?? new WebSocket(upstreamUrl(options.url, options.token));
+	const ws =
+		options.webSocketFactory?.(upstreamUrl(options.url, options.token)) ??
+		new WebSocket(upstreamUrl(options.url, options.token));
 	const opened = Promise.withResolvers<void>();
 	const finished = Promise.withResolvers<void>();
 	let closed = false;
@@ -173,7 +175,8 @@ export async function startRelayPair(options: RelayOptions): Promise<RelayPair> 
 		while (newline >= 0) {
 			const line = downstreamBuffer.subarray(0, newline);
 			downstreamBuffer = downstreamBuffer.subarray(newline + 1);
-			if (line.length === 0) return fail({ type: "transport_error", code: "protocol_error", direction: "downstream->ws" });
+			if (line.length === 0)
+				return fail({ type: "transport_error", code: "protocol_error", direction: "downstream->ws" });
 			if (line.length > REQUEST_FRAME_BYTES)
 				return fail({ type: "transport_error", code: "frame_oversize", direction: "downstream->ws" });
 			enqueue(toWs, "downstream->ws", line);

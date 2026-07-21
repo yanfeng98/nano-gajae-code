@@ -35,30 +35,53 @@ const readLine = async (socket: net.Socket): Promise<string> => {
 			const newline = bytes.indexOf("\n");
 			if (newline >= 0) done(() => resolve(bytes.subarray(0, newline + 1).toString()));
 		};
-		const done = (fn: () => void) => { socket.off("data", data); socket.off("error", fail); socket.off("end", ended); fn(); };
+		const done = (fn: () => void) => {
+			socket.off("data", data);
+			socket.off("error", fail);
+			socket.off("end", ended);
+			fn();
+		};
 		const fail = (error: Error) => done(() => reject(error));
 		const ended = () => done(() => reject(new Error("Socket ended before a complete line.")));
-		socket.on("data", data); socket.once("error", fail); socket.once("end", ended);
+		socket.on("data", data);
+		socket.once("error", fail);
+		socket.once("end", ended);
 	});
 };
-const closeSocket = (socket: net.Socket): Promise<void> => new Promise(resolve => { socket.once("close", resolve); socket.destroy(); });
+const closeSocket = (socket: net.Socket): Promise<void> =>
+	new Promise(resolve => {
+		socket.once("close", resolve);
+		socket.destroy();
+	});
 
 function upstream() {
 	const connections: { ws: ServerWebSocket<unknown>; messages: string[] }[] = [];
 	const server = Bun.serve({
 		port: 0,
-		fetch(req, server) { return server.upgrade(req, { data: {} }) ? undefined : new Response("upgrade required", { status: 426 }); },
+		fetch(req, server) {
+			return server.upgrade(req, { data: {} }) ? undefined : new Response("upgrade required", { status: 426 });
+		},
 		websocket: {
-			open(ws) { connections.push({ ws, messages: [] }); },
-			message(ws, message) { connections.find(connection => connection.ws === ws)?.messages.push(String(message)); },
+			open(ws) {
+				connections.push({ ws, messages: [] });
+			},
+			message(ws, message) {
+				connections.find(connection => connection.ws === ws)?.messages.push(String(message));
+			},
 		},
 	});
 	return { url: `ws://127.0.0.1:${server.port}`, connections, stop: () => server.stop(true) };
 }
 
 const temporary: string[] = [];
-afterEach(async () => { await Promise.all(temporary.splice(0).map(dir => fs.rm(dir, { recursive: true, force: true }))); });
-const tempDir = async (): Promise<string> => { const dir = await fs.mkdtemp(path.join(os.tmpdir(), "sdk-serve-")); temporary.push(dir); return dir; };
+afterEach(async () => {
+	await Promise.all(temporary.splice(0).map(dir => fs.rm(dir, { recursive: true, force: true })));
+});
+const tempDir = async (): Promise<string> => {
+	const dir = await fs.mkdtemp(path.join(os.tmpdir(), "sdk-serve-"));
+	temporary.push(dir);
+	return dir;
+};
 
 class StalledWebSocket extends EventTarget {
 	static CONNECTING = 0;
@@ -69,16 +92,35 @@ class StalledWebSocket extends EventTarget {
 	bufferedAmount = 0;
 	closeCalls = 0;
 	readonly messages: string[] = [];
-	constructor(_url: string) { super(); StalledWebSocket.latest = this; }
-	open(): void { this.readyState = StalledWebSocket.OPEN; this.dispatchEvent(new Event("open")); }
-	send(message: string): void { this.messages.push(message); this.bufferedAmount += Buffer.byteLength(message); }
-	drain(): void { this.bufferedAmount = 0; }
-	close(): void { this.closeCalls++; this.readyState = StalledWebSocket.CLOSED; this.dispatchEvent(new Event("close")); }
+	constructor(_url: string) {
+		super();
+		StalledWebSocket.latest = this;
+	}
+	open(): void {
+		this.readyState = StalledWebSocket.OPEN;
+		this.dispatchEvent(new Event("open"));
+	}
+	send(message: string): void {
+		this.messages.push(message);
+		this.bufferedAmount += Buffer.byteLength(message);
+	}
+	drain(): void {
+		this.bufferedAmount = 0;
+	}
+	close(): void {
+		this.closeCalls++;
+		this.readyState = StalledWebSocket.CLOSED;
+		this.dispatchEvent(new Event("close"));
+	}
 }
 
 async function withStalledWebSocket<T>(run: () => Promise<T>): Promise<T> {
 	StalledWebSocket.latest = undefined;
-	try { return await run(); } finally { StalledWebSocket.latest = undefined; }
+	try {
+		return await run();
+	} finally {
+		StalledWebSocket.latest = undefined;
+	}
 }
 
 async function relayFixture(pendingCeilingBytes = 256 * 1024) {
@@ -88,7 +130,14 @@ async function relayFixture(pendingCeilingBytes = 256 * 1024) {
 	const received: Buffer[] = [];
 	output.on("data", chunk => received.push(Buffer.from(chunk)));
 	const errors: unknown[] = [];
-	const pair = await startRelayPair({ url: fake.url, token, pendingCeilingBytes, downstream: input, downstreamSink: output, onTransportError: error => errors.push(error) });
+	const pair = await startRelayPair({
+		url: fake.url,
+		token,
+		pendingCeilingBytes,
+		downstream: input,
+		downstreamSink: output,
+		onTransportError: error => errors.push(error),
+	});
 	await waitFor(() => fake.connections[0], "upstream connection");
 	return { fake, input, output, received, errors, pair };
 }
@@ -103,23 +152,38 @@ describe("SDK serve raw relay", () => {
 			expect(connection).toBe(request);
 			const response = '{"b" : "\\u263a", "a":true }';
 			fixture.fake.connections[0]!.ws.send(response);
-			expect((await waitFor(() => fixture.received[0], "websocket downstream frame")).toString()).toBe(`${response}\n`);
-		} finally { await fixture.pair.close(); fixture.fake.stop(); }
+			expect((await waitFor(() => fixture.received[0], "websocket downstream frame")).toString()).toBe(
+				`${response}\n`,
+			);
+		} finally {
+			await fixture.pair.close();
+			fixture.fake.stop();
+		}
 	});
 
 	test("enforces only the downstream 256 KiB boundary", async () => {
 		const accepted = await relayFixture();
 		try {
 			accepted.input.write(`${"x".repeat(256 * 1024)}\n`);
-			expect((await waitFor(() => accepted.fake.connections[0]?.messages[0], "boundary frame")).length).toBe(256 * 1024);
+			expect((await waitFor(() => accepted.fake.connections[0]?.messages[0], "boundary frame")).length).toBe(
+				256 * 1024,
+			);
 			accepted.fake.connections[0]!.ws.send("y".repeat(1024 * 1024 + 1));
 			expect((await waitFor(() => accepted.received[0], "large reverse frame")).length).toBe(1024 * 1024 + 2);
-		} finally { await accepted.pair.close(); accepted.fake.stop(); }
+		} finally {
+			await accepted.pair.close();
+			accepted.fake.stop();
+		}
 		const rejected = await relayFixture();
 		try {
 			rejected.input.write(`${"x".repeat(256 * 1024 + 1)}\n`);
-			expect(await waitFor(() => rejected.errors[0] as { code: string } | undefined, "oversize error")).toMatchObject({ code: "frame_oversize" });
-		} finally { await rejected.pair.close(); rejected.fake.stop(); }
+			expect(
+				await waitFor(() => rejected.errors[0] as { code: string } | undefined, "oversize error"),
+			).toMatchObject({ code: "frame_oversize" });
+		} finally {
+			await rejected.pair.close();
+			rejected.fake.stop();
+		}
 	});
 
 	test("allows a single active reverse frame above the pending ceiling and reports queued overflow", async () => {
@@ -129,38 +193,77 @@ describe("SDK serve raw relay", () => {
 			// Replace the consumer with a deliberately backpressured relay to exercise active-frame exemption.
 			const input = new PassThrough();
 			const errors: unknown[] = [];
-			const pair = await startRelayPair({ url: fixture.fake.url, token, pendingCeilingBytes: 256 * 1024, downstream: input, downstreamSink: blocked, onTransportError: error => errors.push(error) });
+			const pair = await startRelayPair({
+				url: fixture.fake.url,
+				token,
+				pendingCeilingBytes: 256 * 1024,
+				downstream: input,
+				downstreamSink: blocked,
+				onTransportError: error => errors.push(error),
+			});
 			const connection = await waitFor(() => fixture.fake.connections[1], "second upstream connection");
 			connection.ws.send("a".repeat(8 * 1024 * 1024 + 1));
 			await Bun.sleep(20);
 			expect(errors).toEqual([]);
 			connection.ws.send("b".repeat(256 * 1024));
 			connection.ws.send("c".repeat(256 * 1024));
-			expect(await waitFor(() => errors[0] as { code: string } | undefined, "pending overflow")).toMatchObject({ code: "pending_overflow", direction: "ws->downstream" });
+			expect(await waitFor(() => errors[0] as { code: string } | undefined, "pending overflow")).toMatchObject({
+				code: "pending_overflow",
+				direction: "ws->downstream",
+			});
 			await pair.close();
-		} finally { await fixture.pair.close(); fixture.fake.stop(); }
+		} finally {
+			await fixture.pair.close();
+			fixture.fake.stop();
+		}
 	});
 
 	test("keeps a downstream frame active until the WebSocket buffer drains", async () => {
 		await withStalledWebSocket(async () => {
-			const input = new PassThrough(); const output = new PassThrough(); const errors: unknown[] = [];
-			const started = startRelayPair({ url: "ws://fake", token, pendingCeilingBytes: 256 * 1024, downstream: input, downstreamSink: output, onTransportError: error => errors.push(error), webSocketFactory: () => new StalledWebSocket("") as unknown as WebSocket });
-			const ws = await waitFor(() => StalledWebSocket.latest, "fake websocket"); ws.open();
+			const input = new PassThrough();
+			const output = new PassThrough();
+			const errors: unknown[] = [];
+			const started = startRelayPair({
+				url: "ws://fake",
+				token,
+				pendingCeilingBytes: 256 * 1024,
+				downstream: input,
+				downstreamSink: output,
+				onTransportError: error => errors.push(error),
+				webSocketFactory: () => new StalledWebSocket("") as unknown as WebSocket,
+			});
+			const ws = await waitFor(() => StalledWebSocket.latest, "fake websocket");
+			ws.open();
 			const pair = await started;
 			try {
 				input.write('{"active":true}\n');
 				await waitFor(() => ws.messages[0], "active websocket frame");
 				input.write(`${"q".repeat(256 * 1024)}\n{"overflow":true}\n`);
-				expect(await waitFor(() => errors[0] as { code: string } | undefined, "downstream pending overflow")).toMatchObject({ code: "pending_overflow", direction: "downstream->ws" });
-			} finally { ws.drain(); await pair.close(); }
+				expect(
+					await waitFor(() => errors[0] as { code: string } | undefined, "downstream pending overflow"),
+				).toMatchObject({ code: "pending_overflow", direction: "downstream->ws" });
+			} finally {
+				ws.drain();
+				await pair.close();
+			}
 		});
 	});
 
 	test("forwards a large downstream frame after its active WebSocket buffer drains", async () => {
 		await withStalledWebSocket(async () => {
-			const input = new PassThrough(); const output = new PassThrough();
-			const started = startRelayPair({ url: "ws://fake", token, pendingCeilingBytes: 256 * 1024, downstream: input, downstreamSink: output, onTransportError: () => {}, webSocketFactory: () => new StalledWebSocket("") as unknown as WebSocket });
-			const ws = await waitFor(() => StalledWebSocket.latest, "fake websocket"); ws.open();
+			const input = new PassThrough();
+			const output = new PassThrough();
+			const started = startRelayPair({
+				url: "ws://fake",
+				token,
+				pendingCeilingBytes: 256 * 1024,
+				downstream: input,
+				downstreamSink: output,
+				onTransportError: () => {},
+				webSocketFactory: () => new StalledWebSocket("") as unknown as WebSocket,
+			});
+			const ws = await waitFor(() => StalledWebSocket.latest, "fake websocket");
+			ws.open();
 			const pair = await started;
 			try {
 				const frame = "x".repeat(256 * 1024);
@@ -168,30 +271,52 @@ describe("SDK serve raw relay", () => {
 				expect(await waitFor(() => ws.messages[0], "large active frame")).toBe(frame);
 				ws.drain();
 				expect(await waitFor(() => ws.messages[1], "frame after drain")).toBe('{"after":"drain"}');
-			} finally { await pair.close(); }
+			} finally {
+				await pair.close();
+			}
 		});
 	});
 });
 
 describe("SDK socket serve", () => {
 	test("auth failures emit a single error and never dial upstream", async () => {
-		const fake = upstream(); const dir = await tempDir(); const socketPath = path.join(dir, "serve.sock");
+		const fake = upstream();
+		const dir = await tempDir();
+		const socketPath = path.join(dir, "serve.sock");
 		const handle = await startSocketServe({ url: fake.url, token, pendingCeilingBytes: 256 * 1024, socketPath });
 		try {
-			for (const preface of ["gjc-sdk-transport/1 token=wrong\n", "garbage\n", "gjc-sdk-transport/2 token=test-token\n", `${"x".repeat(4097)}\n`] as const) {
-				const client = await socketConnect(socketPath); client.write(preface);
-				expect(JSON.parse(await readLine(client))).toEqual({ type: "transport_error", code: "auth_failed" }); await closeSocket(client);
+			for (const preface of [
+				"gjc-sdk-transport/1 token=wrong\n",
+				"garbage\n",
+				"gjc-sdk-transport/2 token=test-token\n",
+				`${"x".repeat(4097)}\n`,
+			] as const) {
+				const client = await socketConnect(socketPath);
+				client.write(preface);
+				expect(JSON.parse(await readLine(client))).toEqual({ type: "transport_error", code: "auth_failed" });
+				await closeSocket(client);
 			}
 			const slow = await socketConnect(socketPath);
-			expect(JSON.parse(await readLine(slow))).toEqual({ type: "transport_error", code: "auth_failed" }); await closeSocket(slow);
+			expect(JSON.parse(await readLine(slow))).toEqual({ type: "transport_error", code: "auth_failed" });
+			await closeSocket(slow);
 			expect(fake.connections).toHaveLength(0);
-		} finally { await handle.close(); fake.stop(); }
+		} finally {
+			await handle.close();
+			fake.stop();
+		}
 	}, 8_000);
 
 	test("pauses after authentication so a frame received during upstream dial is relayed", async () => {
 		await withStalledWebSocket(async () => {
-			const dir = await tempDir(); const socketPath = path.join(dir, "serve.sock");
-			const handle = await startSocketServe({ url: "ws://fake", token, pendingCeilingBytes: 256 * 1024, socketPath, webSocketFactory: () => new StalledWebSocket("") as unknown as WebSocket });
+			const dir = await tempDir();
+			const socketPath = path.join(dir, "serve.sock");
+			const handle = await startSocketServe({
+				url: "ws://fake",
+				token,
+				pendingCeilingBytes: 256 * 1024,
+				socketPath,
+				webSocketFactory: () => new StalledWebSocket("") as unknown as WebSocket,
+			});
 			const client = await socketConnect(socketPath);
 			try {
 				client.write(`gjc-sdk-transport/1 token=${token}\n`);
@@ -199,14 +324,24 @@ describe("SDK socket serve", () => {
 				client.write('{"received":"during-dial"}\n');
 				ws.open();
 				expect(await waitFor(() => ws.messages[0], "handed-off frame")).toBe('{"received":"during-dial"}');
-			} finally { await closeSocket(client); await handle.close(); }
+			} finally {
+				await closeSocket(client);
+				await handle.close();
+			}
 		});
 	});
 
 	test("aborts an authenticated upstream dial during shutdown", async () => {
 		await withStalledWebSocket(async () => {
-			const dir = await tempDir(); const socketPath = path.join(dir, "serve.sock");
-			const handle = await startSocketServe({ url: "ws://fake", token, pendingCeilingBytes: 256 * 1024, socketPath, webSocketFactory: () => new StalledWebSocket("") as unknown as WebSocket });
+			const dir = await tempDir();
+			const socketPath = path.join(dir, "serve.sock");
+			const handle = await startSocketServe({
+				url: "ws://fake",
+				token,
+				pendingCeilingBytes: 256 * 1024,
+				socketPath,
+				webSocketFactory: () => new StalledWebSocket("") as unknown as WebSocket,
+			});
 			const client = await socketConnect(socketPath);
 			client.write(`gjc-sdk-transport/1 token=${token}\n`);
 			const ws = await waitFor(() => StalledWebSocket.latest, "stalled upstream dial");
@@ -219,41 +354,85 @@ describe("SDK socket serve", () => {
 	}, 1_000);
 
 	test("isolates pairs, enforces socket safety, and cleans up only its own socket", async () => {
-		const fake = upstream(); const dir = await tempDir(); const socketPath = path.join(dir, "serve.sock");
+		const fake = upstream();
+		const dir = await tempDir();
+		const socketPath = path.join(dir, "serve.sock");
 		const handle = await startSocketServe({ url: fake.url, token, pendingCeilingBytes: 256 * 1024, socketPath });
 		try {
 			expect((await fs.stat(socketPath)).mode & 0o777).toBe(0o600);
-			const a = await socketConnect(socketPath); const b = await socketConnect(socketPath);
-			a.write(`gjc-sdk-transport/1 token=${token}\n{ "client": "a" }\n`); b.write(`gjc-sdk-transport/1 token=${token}\n{ "client": "b" }\n`);
-			await waitFor(() => fake.connections.length === 2 ? fake.connections : undefined, "isolated upstream pairs");
-			expect(fake.connections.map(connection => connection.messages[0]).sort()).toEqual(['{ "client": "a" }', '{ "client": "b" }']);
-			await closeSocket(a); await Bun.sleep(20);
+			const a = await socketConnect(socketPath);
+			const b = await socketConnect(socketPath);
+			a.write(`gjc-sdk-transport/1 token=${token}\n{ "client": "a" }\n`);
+			b.write(`gjc-sdk-transport/1 token=${token}\n{ "client": "b" }\n`);
+			await waitFor(() => (fake.connections.length === 2 ? fake.connections : undefined), "isolated upstream pairs");
+			expect(fake.connections.map(connection => connection.messages[0]).sort()).toEqual([
+				'{ "client": "a" }',
+				'{ "client": "b" }',
+			]);
+			await closeSocket(a);
+			await Bun.sleep(20);
 			b.write('{"still":"running"}\n');
 			expect(await waitFor(() => fake.connections[1]?.messages[1], "remaining pair")).toBe('{"still":"running"}');
-			const c = await socketConnect(socketPath); c.write(`gjc-sdk-transport/1 token=${token}\n`); await waitFor(() => fake.connections.length === 3 ? fake.connections : undefined, "listener remains active"); await closeSocket(c); await closeSocket(b);
-			await fs.unlink(socketPath); await fs.writeFile(socketPath, "replacement");
-		} finally { await handle.close(); fake.stop(); }
+			const c = await socketConnect(socketPath);
+			c.write(`gjc-sdk-transport/1 token=${token}\n`);
+			await waitFor(() => (fake.connections.length === 3 ? fake.connections : undefined), "listener remains active");
+			await closeSocket(c);
+			await closeSocket(b);
+			await fs.unlink(socketPath);
+			await fs.writeFile(socketPath, "replacement");
+		} finally {
+			await handle.close();
+			fake.stop();
+		}
 		expect(await fs.readFile(socketPath, "utf8")).toBe("replacement");
 	});
 
 	test("refuses existing paths and insecure parent directories", async () => {
-		const fake = upstream(); const dir = await tempDir(); const occupied = path.join(dir, "occupied.sock"); await fs.writeFile(occupied, "x");
-		await expect(startSocketServe({ url: fake.url, token, pendingCeilingBytes: 256 * 1024, socketPath: occupied })).rejects.toThrow("socket_path_in_use");
+		const fake = upstream();
+		const dir = await tempDir();
+		const occupied = path.join(dir, "occupied.sock");
+		await fs.writeFile(occupied, "x");
+		await expect(
+			startSocketServe({ url: fake.url, token, pendingCeilingBytes: 256 * 1024, socketPath: occupied }),
+		).rejects.toThrow("socket_path_in_use");
 		await fs.chmod(dir, 0o777);
-		await expect(startSocketServe({ url: fake.url, token, pendingCeilingBytes: 256 * 1024, socketPath: path.join(dir, "unsafe.sock") })).rejects.toThrow("socket_dir_insecure");
+		await expect(
+			startSocketServe({
+				url: fake.url,
+				token,
+				pendingCeilingBytes: 256 * 1024,
+				socketPath: path.join(dir, "unsafe.sock"),
+			}),
+		).rejects.toThrow("socket_dir_insecure");
 		fake.stop();
 	});
 });
 
 describe("SDK serve CLI and discovery", () => {
 	test("keeps private argv exact and public help private", () => {
-		expect(parseSdkInternalArgv(["broker-internal", "--agent-dir", "/tmp/a"])).toEqual({ action: "broker-internal", agentDir: "/tmp/a" });
+		expect(parseSdkInternalArgv(["broker-internal", "--agent-dir", "/tmp/a"])).toEqual({
+			action: "broker-internal",
+			agentDir: "/tmp/a",
+		});
 		expect(parseSdkInternalArgv(["session-host-internal"])).toEqual({ action: "session-host-internal" });
 		expect(() => parseSdkInternalArgv(["broker-internal"])).toThrow(CliParseError);
-		const output: string[] = []; const stdout = process.stdout.write;
-		(process.stdout as unknown as { write(value: string): boolean }).write = value => { output.push(value); return true; };
-		try { renderCommandHelp("gjc", "sdk", Sdk); } finally { (process.stdout as unknown as { write: typeof stdout }).write = stdout; }
-		const help = output.join("\n"); expect(help).toContain("serve"); expect(help).toContain("--socket"); expect(help).not.toContain("broker-internal"); expect(help).not.toContain("session-host-internal"); expect(help).not.toContain("--agent-dir");
+		const output: string[] = [];
+		const stdout = process.stdout.write;
+		(process.stdout as unknown as { write(value: string): boolean }).write = value => {
+			output.push(value);
+			return true;
+		};
+		try {
+			renderCommandHelp("gjc", "sdk", Sdk);
+		} finally {
+			(process.stdout as unknown as { write: typeof stdout }).write = stdout;
+		}
+		const help = output.join("\n");
+		expect(help).toContain("serve");
+		expect(help).toContain("--socket");
+		expect(help).not.toContain("broker-internal");
+		expect(help).not.toContain("session-host-internal");
+		expect(help).not.toContain("--agent-dir");
 	});
 
 	test("rejects invalid serve mode and ceiling before discovery", async () => {
@@ -264,14 +443,25 @@ describe("SDK serve CLI and discovery", () => {
 	});
 
 	test("parses stale tombstones and fails endpoint selection closed", async () => {
-		const repo = await tempDir(); const state = path.join(repo, ".gjc", "state", "sdk"); await fs.mkdir(state, { recursive: true });
-		await fs.writeFile(path.join(state, "stale.json"), JSON.stringify({ url: "ws://x", stale: true, token: "", pid: -1 }));
+		const repo = await tempDir();
+		const state = path.join(repo, ".gjc", "state", "sdk");
+		await fs.mkdir(state, { recursive: true });
+		await fs.writeFile(
+			path.join(state, "stale.json"),
+			JSON.stringify({ url: "ws://x", stale: true, token: "", pid: -1 }),
+		);
 		await fs.writeFile(path.join(state, "bad.json"), JSON.stringify({ url: "ws://x", token: "" }));
-		const records = await listSdkSessionEndpoints(repo); expect(records.endpoints[0]).toMatchObject({ sessionId: "stale", stale: true, token: "" }); expect(records.warnings).toHaveLength(1);
-		const dead = { sessionId: "dead", url: "ws://x", token, pid: 99999999, path: "x" }; const unknown = { ...dead, sessionId: "unknown", pid: 0 };
-		expect(classifyEndpoint(dead)).toBe("dead"); expect(classifyEndpoint(unknown)).toBe("unknown");
-		expect(selectLiveEndpoint(records.endpoints, "stale")).toEqual({ code: "endpoint_stale" }); expect(selectLiveEndpoint([])).toEqual({ code: "no_live_endpoint" });
-		const live = { ...dead, sessionId: "live", pid: process.pid }; expect(selectLiveEndpoint([live, { ...live, sessionId: "live2" }])).toEqual({ code: "multiple_live_endpoints" });
+		const records = await listSdkSessionEndpoints(repo);
+		expect(records.endpoints[0]).toMatchObject({ sessionId: "stale", stale: true, token: "" });
+		expect(records.warnings).toHaveLength(1);
+		const dead = { sessionId: "dead", url: "ws://x", token, pid: 99999999, path: "x" };
+		const unknown = { ...dead, sessionId: "unknown", pid: 0 };
+		expect(classifyEndpoint(dead)).toBe("dead");
+		expect(classifyEndpoint(unknown)).toBe("unknown");
+		expect(selectLiveEndpoint(records.endpoints, "stale")).toEqual({ code: "endpoint_stale" });
+		expect(selectLiveEndpoint([])).toEqual({ code: "no_live_endpoint" });
+		const live = { ...dead, sessionId: "live", pid: process.pid };
+		expect(selectLiveEndpoint([live, { ...live, sessionId: "live2" }])).toEqual({ code: "multiple_live_endpoints" });
 	});
 
 	test("resolves the pending ceiling with flag > env > default precedence", () => {
@@ -294,6 +484,9 @@ describe("SDK serve CLI and discovery", () => {
 			const sinkBytes = Buffer.concat(fixture.received).toString();
 			expect(sinkBytes).toBe(`${frame}\n`);
 			expect(sinkBytes).not.toContain("transport_error");
-		} finally { await fixture.pair.close(); fixture.fake.stop(); }
+		} finally {
+			await fixture.pair.close();
+			fixture.fake.stop();
+		}
 	});
 });

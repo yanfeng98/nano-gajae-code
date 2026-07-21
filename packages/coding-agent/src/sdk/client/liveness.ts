@@ -3,7 +3,13 @@ import type { SdkSessionEndpoint } from "./discovery";
 export type SdkEndpointLiveness = "live" | "stale" | "dead" | "unknown";
 
 export interface SdkEndpointSelectionError {
-	code: "endpoint_stale" | "endpoint_dead" | "endpoint_unknown" | "no_live_endpoint" | "multiple_live_endpoints" | "not_found";
+	code:
+		| "endpoint_stale"
+		| "endpoint_dead"
+		| "endpoint_unknown"
+		| "no_live_endpoint"
+		| "multiple_live_endpoints"
+		| "not_found";
 }
 
 export function classifyEndpoint(endpoint: SdkSessionEndpoint): SdkEndpointLiveness {

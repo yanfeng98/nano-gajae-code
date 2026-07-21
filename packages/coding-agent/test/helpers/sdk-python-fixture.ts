@@ -27,7 +27,8 @@ function parseCommand(line: string): Command {
 	const value = JSON.parse(line) as Record<string, unknown>;
 	if (value.cmd === "stop") return { cmd: "stop" };
 	if (value.cmd === "trigger_ask" && typeof value.question === "string" && Array.isArray(value.options)) {
-		if (!value.options.every(option => typeof option === "string")) throw new Error("trigger_ask options must be strings");
+		if (!value.options.every(option => typeof option === "string"))
+			throw new Error("trigger_ask options must be strings");
 		return { cmd: "trigger_ask", question: value.question, options: value.options as string[] };
 	}
 	if (
@@ -38,7 +39,12 @@ function parseCommand(line: string): Command {
 		typeof value.schema === "object" &&
 		!Array.isArray(value.schema)
 	) {
-		return { cmd: "trigger_gate", stage: value.stage, kind: value.kind, schema: value.schema as Record<string, unknown> };
+		return {
+			cmd: "trigger_gate",
+			stage: value.stage,
+			kind: value.kind,
+			schema: value.schema as Record<string, unknown>,
+		};
 	}
 	throw new Error("invalid fixture control command");
 }
@@ -47,7 +53,8 @@ async function main(): Promise<void> {
 	const args = process.argv.slice(2);
 	const selfCheck = args.includes("--self-check");
 	const suppliedCwd = args.find(argument => argument !== "--self-check");
-	const temporaryRepo = suppliedCwd === undefined ? await fs.mkdtemp(path.join(tmpdir(), "gjc-sdk-python-")) : undefined;
+	const temporaryRepo =
+		suppliedCwd === undefined ? await fs.mkdtemp(path.join(tmpdir(), "gjc-sdk-python-")) : undefined;
 	const repo = suppliedCwd ?? temporaryRepo!;
 	let host: Host | undefined;
 	let stopped = false;
@@ -101,6 +108,6 @@ async function main(): Promise<void> {
 }
 
 void main().catch(error => {
-	process.stderr.write(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
+	process.stderr.write(`${error instanceof Error ? (error.stack ?? error.message) : String(error)}\n`);
 	process.exitCode = 1;
 });

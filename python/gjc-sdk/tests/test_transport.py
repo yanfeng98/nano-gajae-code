@@ -46,7 +46,7 @@ async def test_socket_transport_receives_frame_larger_than_one_megabyte() -> Non
         await transport.close()
         server.close()
         await server.wait_closed()
-        socket_path.unlink()
+        socket_path.unlink(missing_ok=True)
 
 
 @pytest.mark.asyncio

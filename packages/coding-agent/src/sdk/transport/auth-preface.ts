@@ -32,7 +32,6 @@ function failureFrame(): string {
 	return `${JSON.stringify({ type: "transport_error", code: "auth_failed" })}\n`;
 }
 
-
 /** Consumes the one-shot socket authentication preface and leaves later bytes readable. */
 export async function authenticatePreface(socket: net.Socket, token: string): Promise<Buffer> {
 	return await new Promise<Buffer>((resolve, reject) => {
