@@ -4,7 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import type { Args } from "../src/cli/args";
 import { parseArgs } from "../src/cli/args";
-import type { Settings } from "../src/config/settings";
+import { resetSettingsForTest, Settings } from "../src/config/settings";
 import {
 	BARE_RESUME_CONFLICT_ERROR,
 	BARE_RESUME_INTERACTIVE_ERROR,
@@ -47,6 +47,7 @@ const sessionInfo: SessionInfo = {
 };
 
 afterEach(() => {
+	resetSettingsForTest();
 	process.exitCode = undefined;
 	vi.restoreAllMocks();
 });
@@ -76,6 +77,11 @@ async function captureStderr(operation: () => Promise<void>): Promise<string> {
 		process.stderr.write = originalWrite;
 	}
 	return stderr;
+}
+
+/** Bare resume opens into the managed scope selected from the initialized settings singleton. */
+async function initializeBareResumeManagedScope(): Promise<void> {
+	await Settings.init({ inMemory: true, cwd: process.cwd() });
 }
 
 async function expectEarlyBareResumeRejection(args: Args, isResumePickerTerminal: boolean): Promise<string> {
@@ -219,6 +225,7 @@ describe("bare resume startup gating", () => {
 		expect(stderrWrite).not.toHaveBeenCalled();
 		expect(opens).toBe(0);
 
+		await initializeBareResumeManagedScope();
 		await runRootCommand(bareArgs(), [], {
 			suppressProcessExit: true,
 			isResumePickerTerminal: () => true,
@@ -390,10 +397,12 @@ describe("direct fork destination authority", () => {
 	});
 });
 
-it("bounds a rejected strict-open promise to one error before session startup or fallback", async () => {
+it("bounds a rejected selected strict-open promise to one error before session startup or fallback", async () => {
 	let authDiscoveries = 0;
 	let sessionCreations = 0;
+	let strictOpens = 0;
 	const stderr = await captureStderr(async () => {
+		await initializeBareResumeManagedScope();
 		await runRootCommand(bareArgs(), [], {
 			suppressProcessExit: true,
 			isResumePickerTerminal: () => true,
@@ -405,6 +414,7 @@ it("bounds a rejected strict-open promise to one error before session startup or
 				action: "open-idle",
 			}),
 			openExistingSessionStrict: async () => {
+				strictOpens++;
 				throw new Error("injected strict-open rejection");
 			},
 			discoverAuthStorage: async () => {
@@ -418,6 +428,7 @@ it("bounds a rejected strict-open promise to one error before session startup or
 		});
 	});
 	expect(stderr).toBe(`${BARE_RESUME_OPEN_ERROR}\n`);
+	expect(strictOpens).toBe(1);
 	expect(authDiscoveries).toBe(0);
 	expect(sessionCreations).toBe(0);
 });
