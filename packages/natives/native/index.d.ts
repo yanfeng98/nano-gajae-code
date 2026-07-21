@@ -356,15 +356,57 @@ export declare class PtySession {
 export declare class RecoveryFsRoot {
   /** Return the stable identity of the retained root descriptor. */
   identity(): RecoveryFsResult
+  /**
+   * Derive a retained child-directory capability from this root and exact
+   * identity evidence.
+   */
+  retainManagedDirectory(relativePath: string, expectedDev: string, expectedIno: string): RecoveryFsRoot
   /** Stat one existing regular, single-linked file without following links. */
   stat(relativePath: string): RecoveryFsResult
   /** Read one existing regular, single-linked file without following links. */
   read(relativePath: string, maxBytes: number): RecoveryFsResult
+  /** Read one managed artifact with the managed-storage size bound. */
+  readManaged(relativePath: string): RecoveryFsResult
   /**
    * Create one previously absent regular, owner-only file and synchronously
    * persist its contents. Existing entries are never replaced.
    */
   create(relativePath: string, data: Uint8Array): RecoveryFsResult
+  /** Create one managed artifact with the managed-storage size bound. */
+  createManaged(relativePath: string, data: Uint8Array): RecoveryFsResult
+  /**
+   * Atomically replace one exact regular file with a newly written managed
+   * artifact. The destination must retain the supplied identity throughout
+   * authorization.
+   */
+  replaceManaged(relativePath: string, data: Uint8Array, expectedDev: string, expectedIno: string, expectedSize: string, expectedMtimeNs: string, expectedCtimeNs: string, expectedSha256: string): RecoveryFsResult
+  /**
+   * Synchronously append one record to an exact retained managed file without
+   * replacing its inode or creating recovery copies.
+   */
+  appendManaged(relativePath: string, data: Uint8Array, expectedDev: string, expectedIno: string, expectedSize: string, expectedMtimeNs: string, expectedCtimeNs: string, expectedSha256: string): RecoveryFsResult
+  /** Remove one exact managed regular file through retained authority. */
+  removeManaged(relativePath: string, expectedDev: string, expectedIno: string, expectedSize: string, expectedMtimeNs: string, expectedCtimeNs: string, expectedSha256: string): RecoveryFsResult
+  /**
+   * Create each absent directory component beneath the retained root with
+   * owner-only security. Existing components are re-opened no-follow.
+   */
+  ensureManagedDirectory(relativePath: string): RecoveryFsResult
+  /**
+   * Move an exact managed file to an absent name entirely beneath this
+   * retained root. The source identity is rechecked after the no-replace
+   * rename, and the move is rolled back on a mismatch.
+   */
+  renameManagedFileNoReplace(sourceRelativePath: string, destinationRelativePath: string, expectedDev: string, expectedIno: string, expectedSize: string, expectedMtimeNs: string, expectedCtimeNs: string, expectedSha256: string): RecoveryFsResult
+  /** Snapshot a managed directory tree entirely through the retained root. */
+  snapshotManagedTree(relativePath: string): NativeDirectoryTreeResult
+  /**
+   * Move an exact managed directory tree to an absent name through retained
+   * authority.
+   */
+  renameManagedTreeNoReplace(sourceRelativePath: string, destinationRelativePath: string, expected: NativeDirectoryTreeSnapshot): RecoveryFsResult
+  /** Remove an exact managed directory tree through retained authority. */
+  removeManagedTree(relativePath: string, expected: NativeDirectoryTreeSnapshot): RecoveryFsResult
   /**
    * Atomically install an already-created regular file at an absent name.
    * Both names remain relative to this retained root and are never resolved
@@ -376,6 +418,13 @@ export declare class RecoveryFsRoot {
    * install durable when the filesystem supports directory fsync.
    */
   fsync(): RecoveryFsResult
+  /**
+   * Fsync one expected object relative to the retained root and prove
+   * identity.
+   */
+  fsyncExpected(relativePath: string, directory: boolean, expectedDev: string, expectedIno: string, expectedSize: string, expectedMtimeNs: string, expectedSha256?: string | undefined | null): RecoveryFsResult
+  /** Verify owner-only directory security on the retained root descriptor. */
+  verifyOwnerOnlyDirectory(): RecoveryFsResult
   close(): RecoveryFsResult
 }
 
@@ -421,7 +470,7 @@ export declare class Shell {
  * `packages/natives/native/index.js` (which derives the name from
  * `package.json#version`).
  */
-export declare function __piNativesV0_11_4(): void
+export declare function __piNativesV0_11_6(): void
 
 /**
  * Apply conservative pre-execution rewrites to a bash command.
@@ -431,6 +480,13 @@ export declare function __piNativesV0_11_4(): void
  * `pi_shell::fixup`. Synchronous and cheap (one parse pass over the input).
  */
 export declare function applyBashFixups(command: string): BashFixupResult
+
+/**
+ * Apply owner-only security to the exact caller descriptor and its retained
+ * no-follow path. The descriptor is duplicated with close-on-exec and is never
+ * returned to JavaScript.
+ */
+export declare function applyOwnerOnlyFdSecurity(path: string, kind: "directory" | "file", callerFd: number): NativeOwnerOnlySecurityResult
 
 export declare function applyOwnerOnlyPathSecurity(path: string, kind: "directory" | "file"): NativeOwnerOnlySecurityResult
 
@@ -1548,6 +1604,18 @@ export interface MinimizerResult {
   outputBytes: number
 }
 
+/** Evidence for one Linux POSIX ACL attribute. */
+export interface NativeAclAttributeEvidence {
+  clear: string
+  query: string
+}
+
+/** Bounded Linux POSIX ACL evidence for an owner-only result. */
+export interface NativeAclEvidence {
+  access: NativeAclAttributeEvidence
+  default?: NativeAclAttributeEvidence
+}
+
 /** Classification of a read-only retained-publication observation. */
 export interface NativeBrokerPublicationObservation {
   kind: string
@@ -1581,6 +1649,7 @@ export interface NativeDirectoryTreeEntry {
   ino: string
   size: string
   mtimeNs: string
+  ctimeNs: string
   sha256?: string
 }
 
@@ -1653,7 +1722,71 @@ export interface NativeExactUnlinkResult {
 
 /** Result of applying or checking owner-only path security. */
 export type NativeOwnerOnlySecurityResult =
-	| { ok: true; code?: never }
+	| {
+			ok: true;
+			platform: "linux";
+			kind: "file";
+			protocol: "apply" | "verify";
+			aclEvidence: {
+				access: {
+					clear: "cleared" | "already_absent" | "unsupported" | "not_run";
+					query: "absent" | "unsupported";
+				};
+				default?: never;
+			};
+			code?: never;
+			operation?: never;
+			attribute?: never;
+	  }
+	| {
+			ok: true;
+			platform: "linux";
+			kind: "directory";
+			protocol: "apply" | "verify";
+			aclEvidence: {
+				access: {
+					clear: "cleared" | "already_absent" | "unsupported" | "not_run";
+					query: "absent" | "unsupported";
+				};
+				default: {
+					clear: "cleared" | "already_absent" | "unsupported" | "not_run";
+					query: "absent" | "unsupported";
+				};
+			};
+			code?: never;
+			operation?: never;
+			attribute?: never;
+	  }
+	| {
+			ok: true;
+			platform?: never;
+			kind?: never;
+			protocol?: never;
+			aclEvidence?: never;
+			code?: never;
+			operation?: never;
+			attribute?: never;
+	  }
+	| {
+			ok: false;
+			code: "acl_denied" | "acl_io_error" | "acl_present" | "acl_malformed" | "acl_unknown";
+			operation: "clear" | "query";
+			attribute: "access" | "default";
+			platform?: never;
+			kind?: never;
+			protocol?: never;
+			aclEvidence?: never;
+	  }
+	| {
+			ok: false;
+			code: "acl_unavailable" | "acl_apply_failed" | "acl_verify_failed";
+			operation?: never;
+			attribute?: never;
+			platform?: never;
+			kind?: never;
+			protocol?: never;
+			aclEvidence?: never;
+	  }
 	| {
 			ok: false;
 			code:
@@ -1661,12 +1794,17 @@ export type NativeOwnerOnlySecurityResult =
 				| "not_directory"
 				| "network_unsupported"
 				| "reparse_point"
-				| "acl_unavailable"
-				| "acl_apply_failed"
-				| "acl_verify_failed"
 				| "identity_unavailable"
+				| "identity_mismatch"
 				| "owner_mismatch"
+				| "mode_mismatch"
 				| "io_error";
+			operation?: never;
+			attribute?: never;
+			platform?: never;
+			kind?: never;
+			protocol?: never;
+			aclEvidence?: never;
 	  }
 
 /** Bound endpoint info returned from [`NotificationServer::start`]. */
@@ -1808,6 +1946,8 @@ export interface RecoveryFsIdentity {
   ino: string
   size: string
   mtimeNs: string
+  ctimeNs: string
+  sha256?: string
 }
 
 export interface RecoveryFsResult {
@@ -1818,6 +1958,13 @@ export interface RecoveryFsResult {
 }
 
 export declare function renameNoReplacePath(sourcePath: string, destinationPath: string): NativeExactUnlinkResult
+
+/**
+ * Repair the owner-only ACL for an existing path only when its retained
+ * no-follow handle still identifies the expected object. The expected
+ * identity is checked before any ACL mutation and again after the repair.
+ */
+export declare function repairOwnerOnlyPathSecurityExpected(path: string, kind: "directory" | "file", expectedDev: bigint, expectedIno: bigint): NativeOwnerOnlySecurityResult
 
 /** A client reply forwarded to the TypeScript host for gate resolution. */
 export interface ReplyEvent {
@@ -2038,7 +2185,20 @@ export declare function truncateLinesToWidth(lines: Array<string>, maxWidth: num
 
 export declare function truncateToWidth(text: string, maxWidth: number, ellipsisKind: Ellipsis | undefined | null, pad: boolean | undefined | null, tabWidth: number): string
 
+/**
+ * Verify owner-only security for the exact caller descriptor and retained
+ * no-follow path. The descriptor is duplicated with close-on-exec and is never
+ * returned to JavaScript.
+ */
+export declare function verifyOwnerOnlyFdSecurity(path: string, kind: "directory" | "file", callerFd: number): NativeOwnerOnlySecurityResult
+
 export declare function verifyOwnerOnlyPathSecurity(path: string, kind: "directory" | "file"): NativeOwnerOnlySecurityResult
+
+/**
+ * Verify owner-only security for the exact expected target using a no-follow
+ * handle. The target identity is checked before and after verification.
+ */
+export declare function verifyOwnerOnlyPathSecurityExpected(path: string, kind: "directory" | "file", expectedDev: bigint, expectedIno: bigint): NativeOwnerOnlySecurityResult
 
 /**
  * Calculate visible width of text, excluding ANSI escape sequences.

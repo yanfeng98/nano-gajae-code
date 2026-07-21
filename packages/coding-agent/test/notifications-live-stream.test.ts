@@ -8,6 +8,7 @@ import { createNotificationsExtension } from "../src/sdk/bus/index";
 import type { NotificationSessionContext } from "../src/sdk/bus/session-control";
 import { NotificationSessionController } from "../src/sdk/bus/session-control";
 import { type EnsureDaemonResult, TelegramNotificationDaemon } from "../src/sdk/bus/telegram-daemon";
+import { TelegramDaemonController } from "../src/sdk/bus/telegram-daemon-control";
 import { readEndpoint } from "../src/sdk/bus/telegram-reference";
 import { renderThreadedFrame } from "../src/sdk/bus/threaded-render";
 import {
@@ -131,7 +132,7 @@ async function bootSession(
 	if (typeof botToken === "string" && typeof chatId === "string") {
 		fs.writeFileSync(
 			path.join(agentDir, "config.yml"),
-			`notifications:\n  enabled: true\n  telegram:\n    botToken: ${JSON.stringify(botToken)}\n    chatId: ${JSON.stringify(chatId)}\n`,
+			`notifications:\n  enabled: true\n  daemon:\n    idleTimeoutMs: 20\n  telegram:\n    botToken: ${JSON.stringify(botToken)}\n    chatId: ${JSON.stringify(chatId)}\n`,
 		);
 	}
 	const settings = isolatedNotificationSettings(agentDir, settingsOverrides);
@@ -157,6 +158,10 @@ async function bootSession(
 		key: `notification-session:${sid}`,
 		shutdown: async () => {
 			await handlers.get("session_shutdown")!({ type: "session_shutdown" }, ctx);
+			if (typeof botToken === "string" && typeof chatId === "string") {
+				const stopped = await new TelegramDaemonController(settings).stop();
+				if (!stopped.ok) throw new Error(`Failed to stop fixture Telegram daemon: ${stopped.message}`);
+			}
 		},
 	});
 	await handlers.get("session_start")!({ type: "session_start" }, ctx);

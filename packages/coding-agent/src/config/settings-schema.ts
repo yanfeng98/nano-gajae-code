@@ -1566,7 +1566,19 @@ export const SETTINGS_SCHEMA = {
 		ui: {
 			tab: "context",
 			label: "Save Handoff Docs",
-			description: "Save generated handoff documents to markdown files for the auto-handoff flow",
+			description:
+				"Save auto-triggered handoff documents as session artifacts (resolvable artifact:// URIs); manual /handoff does not save",
+		},
+	},
+
+	"compaction.handoffPromptExtension": {
+		type: "string",
+		default: "",
+		ui: {
+			tab: "context",
+			label: "Handoff Prompt Extension",
+			description:
+				"Extra guidance appended to the default handoff-generation prompt for both manual /handoff and auto-handoff. It supplements, and never replaces, the built-in safety- and continuity-critical instructions.",
 		},
 	},
 
@@ -2439,9 +2451,9 @@ export const SETTINGS_SCHEMA = {
 		default: false,
 		ui: {
 			tab: "tools",
-			label: "Insane Search Fallback",
+			label: "Insane Search Fallback (Compatibility)",
 			description:
-				"Opt in to the vendored insane-search escalation for blocked public URL reads (403/WAF/JS-gated). Off by default. Requires preinstalled python3 + curl_cffi (and node + playwright/stealth for the browser phase); changes network posture by enabling TLS/browser impersonation for public pages.",
+				"Compatibility-only preference. Remote renderer fallback stays disabled because it cannot preserve validated per-hop network routing.",
 		},
 	},
 
@@ -3643,6 +3655,7 @@ export interface CompactionSettings {
 	reserveTokens: number;
 	keepRecentTokens: number;
 	handoffSaveToDisk: boolean;
+	handoffPromptExtension: string;
 	autoContinue: boolean;
 	remoteEnabled: boolean;
 	remoteEndpoint: string | undefined;

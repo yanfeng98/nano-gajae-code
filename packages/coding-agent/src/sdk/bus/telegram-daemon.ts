@@ -20,6 +20,7 @@ import {
 import { daemonPaths, HEARTBEAT_TTL_MS } from "./daemon-paths";
 import {
 	acquireDaemonTransitionLock,
+	classifyNotificationEndpoint,
 	type DaemonTransitionLock,
 	daemonTransitionLockIsHeld,
 	exactUnlinkNotificationFile,
@@ -60,6 +61,7 @@ import {
 	formatLifecycleOutcome,
 	isLifecycleCommandLikeText,
 	isLifecycleCommandText,
+	type LifecycleCommandVerb,
 	lifecycleUsage,
 	parseLifecycleCommand,
 	validateLifecycleTarget,
@@ -591,8 +593,15 @@ function ownershipLockMatchesState(lock: OwnershipLockRead, state: DaemonState |
 	);
 }
 
-function ownershipLockMatchesStoppedState(lock: OwnershipLockRead, state: DaemonState | undefined): boolean {
-	return Boolean(state && isExplicitlyStoppedDaemonState(state) && ownershipLockMatchesState(lock, state));
+function ownershipLockMatchesStoppedState(lock: OwnershipLockRead, state: unknown): boolean {
+	if (isExplicitlyStoppedDaemonState(state)) return ownershipLockMatchesState(lock, state);
+	if (!isLegacyStoppedDaemonState(state) || lock.kind !== "legacy") return false;
+	const legacyState = state as Pick<DaemonState, "pid" | "startedAt"> & { stoppedAt: number };
+	return (
+		lock.metadata.pid === legacyState.pid &&
+		lock.metadata.startedAt <= legacyState.startedAt &&
+		legacyState.startedAt <= legacyState.stoppedAt
+	);
 }
 
 async function transitionLockIsHeldByCaller(input: {
@@ -865,6 +874,39 @@ function isExplicitlyStoppedDaemonState(state: unknown): state is DaemonState {
 			state.acquisitionId.length > 0,
 	);
 }
+/**
+ * v0.11.4 and earlier generations wrote stopped tombstones before acquisition
+ * and incarnation fields existed. A live, reused PID must not turn that durable
+ * stop marker into a foreign live owner during an upgrade.
+ */
+function isLegacyStoppedDaemonState(state: unknown): boolean {
+	const candidate = state as Partial<DaemonState> | undefined;
+	return Boolean(
+		candidate &&
+			Number.isSafeInteger(candidate.pid) &&
+			(candidate.pid ?? 0) > 0 &&
+			typeof candidate.ownerId === "string" &&
+			candidate.ownerId.length > 0 &&
+			typeof candidate.tokenFingerprint === "string" &&
+			typeof candidate.chatId === "string" &&
+			Number.isSafeInteger(candidate.startedAt) &&
+			Number.isSafeInteger(candidate.heartbeatAt) &&
+			Number.isSafeInteger(candidate.stoppedAt) &&
+			(candidate.launcherPid === undefined ||
+				(Number.isSafeInteger(candidate.launcherPid) && (candidate.launcherPid ?? 0) > 0)) &&
+			Array.isArray(candidate.roots) &&
+			candidate.roots.every(root => typeof root === "string") &&
+			candidate.version === DAEMON_VERSION &&
+			isRecognizedLegacyGeneration(candidate.generation) &&
+			candidate.incarnation === undefined &&
+			candidate.acquisitionId === undefined &&
+			candidate.ownershipPhase === undefined,
+	);
+}
+
+function isStoppedDaemonState(state: unknown): boolean {
+	return isExplicitlyStoppedDaemonState(state) || isLegacyStoppedDaemonState(state);
+}
 
 function ownerIdentityMatches(
 	state: Pick<DaemonState, "tokenFingerprint" | "chatId">,
@@ -1016,7 +1058,7 @@ function classifyForeignLiveOwner(input: {
 	// Validate before probing so malformed PIDs never reach the liveness source.
 	if (!state || !validDaemonPid(state.pid) || !input.pidAlive(state.pid)) return undefined;
 	// A stopped tombstone with a canonical acquisition is not a live owner.
-	if (isExplicitlyStoppedDaemonState(state) || isLegacyParentDaemonState(state)) return undefined;
+	if (isStoppedDaemonState(state) || isLegacyParentDaemonState(state)) return undefined;
 	const currentIncarnation = input.pidIncarnation?.(state.pid) ?? defaultPidIncarnation(state.pid);
 	if (
 		!hasSafeDaemonStateShape(state) ||
@@ -1156,7 +1198,7 @@ export async function acquireDaemonOwnership(input: {
 		if (state && !hasSafeDaemonStateShape(state)) {
 			const malformed = state as Partial<DaemonState>;
 			if (
-				!isExplicitlyStoppedDaemonState(malformed) &&
+				!isStoppedDaemonState(malformed) &&
 				validDaemonPid(malformed.pid) &&
 				typeof malformed.incarnation === "string" &&
 				pidAlive(malformed.pid)
@@ -1206,6 +1248,16 @@ export async function acquireDaemonOwnership(input: {
 		return { acquired: false, attached: false, provisional: true };
 	};
 	const existing = await readJson<DaemonState>(fsImpl, paths.state);
+	if (
+		existing &&
+		validDaemonPid(existing.pid) &&
+		!ownerIdentityMatches(existing, input.tokenFingerprint, input.chatId) &&
+		(!hasSafeDaemonStateShape(existing) ||
+			!isProcessIncarnation(existing.incarnation) ||
+			!isProcessIncarnation(pidIncarnation(existing.pid))) &&
+		pidAlive(existing.pid)
+	)
+		return { acquired: false, attached: false, blocked: true };
 	const foreignOwner = classifyForeignLiveOwner({
 		state: existing,
 		tokenFingerprint: input.tokenFingerprint,
@@ -1825,8 +1877,8 @@ function defaultPidAlive(pid: number): boolean {
 	try {
 		process.kill(pid, 0);
 		return true;
-	} catch {
-		return false;
+	} catch (error) {
+		return (error as NodeJS.ErrnoException).code !== "ESRCH";
 	}
 }
 
@@ -2011,6 +2063,135 @@ export async function spawnTelegramDaemonOwner(
 }
 
 /**
+ * Owner-bound reclamation of a confirmed-dead daemon owner, mirroring the
+ * daemon step of `gjc notify recovery`. It returns a structured, actionable
+ * result and removes only identity-verified dead-owner artifacts while holding
+ * the transition fence; live, successor, unknown, or unreadable evidence is
+ * retained.
+ */
+export type DeadOwnerRecoveryResult =
+	| { recovered: true; reason: "cleared" }
+	| {
+			recovered: false;
+			reason:
+				| "not-confirmed-dead"
+				| "unsafe-lock"
+				| "transition-contended"
+				| "owner-superseded"
+				| "unsafe-endpoint"
+				| "endpoint-changed"
+				| "endpoint-directory-unreadable"
+				| "lock-changed";
+	  };
+
+/** Preflight cleanup for a confirmed-dead owner, with identity-bound removal. */
+export async function reclaimDeadDaemonOwner(input: {
+	settings: Settings;
+	endpointDir?: string;
+	fs?: TelegramDaemonFs;
+	now?: () => number;
+	pidAlive?: (pid: number) => boolean;
+	pidIncarnation?: (pid: number) => string | undefined;
+}): Promise<DeadOwnerRecoveryResult> {
+	const fsImpl = input.fs ?? nodeFs;
+	const now = input.now ?? Date.now;
+	const pidAlive = input.pidAlive ?? defaultPidAlive;
+	const pidIncarnation = input.pidIncarnation ?? defaultPidIncarnation;
+	const paths = daemonPaths(input.settings.getAgentDir());
+	const state = await readDaemonState(input.settings, fsImpl);
+	if (!state || !hasSafeDaemonStateShape(state) || pidAlive(state.pid))
+		return { recovered: false, reason: "not-confirmed-dead" };
+	const lock = await readOwnershipLock(fsImpl, paths.lock);
+	if (
+		!(await ownershipLockIsReclaimable({ fs: fsImpl, path: paths.lock, lock, now: now(), pidAlive, pidIncarnation }))
+	)
+		return { recovered: false, reason: "unsafe-lock" };
+	const transition = await acquireDaemonTransitionLock({
+		fs: fsImpl,
+		path: paths.steal,
+		pid: process.pid,
+		pidAlive: defaultPidAlive,
+		pidIncarnation: defaultPidIncarnation,
+	});
+	const readEndpointFile = fsImpl.readEndpointFile;
+	if (!transition || !readEndpointFile || !fsImpl.exactUnlink)
+		return { recovered: false, reason: "transition-contended" };
+	try {
+		const current = await readDaemonState(input.settings, fsImpl);
+		if (
+			!current ||
+			!hasSafeDaemonStateShape(current) ||
+			current.ownerId !== state.ownerId ||
+			current.acquisitionId !== state.acquisitionId ||
+			current.pid !== state.pid ||
+			current.incarnation !== state.incarnation ||
+			current.generation !== state.generation ||
+			current.ownershipPhase !== state.ownershipPhase ||
+			current.tokenFingerprint !== state.tokenFingerprint ||
+			current.chatId !== state.chatId ||
+			pidAlive(current.pid)
+		)
+			return { recovered: false, reason: "owner-superseded" };
+		const currentLock = await readOwnershipLock(fsImpl, paths.lock);
+		if (
+			!ownershipLockMatches(lock, currentLock) ||
+			!(await ownershipLockIsReclaimable({
+				fs: fsImpl,
+				path: paths.lock,
+				lock: currentLock,
+				now: now(),
+				pidAlive,
+				pidIncarnation,
+			})) ||
+			!(await transitionLockIsHeldByCaller({ fs: fsImpl, path: paths.steal, lock: transition }))
+		)
+			return { recovered: false, reason: "unsafe-lock" };
+		const endpoints: Array<{ file: string; identity: NotificationEndpointFileIdentity }> = [];
+		if (input.endpointDir) {
+			let names: string[];
+			try {
+				names = await fsImpl.readdir(input.endpointDir);
+			} catch (error) {
+				if ((error as NodeJS.ErrnoException).code === "ENOENT") names = [];
+				else return { recovered: false, reason: "endpoint-directory-unreadable" };
+			}
+			for (const name of names) {
+				if (!name.endsWith(".json")) continue;
+				const file = path.join(input.endpointDir, name);
+				const endpoint = await classifyNotificationEndpoint(
+					{ readEndpointFile: fsImpl.readEndpointFile! },
+					file,
+					pidAlive,
+				);
+				if (endpoint.kind === "non-endpoint") continue;
+				if (endpoint.kind !== "endpoint" || endpoint.liveness !== "dead")
+					return { recovered: false, reason: "unsafe-endpoint" };
+				endpoints.push({ file, identity: endpoint.identity });
+			}
+		}
+		if (!(await transitionLockIsHeldByCaller({ fs: fsImpl, path: paths.steal, lock: transition })))
+			return { recovered: false, reason: "transition-contended" };
+		for (const endpoint of endpoints)
+			if (!(await fsImpl.exactUnlink(endpoint.file, endpoint.identity)).ok)
+				return { recovered: false, reason: "endpoint-changed" };
+		if (currentLock.kind === "missing") return { recovered: true, reason: "cleared" };
+		const exactLock = await fsImpl.readEndpointFile!(paths.lock).catch(() => undefined);
+		const exactCurrentLock = await readOwnershipLock(fsImpl, paths.lock);
+		if (
+			!exactLock ||
+			!ownershipLockMatches(currentLock, exactCurrentLock) ||
+			!(await transitionLockIsHeldByCaller({ fs: fsImpl, path: paths.steal, lock: transition }))
+		)
+			return { recovered: false, reason: "lock-changed" };
+		return (await fsImpl.exactUnlink(paths.lock, exactLock.identity)).ok
+			? { recovered: true, reason: "cleared" }
+			: { recovered: false, reason: "lock-changed" };
+	} finally {
+		await releaseDaemonTransitionLock({ fs: fsImpl, path: paths.steal, lock: transition });
+	}
+}
+
+/**
  * Ensure a configured daemon owns this session root, preserving ownership safety
  * while exposing whether a #2028 generation handoff was required.
  */
@@ -2022,6 +2203,24 @@ export async function ensureTelegramDaemonRunningDetailed(
 	if (!isTelegramConfigured(cfg)) return "disabled";
 	const root = notificationRootForCwd(input.cwd);
 	const fp = tokenFingerprint(cfg.botToken);
+	// Windows can retain dead launcher metadata without an ownership lock; reclaim
+	// its dead discovery records before the replacement can publish a new owner.
+	if ((deps.platform ?? process.platform) === "win32" && !deps.fs) {
+		const preflight = await reclaimDeadDaemonOwner({
+			settings: input.settings,
+			endpointDir: path.join(root, "sdk"),
+			fs: deps.fs,
+			now: deps.now,
+			pidAlive: deps.pidAlive,
+			pidIncarnation: deps.pidIncarnation,
+		});
+		if (!preflight.recovered && preflight.reason !== "not-confirmed-dead") {
+			logger.warn(
+				`notifications: startup recovery unsafe (${preflight.reason}); run \`gjc notify recovery\` for diagnostics`,
+			);
+			return "blocked_identity";
+		}
+	}
 	let spawned = await withTelegramSetupLease(
 		cfg.botToken,
 		async () =>
@@ -2063,8 +2262,31 @@ export async function ensureTelegramDaemonRunningDetailed(
 			);
 		}
 	}
+	let recoveryReason: Extract<DeadOwnerRecoveryResult, { recovered: false }>["reason"] | undefined;
+	if (spawned.result === "blocked" && !spawned.warnings[0]?.includes("provisional")) {
+		const recovery = await reclaimDeadDaemonOwner({
+			settings: input.settings,
+			endpointDir: path.join(root, "sdk"),
+			fs: deps.fs,
+			now: deps.now,
+			pidAlive: deps.pidAlive,
+			pidIncarnation: deps.pidIncarnation,
+		});
+		if (recovery.recovered) {
+			spawned = await withTelegramSetupLease(
+				cfg.botToken,
+				async () =>
+					await spawnTelegramDaemonOwner(
+						{ settings: input.settings, roots: [root], tokenFingerprint: fp, chatId: cfg.chatId },
+						deps,
+					),
+			);
+		} else recoveryReason = recovery.reason;
+	}
 	if (spawned.result === "blocked") {
-		logger.warn(`notifications: failed to ensure Telegram daemon: ${spawned.warnings.join("; ")}`);
+		logger.warn(
+			`notifications: failed to ensure Telegram daemon: ${recoveryReason ? `stale recovery ${recoveryReason}; run \`gjc notify recovery\`` : spawned.warnings.join("; ")}`,
+		);
 		return "blocked_identity";
 	}
 	if (spawned.result === "attached" && spawned.reloadRequired) {
@@ -3121,7 +3343,7 @@ export class TelegramNotificationDaemon {
 
 		const frame = this.buildLifecycleFrame(parsed, updateId ?? Date.now());
 		const response = await this.submitLifecycleFrame(frame);
-		await reply(this.formatLifecycleResponse(response));
+		await reply(this.formatLifecycleResponse(response, verb));
 		return true;
 	}
 
@@ -3137,8 +3359,8 @@ export class TelegramNotificationDaemon {
 	}
 
 	/** Map a lifecycle response/error to a user-facing message (G010 surfacing). */
-	private formatLifecycleResponse(r: SessionLifecycleResponse): string {
-		return formatLifecycleOutcome(r);
+	private formatLifecycleResponse(r: SessionLifecycleResponse, verb: LifecycleCommandVerb): string {
+		return formatLifecycleOutcome(r, verb);
 	}
 
 	constructor(private readonly opts: TelegramDaemonOptions) {

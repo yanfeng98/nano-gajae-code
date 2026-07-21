@@ -90,8 +90,9 @@ import { loadActiveSubskillTools } from "../extensibility/gjc-plugins/tools";
 import { loadSkills, type Skill, type SkillWarning, setActiveSkills } from "../extensibility/skills";
 import type { FileSlashCommand } from "../extensibility/slash-commands";
 import type { HindsightSessionState } from "../hindsight/state";
-import { LocalProtocolHandler, type LocalProtocolOptions } from "../internal-urls";
+import { initializeLocalRoot, LocalProtocolHandler, type LocalProtocolOptions } from "../internal-urls";
 import { resolveMemoryBackend } from "../memory-backend";
+import btwUserPrompt from "../prompts/system/btw-user.md" with { type: "text" };
 import asyncResultTemplate from "../prompts/tools/async-result.md" with { type: "text" };
 import { AgentRegistry, MAIN_AGENT_ID } from "../registry/agent-registry";
 import { MCPManager } from "../runtime-mcp";
@@ -1171,8 +1172,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		const sessionManager =
 			options.sessionManager ??
 			(await logger.time("sessionManager", async () => {
-				const sessionDir = SessionManager.getDefaultSessionDir(cwd, agentDir);
-				return SessionManager.create(cwd, sessionDir);
+				return SessionManager.create(cwd, SessionManager.managedDestination(cwd, agentDir));
 			}));
 		const logicalSessionId = sessionManager.getSessionId();
 		const providerSessionId = options.providerSessionId ?? options.forkContextSeed?.cacheIdentity ?? logicalSessionId;
@@ -1507,6 +1507,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			trackEvalExecution: (execution, abortController) =>
 				session ? session.trackEvalExecution(execution, abortController) : execution,
 			getSessionId: () => sessionManager.getSessionId?.() ?? null,
+			isManagedSessionDestination: () => sessionManager.isManagedDestination(),
 			getActiveSkillState: () => session?.getActiveSkillState(),
 			getActiveSkillPhase: () => session?.getActiveSkillPhase(),
 			getHindsightSessionState: () => session?.getHindsightSessionState(),
@@ -1590,11 +1591,18 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		// which collapses to the parent's dir for subagents (they adopt the
 		// parent's ArtifactManager) so one lookup hits everything.
 		const getArtifactsDir = () => sessionManager.getArtifactsDir();
+		const localProtocolOptions = options.localProtocolOptions ?? {
+			getArtifactsDir,
+			isManagedDestination: () => sessionManager.isManagedDestination(),
+			getManagedLegacyLocalMigrationSource: () => sessionManager.getManagedLegacyLocalMigrationSource(),
+			getSessionId: () => sessionManager.getSessionId(),
+		};
 		if (!options.parentTaskPrefix) {
 			setActiveSkills(skills);
 			setActiveRules([...rulebookRules, ...alwaysApplyRules]);
 			if (asyncJobManager) AsyncJobManager.setInstance(asyncJobManager);
 		}
+		await initializeLocalRoot(localProtocolOptions);
 		if (options.localProtocolOptions) {
 			disposeLocalProtocolOverride = LocalProtocolHandler.installOverride(options.localProtocolOptions);
 		}
@@ -1752,17 +1760,20 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			// product decision holds for subagent sessions too.
 			const singleton = MCPManager.instance();
 			const inherited = mcpManager ?? (singleton?.isToolsOnly() ? undefined : singleton);
-			const pluginServers = inherited ? pluginMcpManagerServers.get(inherited) : undefined;
-			if (inherited && pluginServers) {
+			if (inherited) {
 				try {
-					const inheritedTools = inherited.getTools().filter(tool => {
-						const serverName = tool.mcpServerName;
-						return serverName !== undefined && pluginServers.has(serverName);
-					});
+					const inheritedTools = inherited.getTools();
 					if (inheritedTools.length > 0) customTools.push(...(inheritedTools as CustomTool[]));
-					pluginMcpToolNames.push(...inheritedTools.map(tool => tool.name));
+					const pluginServers = pluginMcpManagerServers.get(inherited);
+					if (pluginServers) {
+						pluginMcpToolNames.push(
+							...inheritedTools
+								.filter(tool => tool.mcpServerName !== undefined && pluginServers.has(tool.mcpServerName))
+								.map(tool => tool.name),
+						);
+					}
 				} catch (error) {
-					logger.warn("Failed to inherit plugin MCP tools in subagent", { error });
+					logger.warn("Failed to inherit MCP tools in subagent", { error });
 				}
 			}
 		}
@@ -1845,9 +1856,13 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 						spawnedByGjc,
 						sdkHostModeSupported: options.sdkHostModeSupported,
 						ensureProviderDaemon: options.ensureNotificationProviderDaemon,
-						runEphemeralTurn: async (promptText, signal) => {
+						runBtwTurn: async (question, signal) => {
 							if (!session) throw new Error("Ephemeral turns are unavailable.");
-							const { replyText } = await session.runEphemeralTurn({ promptText, signal });
+							const { replyText } = await session.runEphemeralTurn({
+								purpose: "btw",
+								turn: { question, scope: session.createBtwConversationScope(btwUserPrompt) },
+								signal,
+							});
 							return { replyText };
 						},
 					});

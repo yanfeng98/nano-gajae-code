@@ -6,7 +6,7 @@ import { type AssistantMessage, getBundledModel } from "@gajae-code/ai";
 import type { Rule } from "@gajae-code/coding-agent/capability/rule";
 import { Settings } from "@gajae-code/coding-agent/config/settings";
 import type { ExtensionFactory } from "@gajae-code/coding-agent/extensibility/extensions";
-import { LocalProtocolHandler, resolveLocalUrlToPath } from "@gajae-code/coding-agent/internal-urls";
+import { LocalProtocolHandler, resolveLocalRoot, resolveLocalUrlToPath } from "@gajae-code/coding-agent/internal-urls";
 import { AgentRegistry } from "@gajae-code/coding-agent/registry/agent-registry";
 import { createAgentSession } from "@gajae-code/coding-agent/sdk";
 import { createSecretObfuscator } from "@gajae-code/coding-agent/secrets";
@@ -105,6 +105,93 @@ describe("createAgentSession session storage isolation", () => {
 			await session.dispose();
 		}
 	});
+	it("migrates a resumed managed session's legacy local root before synchronous path resolution", async () => {
+		const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `gjc-sdk-local-resume-${Snowflake.next()}-`));
+		tempDirs.push(tempDir);
+		const cwd = path.join(tempDir, "project");
+		const agentDir = path.join(tempDir, "agent");
+		fs.mkdirSync(cwd, { recursive: true });
+
+		const destination = SessionManager.managedDestination(cwd, agentDir);
+		const initialManager = SessionManager.create(cwd, destination);
+		initialManager.appendMessage({ role: "user", content: "legacy local migration", timestamp: Date.now() });
+		await initialManager.flush();
+		const sessionFile = initialManager.getSessionFile();
+		if (!sessionFile) throw new Error("Expected persisted managed session path");
+		await initialManager.close();
+
+		const resumedManager = await SessionManager.open(sessionFile, destination);
+		const artifactsDir = resumedManager.getArtifactsDir();
+		if (!artifactsDir) throw new Error("Expected resumed managed artifacts path");
+		const legacyLocalRoot = path.join(artifactsDir, "local");
+		fs.mkdirSync(legacyLocalRoot, { recursive: true, mode: 0o700 });
+		fs.writeFileSync(path.join(legacyLocalRoot, "resume.md"), "preserved", { mode: 0o600 });
+		const { session } = await createAgentSession({
+			cwd,
+			agentDir,
+			sessionManager: resumedManager,
+			settings: Settings.isolated(),
+			disableExtensionDiscovery: true,
+			skills: [],
+			contextFiles: [],
+			promptTemplates: [],
+			slashCommands: [],
+			enableMCP: false,
+			enableLsp: false,
+		});
+
+		try {
+			const localOptions = {
+				getArtifactsDir: () => resumedManager.getArtifactsDir(),
+				isManagedDestination: () => resumedManager.isManagedDestination(),
+				getManagedLegacyLocalMigrationSource: () => resumedManager.getManagedLegacyLocalMigrationSource(),
+				getSessionId: () => resumedManager.getSessionId(),
+			};
+			const resumedPath = resolveLocalUrlToPath("local://resume.md", localOptions);
+			expect(resumedPath).toBe(path.join(resolveLocalRoot(localOptions), "resume.md"));
+			expect(fs.readFileSync(resumedPath, "utf8")).toBe("preserved");
+			expect(fs.existsSync(legacyLocalRoot)).toBe(false);
+		} finally {
+			await session.dispose();
+		}
+	}, 20_000);
+	it("initializes a default local root without shadowing an explicit owner", async () => {
+		const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `gjc-sdk-local-owner-${Snowflake.next()}-`));
+		tempDirs.push(tempDir);
+		const cwd = path.join(tempDir, "project");
+		const agentDir = path.join(tempDir, "agent");
+		fs.mkdirSync(cwd, { recursive: true });
+		const owned = {
+			getArtifactsDir: () => path.join(tempDir, "owned-artifacts"),
+			getSessionId: () => "owned-local-session",
+		};
+		const disposeOwned = LocalProtocolHandler.installOverride(owned);
+
+		let session: AgentSession | undefined;
+		try {
+			session = (
+				await createAgentSession({
+					cwd,
+					agentDir,
+					settings: Settings.isolated(),
+					disableExtensionDiscovery: true,
+					skills: [],
+					contextFiles: [],
+					promptTemplates: [],
+					slashCommands: [],
+					enableMCP: false,
+					enableLsp: false,
+				})
+			).session;
+			expect(LocalProtocolHandler.resolveOptions()).toBe(owned);
+			await session.dispose();
+			session = undefined;
+			expect(LocalProtocolHandler.resolveOptions()).toBe(owned);
+		} finally {
+			await session?.dispose();
+			disposeOwned();
+		}
+	});
 	it("keeps settings storage usable while default sessions dispose independently", async () => {
 		const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `pi-sdk-shared-storage-${Snowflake.next()}-`));
 		tempDirs.push(tempDir);
@@ -197,11 +284,86 @@ describe("createAgentSession session storage isolation", () => {
 				path.join(secondArtifactsDir, "local", "note.md"),
 			);
 
+			// Dispose the first (bottom-of-stack) override while the second remains installed;
+			// only the first session's override may be removed and the second must still resolve.
+			await firstSession.dispose();
+			firstSession = undefined;
+			expect(resolveLocalUrlToPath("local://note.md", LocalProtocolHandler.resolveOptions()!)).toBe(
+				path.join(secondArtifactsDir, "local", "note.md"),
+			);
+
+			// Disposing the remaining second override restores the default/fallback resolution.
+			await secondSession.dispose();
+			secondSession = undefined;
+			expect(LocalProtocolHandler.resolveOptions()).toBeUndefined();
+
+			// Managed-destination sessions retain their owner-only external gjc-local root.
+			expect(
+				resolveLocalRoot({
+					getArtifactsDir: () => firstArtifactsDir,
+					isManagedDestination: () => true,
+					getSessionId: () => "managed-owner-session",
+				}),
+			).toBe(path.join(os.tmpdir(), "gjc-local", "managed-owner-session"));
+		} finally {
+			await secondSession?.dispose();
+			await firstSession?.dispose();
+		}
+	});
+
+	it("restores the previous session's local:// override when the top override is disposed (LIFO)", async () => {
+		const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `pi-sdk-local-protocol-lifo-${Snowflake.next()}-`));
+		tempDirs.push(tempDir);
+		const cwd = path.join(tempDir, "project");
+		const agentDir = path.join(tempDir, "agent");
+		const firstArtifactsDir = path.join(tempDir, "first-artifacts");
+		const secondArtifactsDir = path.join(tempDir, "second-artifacts");
+		fs.mkdirSync(cwd, { recursive: true });
+		const sessionOptions = {
+			cwd,
+			agentDir,
+			settings: Settings.isolated(),
+			disableExtensionDiscovery: true,
+			skills: [],
+			contextFiles: [],
+			promptTemplates: [],
+			slashCommands: [],
+			enableMCP: false,
+			enableLsp: false,
+		};
+		let firstSession: AgentSession | undefined;
+		let secondSession: AgentSession | undefined;
+		try {
+			firstSession = (
+				await createAgentSession({
+					...sessionOptions,
+					localProtocolOptions: {
+						getArtifactsDir: () => firstArtifactsDir,
+						getSessionId: () => "first-local-session",
+					},
+				})
+			).session;
+			secondSession = (
+				await createAgentSession({
+					...sessionOptions,
+					localProtocolOptions: {
+						getArtifactsDir: () => secondArtifactsDir,
+						getSessionId: () => "second-local-session",
+					},
+				})
+			).session;
+			expect(resolveLocalUrlToPath("local://note.md", LocalProtocolHandler.resolveOptions()!)).toBe(
+				path.join(secondArtifactsDir, "local", "note.md"),
+			);
+
+			// Dispose the top-of-stack (second) override; the previous (first) override must be restored.
 			await secondSession.dispose();
 			secondSession = undefined;
 			expect(resolveLocalUrlToPath("local://note.md", LocalProtocolHandler.resolveOptions()!)).toBe(
 				path.join(firstArtifactsDir, "local", "note.md"),
 			);
+
+			// Disposing the last remaining override restores the default/fallback resolution.
 			await firstSession.dispose();
 			firstSession = undefined;
 			expect(LocalProtocolHandler.resolveOptions()).toBeUndefined();
