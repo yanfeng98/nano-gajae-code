@@ -221,8 +221,58 @@ describe("ultragoal critic pause ceiling", () => {
 		expect((await isUltragoalPauseBlocked(cwd)).blocked).toBe(false);
 	});
 
-	it("passes classify-blocker JSON event_id into a pause critic verdict command", async () => {
+	it("defaults omitted completion blockers, rejects wrong shapes, and binds pause verdicts", async () => {
 		const cwd = await createActiveRun();
+		const completion = await runNativeUltragoalCommand(
+			[
+				"record-critic-verdict",
+				"--terminus",
+				"completion",
+				"--verdict",
+				"OKAY",
+				"--evidence",
+				"Critic confirms the completion evidence is current",
+				"--json",
+			],
+			cwd,
+		);
+		expect(completion.status).toBe(0);
+		expect(JSON.parse(completion.stdout ?? "{}")).toMatchObject({
+			ok: true,
+			event: "critic_verdict",
+			terminus: "completion",
+			verdict: "OKAY",
+		});
+		let ledger = await readUltragoalLedger(cwd);
+		expect(ledger).toContainEqual(
+			expect.objectContaining({
+				event: "critic_verdict",
+				terminus: "completion",
+				verdict: "OKAY",
+				blockers: [],
+			}),
+		);
+
+		const malformed = await runNativeUltragoalCommand(
+			[
+				"record-critic-verdict",
+				"--terminus",
+				"completion",
+				"--verdict",
+				"OKAY",
+				"--evidence",
+				"Critic malformed blockers must not append a verdict",
+				"--blockers-json",
+				"{}",
+				"--json",
+			],
+			cwd,
+		);
+		expect(malformed.status).not.toBe(0);
+		expect(malformed.stderr).toBe("record-critic-verdict --blockers-json must be a JSON string array\n");
+		ledger = await readUltragoalLedger(cwd);
+		expect(ledger.filter(event => event.event === "critic_verdict")).toHaveLength(1);
+
 		const classification = await runNativeUltragoalCommand(
 			[
 				"classify-blocker",

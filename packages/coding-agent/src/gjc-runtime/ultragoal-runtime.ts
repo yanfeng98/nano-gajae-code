@@ -4565,13 +4565,15 @@ async function dispatchUltragoalCommand(args: string[], cwd: string): Promise<Ul
 				const blockersJson = flagValue(args, "--blockers-json");
 				const blockers =
 					blockersJson === undefined ? undefined : stringArray(await readStructuredValue(cwd, blockersJson));
-				if (!blockers) throw new Error("record-critic-verdict --blockers-json must be a JSON string array");
+				if (blockersJson !== undefined && !blockers) {
+					throw new Error("record-critic-verdict --blockers-json must be a JSON string array");
+				}
 				const event = await recordUltragoalCriticVerdict({
 					cwd,
 					terminus: (flagValue(args, "--terminus") ?? "") as "completion" | "pause",
 					verdict: (flagValue(args, "--verdict") ?? "") as CriticVerdict,
 					evidence: flagValue(args, "--evidence") ?? "",
-					blockers,
+					blockers: blockers ?? undefined,
 					goalId: flagValue(args, "--goal-id"),
 					classificationEventId: flagValue(args, "--classification-event-id"),
 				});
