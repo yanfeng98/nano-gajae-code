@@ -373,7 +373,9 @@ export async function runCli(argv: string[]): Promise<void> {
 		process.exitCode = await runFixtureReport(id);
 		return;
 	}
-	if (hasRootHelpFlag(argv)) {
+	const normalizedArgv = normalizeResumeAlias(argv);
+	const legacyArgv = routeLegacyRootArgv(normalizedArgv);
+	if (!legacyArgv && hasRootHelpFlag(normalizedArgv)) {
 		const { renderRootHelp } = await import("@gajae-code/utils/cli");
 		const { getExtraHelpText } = await import("./cli/fast-help");
 		renderRootHelp({ bin: APP_NAME, version: VERSION, commands: new Map([["launch", RootHelpCommand]]) });
@@ -383,11 +385,11 @@ export async function runCli(argv: string[]): Promise<void> {
 		}
 		return;
 	}
-	if (hasRootVersionFlag(argv)) {
+	if (!legacyArgv && hasRootVersionFlag(normalizedArgv)) {
 		process.stdout.write(`${APP_NAME}/${VERSION}\n`);
 		return;
 	}
-	const runArgv = routeRootArgv(argv);
+	const runArgv = legacyArgv ?? routeRootArgv(normalizedArgv);
 	if (isStatsHelpFastPath(runArgv)) {
 		showStatsFastHelp();
 		return;
