@@ -72,7 +72,7 @@ describe("ultragoal pause guard", () => {
 		});
 		const diagnostic = await isUltragoalPauseBlocked(cwd);
 		expect(diagnostic.blocked).toBe(true);
-		expect(diagnostic.reason).toContain("fresh clean critic OKAY verdict");
+		expect(diagnostic.reason).toContain("fresh clean pause terminal critic OKAY verdict");
 	});
 
 	it("blocks pause when the bound critic verdict is REJECT", async () => {
@@ -94,7 +94,7 @@ describe("ultragoal pause guard", () => {
 		});
 		const diagnostic = await isUltragoalPauseBlocked(cwd);
 		expect(diagnostic.blocked).toBe(true);
-		expect(diagnostic.reason).toContain("fresh clean critic OKAY verdict");
+		expect(diagnostic.reason).toContain("fresh clean pause terminal critic OKAY verdict");
 	});
 
 	it("still blocks pause when the latest classification is resolvable", async () => {

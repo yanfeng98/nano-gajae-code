@@ -40,6 +40,7 @@ describe("ultragoal terminal critic command contract", () => {
 		const topLevel = await runNativeUltragoalCommand(["--help"], cwd);
 		const verdict = await runNativeUltragoalCommand(["record-critic-verdict", "--help"], cwd);
 		const override = await runNativeUltragoalCommand(["record-critic-gate-override", "--help"], cwd);
+		const classifyBlocker = await runNativeUltragoalCommand(["classify-blocker", "--help"], cwd);
 
 		expect(topLevel.status).toBe(0);
 		expect(topLevel.stdout).toContain("record-critic-verdict");
@@ -60,5 +61,10 @@ describe("ultragoal terminal critic command contract", () => {
 		expect(override.stdout).toContain("gjc ultragoal record-critic-gate-override --evidence <text> [--json]");
 		expect(override.stdout).toContain("--evidence=<value>");
 		expect(override.stdout).toContain("--json");
+
+		expect(classifyBlocker.status).toBe(0);
+		expect(classifyBlocker.stdout).toContain("latest blocker_classified event");
+		expect(classifyBlocker.stdout).toContain("later bound clean pause terminal critic OKAY verdict");
+		expect(classifyBlocker.stdout).not.toContain("latest ledger event");
 	});
 });

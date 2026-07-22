@@ -68,7 +68,7 @@ describe("ultragoal pause guard red-team coverage", () => {
 
 		const diagnostic = await isUltragoalPauseBlocked(cwd);
 		expect(diagnostic.blocked).toBe(true);
-		expect(diagnostic.reason).toContain("latest ledger event");
+		expect(diagnostic.reason).toContain("latest blocker_classified event");
 	});
 
 	it("assertUltragoalPauseAllowed throws while blocked and resolves with a bound human_blocked classification", async () => {

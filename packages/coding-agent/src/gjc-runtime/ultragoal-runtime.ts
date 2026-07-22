@@ -3601,10 +3601,10 @@ export async function recordUltragoalReviewBlockers(input: {
 export type UltragoalBlockerClassification = "human_blocked" | "resolvable";
 
 /**
- * Record an audited blocker triage classification in the durable ledger. A
- * `human_blocked` classification is the only thing that authorizes
- * `goal({"op":"pause"})` while an Ultragoal run is active; `resolvable` is an
- * audit note and never unblocks pause.
+ * Record an audited blocker triage classification in the durable ledger. Pause
+ * requires the latest `blocker_classified` event to be `human_blocked` and a
+ * later clean pause terminal critic verdict bound to that classification; `resolvable`
+ * is an audit note and never unblocks pause.
  */
 export async function recordUltragoalBlockerClassification(input: {
 	cwd: string;
@@ -4147,7 +4147,7 @@ function renderUltragoalHelp(args: readonly string[]): string | null {
 			"  $ gjc ultragoal classify-blocker --classification <human_blocked|resolvable> --evidence <text> [FLAGS]",
 			"",
 			"FLAGS",
-			"      --classification=<value>     Required. human_blocked authorizes pause only as the latest ledger event; resolvable never authorizes pause",
+			"      --classification=<value>     Required. human_blocked must be the latest blocker_classified event; pause also requires a later bound clean pause terminal critic OKAY verdict; resolvable never authorizes pause",
 			"      --evidence=<value>           Required. Specific blocker evidence; must name the human-only dependency for human_blocked",
 			"      --goal-id=<value>            Optional durable .gjc/ultragoal goal id, e.g. G001",
 			"      --json                       Output a machine-readable receipt",
