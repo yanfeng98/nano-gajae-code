@@ -250,8 +250,13 @@ const BTW_USAGE_TEXT = "Usage: /btw <question>";
 const BTW_CAPACITY_TEXT = "Too many /btw questions are pending. Wait for one to finish and try again.";
 export const BTW_QUESTION_MAX_UNICODE_SCALARS = 4_096;
 export const BTW_QUESTION_MAX_UTF8_BYTES = 16_384;
+const TELEGRAM_ATTACHMENT_MAX_BYTES = 20 * 1024 * 1024;
+const TELEGRAM_SESSION_ATTACHMENT_MAX_COUNT = 20;
+const TELEGRAM_SESSION_ATTACHMENT_MAX_BYTES = 50 * 1024 * 1024;
+const TELEGRAM_ATTACHMENT_DOWNLOAD_TIMEOUT_MS = 60_000;
 const BTW_QUESTION_LIMIT_TEXT = "Question must be at most 4096 Unicode scalar values and 16384 UTF-8 bytes.";
 type ParsedBtwCommand = { kind: "question"; question: string } | { kind: "ignored" };
+type TelegramFileDownload = { bytes: Buffer } | { failure: "download_failed" | "too_large" };
 class ThreadedModeCapabilityRefusal extends Error {}
 
 /** Only an explicit Bot API capability refusal may enable flat private-chat delivery. */
@@ -5432,8 +5437,12 @@ export class TelegramNotificationDaemon {
 		for (const sessionId of this.topics.deletePendingSessionIds()) await this.deleteTopic(sessionId);
 	}
 
-	/** Download a Telegram file by its file_path (from getFile) into memory. */
-	private async downloadTelegramFile(filePath: string): Promise<Buffer | undefined> {
+	/** Download one Telegram file with the Bot API's 20 MiB ceiling and one end-to-end deadline. */
+	private async downloadTelegramFile(
+		filePath: string,
+		maxBytes = TELEGRAM_ATTACHMENT_MAX_BYTES,
+		deadlineController?: AbortController,
+	): Promise<TelegramFileDownload> {
 		const apiBase = this.opts.apiBase ?? "https://api.telegram.org";
 		const fetchImpl = this.opts.fetchImpl ?? fetch;
 		// `filePath` is remote metadata from getFile; reject suspicious segments
@@ -5441,17 +5450,68 @@ export class TelegramNotificationDaemon {
 		// composing the download URL.
 		if (filePath.includes("..") || filePath.startsWith("/") || filePath.includes("\\")) {
 			logger.warn("notifications: rejecting suspicious Telegram file_path");
-			return undefined;
+			return { failure: "download_failed" };
 		}
 		const encodedPath = filePath.split("/").map(encodeURIComponent).join("/");
 		const url = `${apiBase}/file/bot${this.opts.botToken}/${encodedPath}`;
+		const controller = deadlineController ?? new AbortController();
+		let cancelActiveReader: (() => Promise<void>) | undefined;
+		const setTimeoutImpl = this.opts.setTimeoutImpl ?? setTimeout;
+		const clearTimeoutImpl = this.opts.clearTimeoutImpl ?? clearTimeout;
+		const timeout = deadlineController
+			? undefined
+			: setTimeoutImpl(
+					() => controller.abort(new Error("Telegram attachment download timed out")),
+					TELEGRAM_ATTACHMENT_DOWNLOAD_TIMEOUT_MS,
+				);
+		const cancelReader = () => void cancelActiveReader?.();
+		controller.signal.addEventListener("abort", cancelReader, { once: true });
 		try {
-			const res = await fetchImpl(url);
-			if (!res.ok) return undefined;
-			return Buffer.from(await res.arrayBuffer());
+			const res = await fetchImpl(url, { signal: controller.signal });
+			if (!res.ok) {
+				await res.body?.cancel().catch(() => undefined);
+				controller.abort();
+				return { failure: "download_failed" };
+			}
+			const declaredLength = res.headers.get("content-length");
+			if (declaredLength !== null) {
+				const declaredBytes = Number(declaredLength);
+				if (!Number.isSafeInteger(declaredBytes) || declaredBytes < 0 || declaredBytes > maxBytes) {
+					await res.body?.cancel().catch(() => undefined);
+					controller.abort();
+					return { failure: "too_large" };
+				}
+			}
+			if (!res.body) {
+				controller.abort();
+				return { failure: "download_failed" };
+			}
+			const reader = res.body.getReader();
+			cancelActiveReader = () => reader.cancel().catch(() => undefined);
+			controller.signal.throwIfAborted();
+			const chunks: Buffer[] = [];
+			let total = 0;
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) break;
+				total += value.byteLength;
+				if (total > maxBytes) {
+					await reader.cancel().catch(() => undefined);
+					controller.abort();
+					return { failure: "too_large" };
+				}
+				chunks.push(Buffer.from(value));
+			}
+			controller.signal.throwIfAborted();
+			return { bytes: Buffer.concat(chunks, total) };
 		} catch (e) {
+			await cancelActiveReader?.();
+			controller.abort();
 			logger.warn(`notifications: file download failed: ${sanitizeDiagnostic(String(e))}`);
-			return undefined;
+			return { failure: "download_failed" };
+		} finally {
+			controller.signal.removeEventListener("abort", cancelReader);
+			if (timeout !== undefined) clearTimeoutImpl(timeout);
 		}
 	}
 
@@ -5461,6 +5521,8 @@ export class TelegramNotificationDaemon {
 	 * removed when the daemon stops (see {@link cleanupAllAttachmentDirs}).
 	 */
 	private readonly attachmentDirs = new Map<string, string>();
+	readonly #attachmentUsage = new Map<string, { count: number; bytes: number }>();
+	readonly #attachmentChains = new Map<string, Promise<void>>();
 
 	/** Lazily create a private, unguessable 0700 temp dir for `sessionId`. */
 	private async ensureAttachmentDir(sessionId: string): Promise<string> {
@@ -5478,6 +5540,8 @@ export class TelegramNotificationDaemon {
 	private async cleanupAllAttachmentDirs(): Promise<void> {
 		const dirs = [...this.attachmentDirs.values()];
 		this.attachmentDirs.clear();
+		this.#attachmentUsage.clear();
+		this.#attachmentChains.clear();
 		await Promise.all(dirs.map(dir => fs.promises.rm(dir, { recursive: true, force: true }).catch(() => undefined)));
 	}
 
@@ -5494,21 +5558,82 @@ export class TelegramNotificationDaemon {
 		att: InboundAttachment,
 		sessionId: string,
 	): Promise<{ images: { data: string; mime?: string }[]; fileNotes: string[] }> {
+		const previous = this.#attachmentChains.get(sessionId) ?? Promise.resolve();
+		const task = previous.then(() => this.resolveInboundAttachmentSerial(att, sessionId));
+		const chain = task.then(
+			() => undefined,
+			() => undefined,
+		);
+		this.#attachmentChains.set(sessionId, chain);
+		return task.finally(() => {
+			if (this.#attachmentChains.get(sessionId) === chain) this.#attachmentChains.delete(sessionId);
+		});
+	}
+
+	private async resolveInboundAttachmentSerial(
+		att: InboundAttachment,
+		sessionId: string,
+	): Promise<{ images: { data: string; mime?: string }[]; fileNotes: string[] }> {
 		const images: { data: string; mime?: string }[] = [];
 		const fileNotes: string[] = [];
 		const label = att.fileName ?? att.kind;
+		let timeout: NodeJS.Timeout | undefined;
 		try {
-			const got = (await this.botApi.call("getFile", { file_id: att.fileId })) as {
-				result?: { file_path?: unknown };
+			const usage = this.#attachmentUsage.get(sessionId) ?? { count: 0, bytes: 0 };
+			if (
+				usage.count >= TELEGRAM_SESSION_ATTACHMENT_MAX_COUNT ||
+				usage.bytes >= TELEGRAM_SESSION_ATTACHMENT_MAX_BYTES
+			) {
+				fileNotes.push(`[attachment rejected: ${label}; session attachment limit reached]`);
+				return { images, fileNotes };
+			}
+			const controller = new AbortController();
+			timeout = (this.opts.setTimeoutImpl ?? setTimeout)(
+				() => controller.abort(new Error("Telegram attachment download timed out")),
+				TELEGRAM_ATTACHMENT_DOWNLOAD_TIMEOUT_MS,
+			);
+			const got = (await this.botApi.call("getFile", { file_id: att.fileId }, { signal: controller.signal })) as {
+				result?: { file_path?: unknown; file_size?: unknown };
 			};
 			const filePath = typeof got?.result?.file_path === "string" ? got.result.file_path : undefined;
 			if (!filePath) {
 				fileNotes.push(`[attachment unavailable: ${label}]`);
 				return { images, fileNotes };
 			}
-			const bytes = await this.downloadTelegramFile(filePath);
-			if (!bytes) {
-				fileNotes.push(`[attachment download failed: ${label}]`);
+			const declaredBytes = got.result?.file_size;
+			const remainingBytes = TELEGRAM_SESSION_ATTACHMENT_MAX_BYTES - usage.bytes;
+			if (
+				(typeof declaredBytes === "number" &&
+					(!Number.isSafeInteger(declaredBytes) ||
+						declaredBytes < 0 ||
+						declaredBytes > TELEGRAM_ATTACHMENT_MAX_BYTES ||
+						declaredBytes > remainingBytes)) ||
+				remainingBytes <= 0
+			) {
+				fileNotes.push(`[attachment rejected: ${label}; size limit exceeded]`);
+				return { images, fileNotes };
+			}
+			const downloaded = await this.downloadTelegramFile(
+				filePath,
+				Math.min(TELEGRAM_ATTACHMENT_MAX_BYTES, remainingBytes),
+				controller,
+			);
+			if ("failure" in downloaded) {
+				fileNotes.push(
+					downloaded.failure === "too_large"
+						? `[attachment rejected: ${label}; size limit exceeded]`
+						: `[attachment download failed: ${label}]`,
+				);
+				return { images, fileNotes };
+			}
+			const bytes = downloaded.bytes;
+			const accountedBytes = Math.max(bytes.byteLength, typeof declaredBytes === "number" ? declaredBytes : 0);
+			const current = this.#attachmentUsage.get(sessionId) ?? { count: 0, bytes: 0 };
+			if (
+				current.count >= TELEGRAM_SESSION_ATTACHMENT_MAX_COUNT ||
+				current.bytes + accountedBytes > TELEGRAM_SESSION_ATTACHMENT_MAX_BYTES
+			) {
+				fileNotes.push(`[attachment rejected: ${label}; session attachment limit reached]`);
 				return { images, fileNotes };
 			}
 			const isImage = att.kind === "photo" || (typeof att.mime === "string" && att.mime.startsWith("image/"));
@@ -5525,12 +5650,20 @@ export class TelegramNotificationDaemon {
 				// Unguessable, non-colliding name inside the private 0700 dir; the
 				// exclusive 0600 create (`wx`) refuses to follow a pre-existing file/symlink.
 				const dest = path.join(dir, `${crypto.randomBytes(8).toString("hex")}-${safeBase}`);
-				await fs.promises.writeFile(dest, bytes, { flag: "wx", mode: 0o600 });
+				try {
+					await fs.promises.writeFile(dest, bytes, { flag: "wx", mode: 0o600 });
+				} catch (e) {
+					await fs.promises.unlink(dest).catch(() => undefined);
+					throw e;
+				}
 				fileNotes.push(`[user attached a file, saved to ${dest}${att.mime ? ` (${att.mime})` : ""}]`);
 			}
+			this.#attachmentUsage.set(sessionId, { count: current.count + 1, bytes: current.bytes + accountedBytes });
 		} catch (e) {
 			logger.warn(`notifications: inbound attachment failed: ${String(e)}`);
 			fileNotes.push(`[attachment error: ${label}]`);
+		} finally {
+			if (timeout !== undefined) (this.opts.clearTimeoutImpl ?? clearTimeout)(timeout);
 		}
 		return { images, fileNotes };
 	}

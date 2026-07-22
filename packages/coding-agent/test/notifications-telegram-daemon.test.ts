@@ -54,9 +54,21 @@ import {
 } from "../src/sdk/bus/telegram-daemon";
 import { ownerPidFromOwnerId, runDaemonInternal, runDaemonSmoke } from "../src/sdk/bus/telegram-daemon-cli";
 import { NOTIFICATION_PROTOCOL_VERSION } from "../src/sdk/bus/telegram-daemon-contract";
+import type { InboundAttachment } from "../src/sdk/bus/threaded-inbound";
 
 const THREADED_FALLBACK_NOTICE =
 	"Flat Telegram private chat supports outbound notifications and inline ask buttons only. Enable Threaded Mode in @BotFather > Bot Settings > Threads Settings for free-text replies and session commands.";
+type AttachmentDownload = { bytes: Buffer } | { failure: "download_failed" | "too_large" };
+interface AttachmentTestAccess {
+	downloadTelegramFile(filePath: string, maxBytes?: number): Promise<AttachmentDownload>;
+	resolveInboundAttachment(
+		attachment: InboundAttachment,
+		sessionId: string,
+	): Promise<{ images: Array<{ data: string }>; fileNotes: string[] }>;
+}
+function attachmentAccess(daemon: TelegramNotificationDaemon): AttachmentTestAccess {
+	return daemon as unknown as AttachmentTestAccess;
+}
 
 test("endpoint authority digest canonicalizes endpoint presentation and binds authenticated identity", () => {
 	const canonical = endpointAuthorityDigest("ws://LOCALHOST:80/sdk?ignored=yes#ignored", "token");
@@ -9398,10 +9410,7 @@ test("inbound photo is downloaded and forwarded as an image in the user_message"
 	FakeWs.instances = [];
 	const agentDir = tempAgentDir();
 	const bot = new FakeBotApi();
-	const fetchImpl = (async () => ({
-		ok: true,
-		arrayBuffer: async () => new Uint8Array([1, 2, 3, 4]).buffer,
-	})) as unknown as typeof fetch;
+	const fetchImpl = (async () => new Response(new Uint8Array([1, 2, 3, 4]))) as unknown as typeof fetch;
 	const daemon = new TelegramNotificationDaemon({
 		settings: settings(agentDir),
 		ownerId: "owner",
@@ -9435,6 +9444,198 @@ test("inbound photo is downloaded and forwarded as an image in the user_message"
 	expect(bot.calls.some(c => c.method === "getFile" && c.body.file_id === "large")).toBe(true);
 });
 
+test("inbound attachment download enforces declared and streamed byte ceilings", async () => {
+	let requests = 0;
+	let nonSuccessCancelled = false;
+	let oversizedCancelled = false;
+	let nonSuccessSignal: AbortSignal | undefined;
+	const nonSuccessBody = new ReadableStream<Uint8Array>({
+		cancel() {
+			nonSuccessCancelled = true;
+		},
+	});
+	const oversizedBody = new ReadableStream<Uint8Array>({
+		start(controller) {
+			controller.enqueue(new Uint8Array(4));
+			controller.enqueue(new Uint8Array([1]));
+		},
+		cancel() {
+			oversizedCancelled = true;
+		},
+	});
+	const responses = [
+		new Response(nonSuccessBody, { status: 503 }),
+		new Response(null, { headers: { "content-length": "5" } }),
+		new Response(oversizedBody),
+		new Response(new Uint8Array([1, 2, 3, 4]), { headers: { "content-length": "4" } }),
+	];
+	const daemon = new TelegramNotificationDaemon({
+		settings: settings(tempAgentDir()),
+		ownerId: "owner",
+		botToken: "tok",
+		chatId: "42",
+		fetchImpl: (async (_url, init) => {
+			if (requests === 0) nonSuccessSignal = init?.signal ?? undefined;
+			return responses[requests++]!;
+		}) as typeof fetch,
+	});
+	const download = attachmentAccess(daemon).downloadTelegramFile.bind(daemon);
+
+	await expect(download("docs/unavailable.bin", 4)).resolves.toEqual({ failure: "download_failed" });
+	expect(nonSuccessCancelled).toBe(true);
+	expect(nonSuccessSignal?.aborted).toBe(true);
+	await expect(download("docs/declared.bin", 4)).resolves.toEqual({ failure: "too_large" });
+	await expect(download("docs/chunked.bin", 4)).resolves.toEqual({ failure: "too_large" });
+	expect(oversizedCancelled).toBe(true);
+	await expect(download("docs/exact.bin", 4)).resolves.toEqual({ bytes: Buffer.from([1, 2, 3, 4]) });
+});
+
+test("inbound attachment download aborts when its single deadline expires", async () => {
+	let expire: (() => void) | undefined;
+	let observedSignal: AbortSignal | undefined;
+	const fetchImpl = ((_url: string | URL | Request, init?: RequestInit) => {
+		observedSignal = init?.signal ?? undefined;
+		const pending = Promise.withResolvers<Response>();
+		observedSignal?.addEventListener("abort", () => pending.reject(observedSignal?.reason), { once: true });
+		return pending.promise;
+	}) as typeof fetch;
+	const daemon = new TelegramNotificationDaemon({
+		settings: settings(tempAgentDir()),
+		ownerId: "owner",
+		botToken: "tok",
+		chatId: "42",
+		fetchImpl,
+		setTimeoutImpl: ((callback: () => void) => {
+			expire = callback;
+			return 1;
+		}) as unknown as typeof setTimeout,
+		clearTimeoutImpl: (() => undefined) as unknown as typeof clearTimeout,
+	});
+	const pending = attachmentAccess(daemon).downloadTelegramFile("docs/slow.bin");
+	await Promise.resolve();
+	expire?.();
+	await expect(pending).resolves.toEqual({ failure: "download_failed" });
+	expect(observedSignal?.aborted).toBe(true);
+});
+
+test("one inbound attachment deadline covers getFile and a stalled response body read", async () => {
+	let expire: (() => void) | undefined;
+	let cancelled = false;
+	let getFileSignal: AbortSignal | undefined;
+	let fetchSignal: AbortSignal | undefined;
+	let timerCount = 0;
+	const body = new ReadableStream<Uint8Array>({
+		cancel() {
+			cancelled = true;
+		},
+	});
+	const botApi: BotApi = {
+		async call(method, _body, opts): Promise<unknown> {
+			if (method === "getFile") {
+				getFileSignal = opts?.signal;
+				return { ok: true, result: { file_path: "docs/stalled-body.bin", file_size: 1 } };
+			}
+			return { ok: true, result: true };
+		},
+	};
+	const daemon = new TelegramNotificationDaemon({
+		settings: settings(tempAgentDir()),
+		ownerId: "owner",
+		botToken: "tok",
+		chatId: "42",
+		botApi,
+		fetchImpl: (async (_url, init) => {
+			fetchSignal = init?.signal ?? undefined;
+			return new Response(body);
+		}) as typeof fetch,
+		setTimeoutImpl: ((callback: () => void) => {
+			timerCount++;
+			expire = callback;
+			return 1;
+		}) as unknown as typeof setTimeout,
+		clearTimeoutImpl: (() => undefined) as unknown as typeof clearTimeout,
+	});
+	const pending = attachmentAccess(daemon).resolveInboundAttachment(
+		{ fileId: "slow", kind: "photo", mime: "image/jpeg" },
+		"S",
+	);
+	while (!fetchSignal) await Promise.resolve();
+	expire?.();
+
+	const result = await pending;
+	expect(result.images).toHaveLength(0);
+	expect(result.fileNotes[0]).toContain("attachment download failed");
+	expect(timerCount).toBe(1);
+	expect(getFileSignal?.aborted).toBe(true);
+	expect(fetchSignal?.aborted).toBe(true);
+	expect(cancelled).toBe(true);
+});
+
+test("inbound attachments enforce per-session count and cumulative byte budgets", async () => {
+	const resolve = (daemon: TelegramNotificationDaemon, fileId: string, kind: "photo" | "document" = "photo") =>
+		attachmentAccess(daemon).resolveInboundAttachment(
+			{
+				fileId,
+				kind,
+				mime: kind === "photo" ? "image/jpeg" : "application/octet-stream",
+				fileName: kind === "document" ? "file.bin" : undefined,
+			},
+			"S",
+		);
+	const harness = (sizes: number[]) => {
+		let getFileCalls = 0;
+		let fetchCalls = 0;
+		const botApi: BotApi = {
+			async call(method: string): Promise<unknown> {
+				if (method === "getFile")
+					return { ok: true, result: { file_path: "photos/file.jpg", file_size: sizes[getFileCalls++] } };
+				return { ok: true, result: true };
+			},
+		};
+		const daemon = new TelegramNotificationDaemon({
+			settings: settings(tempAgentDir()),
+			ownerId: "owner",
+			botToken: "tok",
+			chatId: "42",
+			botApi,
+			fetchImpl: (async () => {
+				fetchCalls++;
+				return new Response(new Uint8Array([1]));
+			}) as unknown as typeof fetch,
+		});
+		return { daemon, calls: () => ({ getFileCalls, fetchCalls }) };
+	};
+
+	const count = harness([1, 20 * 1024 * 1024 + 1, ...Array<number>(20).fill(1)]);
+	const writeFile = fs.promises.writeFile.bind(fs.promises);
+	let partialPath: string | undefined;
+	const writeSpy = vi.spyOn(fs.promises, "writeFile").mockImplementationOnce(async (file, data, options) => {
+		partialPath = String(file);
+		await writeFile(file, data, options);
+		throw new Error("disk full after partial write");
+	});
+	const writeFailed = await resolve(count.daemon, "write-fails", "document");
+	writeSpy.mockRestore();
+	expect(writeFailed.images).toHaveLength(0);
+	expect(writeFailed.fileNotes[0]).toContain("attachment error");
+	expect(partialPath).toBeDefined();
+	expect(fs.existsSync(partialPath!)).toBe(false);
+	expect((await resolve(count.daemon, "oversize")).images).toHaveLength(0);
+	for (let i = 0; i < 20; i++) expect((await resolve(count.daemon, `ok-${i}`)).images).toHaveLength(1);
+	const countRejected = await resolve(count.daemon, "count-exhausted");
+	expect(countRejected.images).toHaveLength(0);
+	expect(countRejected.fileNotes[0]).toContain("session attachment limit");
+	expect(count.calls()).toEqual({ getFileCalls: 22, fetchCalls: 21 });
+
+	const mib = 1024 * 1024;
+	const total = harness([20 * mib, 20 * mib, 10 * mib]);
+	const results = await Promise.all(["a", "b", "c", "total-exhausted"].map(id => resolve(total.daemon, id)));
+	expect(results.slice(0, 3).every(result => result.images.length === 1)).toBe(true);
+	expect(results[3]!.images).toHaveLength(0);
+	expect(results[3]!.fileNotes[0]).toContain("session attachment limit");
+	expect(total.calls()).toEqual({ getFileCalls: 3, fetchCalls: 3 });
+});
+
 test("redacts token-shaped download URLs from attachment failure logs", async () => {
 	const botToken = "123456789:ABCDEF_ghijklmnopqrstuvwxyz012345";
 	let downloadedUrl = "";
@@ -9453,11 +9654,9 @@ test("redacts token-shaped download URLs from attachment failure logs", async ()
 	const errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
 
 	try {
-		await expect(
-			(
-				daemon as unknown as { downloadTelegramFile(filePath: string): Promise<Buffer | undefined> }
-			).downloadTelegramFile("photos/file.jpg"),
-		).resolves.toBeUndefined();
+		await expect(attachmentAccess(daemon).downloadTelegramFile("photos/file.jpg")).resolves.toEqual({
+			failure: "download_failed",
+		});
 
 		const logged = JSON.stringify([...warnSpy.mock.calls, ...errorSpy.mock.calls]);
 		expect(downloadedUrl).toBe(`https://api.telegram.org/file/bot${botToken}/photos/file.jpg`);
@@ -9515,10 +9714,7 @@ test("inbound document is saved to a tmp file and its path injected into the tex
 	FakeWs.instances = [];
 	const agentDir = tempAgentDir();
 	const bot = new FakeBotApi();
-	const fetchImpl = (async () => ({
-		ok: true,
-		arrayBuffer: async () => new Uint8Array([9, 9, 9]).buffer,
-	})) as unknown as typeof fetch;
+	const fetchImpl = (async () => new Response(new Uint8Array([9, 9, 9]))) as unknown as typeof fetch;
 	const daemon = new TelegramNotificationDaemon({
 		settings: settings(agentDir),
 		ownerId: "owner",
@@ -9574,10 +9770,7 @@ test("inbound document with a path-traversal filename stays sandboxed in the pri
 	FakeWs.instances = [];
 	const agentDir = tempAgentDir();
 	const bot = new FakeBotApi();
-	const fetchImpl = (async () => ({
-		ok: true,
-		arrayBuffer: async () => new Uint8Array([7]).buffer,
-	})) as unknown as typeof fetch;
+	const fetchImpl = (async () => new Response(new Uint8Array([7]))) as unknown as typeof fetch;
 	const daemon = new TelegramNotificationDaemon({
 		settings: settings(agentDir),
 		ownerId: "owner",
@@ -9624,10 +9817,7 @@ test("daemon attachment temp dirs are removed by the shutdown cleanup path", asy
 	FakeWs.instances = [];
 	const agentDir = tempAgentDir();
 	const bot = new FakeBotApi();
-	const fetchImpl = (async () => ({
-		ok: true,
-		arrayBuffer: async () => new Uint8Array([1, 1]).buffer,
-	})) as unknown as typeof fetch;
+	const fetchImpl = (async () => new Response(new Uint8Array([1, 1]))) as unknown as typeof fetch;
 	const daemon = new TelegramNotificationDaemon({
 		settings: settings(agentDir),
 		ownerId: "owner",
