@@ -191,6 +191,35 @@ describe("GJC public CLI command surface", () => {
 		expect(output).toContain(".gjc/_session-{sessionid}/state/team");
 	}, 30_000);
 
+	it("preserves root fast-path and legacy team-help precedence", () => {
+		const cases = [
+			{ args: ["--tmux", "--version"], output: /^gjc\/\d+\.\d+\.\d+\n$/ },
+			{ args: ["--tmux", "-v"], output: /^gjc\/\d+\.\d+\.\d+\n$/ },
+			{ args: ["--resume", "--version"], output: /^gjc\/\d+\.\d+\.\d+\n$/ },
+			{ args: ["--resume", "-v"], output: /^gjc\/\d+\.\d+\.\d+\n$/ },
+			{ args: ["--help"], output: "USAGE" },
+			{ args: ["--tmux", "--help"], output: "USAGE" },
+			{ args: ["--resume", "--help"], output: "USAGE" },
+			{ args: ["--team", "--team-size", "2", "--help"], output: "--dry-run" },
+			{ args: ["--team", "--team-size=2", "--help"], output: "--dry-run" },
+			{ args: ["--team", "--team-size", "2", "-h"], output: "--dry-run" },
+		];
+
+		for (const { args, output } of cases) {
+			const result = Bun.spawnSync(["bun", cliEntry, ...args], {
+				cwd: repoRoot,
+				stderr: "pipe",
+				stdout: "pipe",
+			});
+			const stdout = result.stdout.toString();
+			const stderr = result.stderr.toString();
+
+			expect(result.exitCode, stderr).toBe(0);
+			if (typeof output === "string") expect(stdout).toContain(output);
+			else expect(stdout).toMatch(output);
+		}
+	}, 30_000);
+
 	it("does not capture absolute-path prompts as startup slash commands", () => {
 		const parsed = parseArgs(["/tmp/request.md", "--model", "opus", "summarize"]);
 
