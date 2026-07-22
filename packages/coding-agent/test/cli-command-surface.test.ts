@@ -198,7 +198,11 @@ describe("GJC public CLI command surface", () => {
 			{ args: ["--resume", "--version"], output: /^gjc\/\d+\.\d+\.\d+\n$/ },
 			{ args: ["--resume", "-v"], output: /^gjc\/\d+\.\d+\.\d+\n$/ },
 			{ args: ["--help"], output: "USAGE" },
+			{ args: ["--tmux", "--help"], output: "USAGE" },
+			{ args: ["--resume", "--help"], output: "USAGE" },
 			{ args: ["--team", "--team-size", "2", "--help"], output: "--dry-run" },
+			{ args: ["--team", "--team-size=2", "--help"], output: "--dry-run" },
+			{ args: ["--team", "--team-size", "2", "-h"], output: "--dry-run" },
 		];
 
 		for (const { args, output } of cases) {
