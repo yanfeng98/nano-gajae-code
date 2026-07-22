@@ -298,22 +298,22 @@ const expectedProfiles: Array<{ name: string; requiredProviders: string[]; mappi
 		name: "alibaba-token-plan-balanced",
 		requiredProviders: ["alibaba-token-plan"],
 		mapping: {
-			default: "alibaba-token-plan/qwen-3.8-max-preview:medium",
+			default: "alibaba-token-plan/qwen3.8-max-preview:medium",
 			executor: "alibaba-token-plan/deepseek-v4-pro:xhigh",
 			planner: "alibaba-token-plan/glm-5.2:high",
 			critic: "alibaba-token-plan/glm-5.2:high",
-			architect: "alibaba-token-plan/qwen-3.8-max-preview:xhigh",
+			architect: "alibaba-token-plan/qwen3.8-max-preview:xhigh",
 		},
 	},
 	{
 		name: "alibaba-token-plan-qwenmaxxing",
 		requiredProviders: ["alibaba-token-plan"],
 		mapping: {
-			default: "alibaba-token-plan/qwen-3.8-max-preview:medium",
-			executor: "alibaba-token-plan/qwen-3.8-max-preview:low",
-			planner: "alibaba-token-plan/qwen-3.8-max-preview:medium",
-			critic: "alibaba-token-plan/qwen-3.8-max-preview:xhigh",
-			architect: "alibaba-token-plan/qwen-3.8-max-preview:xhigh",
+			default: "alibaba-token-plan/qwen3.8-max-preview:medium",
+			executor: "alibaba-token-plan/qwen3.8-max-preview:low",
+			planner: "alibaba-token-plan/qwen3.8-max-preview:medium",
+			critic: "alibaba-token-plan/qwen3.8-max-preview:xhigh",
+			architect: "alibaba-token-plan/qwen3.8-max-preview:xhigh",
 		},
 	},
 	{
@@ -485,7 +485,7 @@ describe("built-in model profile catalog", () => {
 		).toBeDefined();
 		expect((modelsJson as Record<string, Record<string, unknown>>)["alibaba-token-plan"]?.["glm-5.2"]).toBeDefined();
 		expect(
-			(modelsJson as Record<string, Record<string, unknown>>)["alibaba-token-plan"]?.["qwen-3.8-max-preview"],
+			(modelsJson as Record<string, Record<string, unknown>>)["alibaba-token-plan"]?.["qwen3.8-max-preview"],
 		).toBeDefined();
 	});
 
@@ -571,18 +571,18 @@ describe("built-in model profile catalog", () => {
 
 	test("Alibaba Token Plan profiles route their intended roles", () => {
 		expect(builtinMapping("alibaba-token-plan-balanced")).toEqual({
-			default: "alibaba-token-plan/qwen-3.8-max-preview:medium",
+			default: "alibaba-token-plan/qwen3.8-max-preview:medium",
 			executor: "alibaba-token-plan/deepseek-v4-pro:xhigh",
 			planner: "alibaba-token-plan/glm-5.2:high",
 			critic: "alibaba-token-plan/glm-5.2:high",
-			architect: "alibaba-token-plan/qwen-3.8-max-preview:xhigh",
+			architect: "alibaba-token-plan/qwen3.8-max-preview:xhigh",
 		});
 		expect(builtinMapping("alibaba-token-plan-qwenmaxxing")).toEqual({
-			default: "alibaba-token-plan/qwen-3.8-max-preview:medium",
-			executor: "alibaba-token-plan/qwen-3.8-max-preview:low",
-			planner: "alibaba-token-plan/qwen-3.8-max-preview:medium",
-			critic: "alibaba-token-plan/qwen-3.8-max-preview:xhigh",
-			architect: "alibaba-token-plan/qwen-3.8-max-preview:xhigh",
+			default: "alibaba-token-plan/qwen3.8-max-preview:medium",
+			executor: "alibaba-token-plan/qwen3.8-max-preview:low",
+			planner: "alibaba-token-plan/qwen3.8-max-preview:medium",
+			critic: "alibaba-token-plan/qwen3.8-max-preview:xhigh",
+			architect: "alibaba-token-plan/qwen3.8-max-preview:xhigh",
 		});
 	});
 

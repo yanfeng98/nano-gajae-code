@@ -54,7 +54,7 @@ function captureCompletionsPayload(
 	return promise;
 }
 
-const qwen = getBundledModel("alibaba-token-plan", "qwen-3.8-max-preview") as Model<"openai-responses">;
+const qwen = getBundledModel("alibaba-token-plan", "qwen3.8-max-preview") as Model<"openai-responses">;
 const glm = getBundledModel("alibaba-token-plan", "glm-5.2") as Model<"openai-completions">;
 const deepseek = getBundledModel("alibaba-token-plan", "deepseek-v4-pro") as Model<"openai-completions">;
 

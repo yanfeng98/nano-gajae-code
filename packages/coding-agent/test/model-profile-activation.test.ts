@@ -104,7 +104,7 @@ function fakeRegistry(options?: { missingProviders?: string[]; profiles?: ModelP
 			model("minimax-code-cn", "minimax-m3"),
 			model("kimi-code", "kimi-k2.5"),
 			model("zai", "glm-5.1"),
-			model("alibaba-token-plan", "qwen-3.8-max-preview", {
+			model("alibaba-token-plan", "qwen3.8-max-preview", {
 				mode: "effort",
 				minLevel: ThinkingLevel.Minimal,
 				maxLevel: ThinkingLevel.XHigh,
@@ -594,21 +594,21 @@ describe("model profile activation", () => {
 		[
 			"alibaba-token-plan-balanced",
 			{
-				default: "alibaba-token-plan/qwen-3.8-max-preview:medium",
+				default: "alibaba-token-plan/qwen3.8-max-preview:medium",
 				executor: "alibaba-token-plan/deepseek-v4-pro:xhigh",
 				planner: "alibaba-token-plan/glm-5.2:high",
 				critic: "alibaba-token-plan/glm-5.2:high",
-				architect: "alibaba-token-plan/qwen-3.8-max-preview:xhigh",
+				architect: "alibaba-token-plan/qwen3.8-max-preview:xhigh",
 			},
 		],
 		[
 			"alibaba-token-plan-qwenmaxxing",
 			{
-				default: "alibaba-token-plan/qwen-3.8-max-preview:medium",
-				executor: "alibaba-token-plan/qwen-3.8-max-preview:low",
-				planner: "alibaba-token-plan/qwen-3.8-max-preview:medium",
-				critic: "alibaba-token-plan/qwen-3.8-max-preview:xhigh",
-				architect: "alibaba-token-plan/qwen-3.8-max-preview:xhigh",
+				default: "alibaba-token-plan/qwen3.8-max-preview:medium",
+				executor: "alibaba-token-plan/qwen3.8-max-preview:low",
+				planner: "alibaba-token-plan/qwen3.8-max-preview:medium",
+				critic: "alibaba-token-plan/qwen3.8-max-preview:xhigh",
+				architect: "alibaba-token-plan/qwen3.8-max-preview:xhigh",
 			},
 		],
 	] satisfies Array<

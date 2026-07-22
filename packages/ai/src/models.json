@@ -28,8 +28,8 @@
 			"compat": { "supportsDeveloperRole": false },
 			"thinking": { "mode": "effort", "minLevel": "minimal", "maxLevel": "xhigh" }
 		},
-		"qwen-3.8-max-preview": {
-			"id": "qwen-3.8-max-preview",
+		"qwen3.8-max-preview": {
+			"id": "qwen3.8-max-preview",
 			"name": "Qwen3.8 Max Preview",
 			"api": "openai-responses",
 			"provider": "alibaba-token-plan",

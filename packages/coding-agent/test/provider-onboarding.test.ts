@@ -162,7 +162,7 @@ describe("provider onboarding setup core", () => {
 		expect(result.compatibility).toBe("openai");
 		expect(result.preset).toBe("alibaba-token-plan");
 		expect(result.presetName).toBe("Alibaba Token Plan");
-		expect(result.modelIds).toEqual(["qwen-3.8-max-preview", "glm-5.2", "deepseek-v4-pro"]);
+		expect(result.modelIds).toEqual(["qwen3.8-max-preview", "glm-5.2", "deepseek-v4-pro"]);
 		expect(result.credentialSource).toBe("env");
 
 		const parsed = YAML.parse(await Bun.file(modelsPath).text()) as { providers?: Record<string, unknown> };
@@ -173,7 +173,7 @@ describe("provider onboarding setup core", () => {
 			apiKeyEnv: "ALIBABA_TOKEN_PLAN_API_KEY",
 			compat: { supportsDeveloperRole: false },
 			models: [
-				{ id: "qwen-3.8-max-preview", api: "openai-responses" },
+				{ id: "qwen3.8-max-preview", api: "openai-responses" },
 				{ id: "glm-5.2", api: "openai-completions" },
 				{ id: "deepseek-v4-pro", api: "openai-completions" },
 			],
@@ -195,7 +195,7 @@ describe("provider onboarding setup core", () => {
 		authStorage.setRuntimeApiKey("alibaba-token-plan", "test-key");
 		try {
 			const registry = new ModelRegistry(authStorage, modelsPath);
-			const qwen = registry.find("alibaba-token-plan", "qwen-3.8-max-preview");
+			const qwen = registry.find("alibaba-token-plan", "qwen3.8-max-preview");
 			const glm = registry.find("alibaba-token-plan", "glm-5.2");
 			const deepseek = registry.find("alibaba-token-plan", "deepseek-v4-pro");
 			if (!qwen || !glm || !deepseek) throw new Error("Expected Alibaba Token Plan models to load");
@@ -239,17 +239,17 @@ describe("provider onboarding setup core", () => {
 					{
 						executor: "alibaba-token-plan/deepseek-v4-pro:xhigh",
 						planner: "alibaba-token-plan/glm-5.2:high",
-						architect: "alibaba-token-plan/qwen-3.8-max-preview:xhigh",
+						architect: "alibaba-token-plan/qwen3.8-max-preview:xhigh",
 						critic: "alibaba-token-plan/glm-5.2:high",
 					},
 				],
 				[
 					"alibaba-token-plan-qwenmaxxing",
 					{
-						executor: "alibaba-token-plan/qwen-3.8-max-preview:low",
-						planner: "alibaba-token-plan/qwen-3.8-max-preview:medium",
-						architect: "alibaba-token-plan/qwen-3.8-max-preview:xhigh",
-						critic: "alibaba-token-plan/qwen-3.8-max-preview:xhigh",
+						executor: "alibaba-token-plan/qwen3.8-max-preview:low",
+						planner: "alibaba-token-plan/qwen3.8-max-preview:medium",
+						architect: "alibaba-token-plan/qwen3.8-max-preview:xhigh",
+						critic: "alibaba-token-plan/qwen3.8-max-preview:xhigh",
 					},
 				],
 			] as const) {
@@ -261,7 +261,7 @@ describe("provider onboarding setup core", () => {
 				});
 				expect(
 					`${prepared.defaultModel?.provider}/${prepared.defaultModel?.id}:${prepared.defaultThinkingLevel}`,
-				).toBe("alibaba-token-plan/qwen-3.8-max-preview:medium");
+				).toBe("alibaba-token-plan/qwen3.8-max-preview:medium");
 				expect(prepared.agentModelOverrides).toEqual(agentModelOverrides);
 			}
 		} finally {
@@ -271,15 +271,15 @@ describe("provider onboarding setup core", () => {
 
 	it("rejects modelApi with a key outside the preset models", () => {
 		expect(() =>
-			validateModelApi({ "unknown-model": "openai-responses" }, ["qwen-3.8-max-preview", "glm-5.2"], "test-preset"),
+			validateModelApi({ "unknown-model": "openai-responses" }, ["qwen3.8-max-preview", "glm-5.2"], "test-preset"),
 		).toThrow("Provider preset 'test-preset' declares modelApi for unknown model 'unknown-model'.");
 	});
 
 	it("rejects modelApi with an invalid API value", () => {
 		expect(() =>
-			validateModelApi({ "qwen-3.8-max-preview": "invalid-api" }, ["qwen-3.8-max-preview"], "test-preset"),
+			validateModelApi({ "qwen3.8-max-preview": "invalid-api" }, ["qwen3.8-max-preview"], "test-preset"),
 		).toThrow(
-			"Provider preset 'test-preset' declares invalid modelApi value 'invalid-api' for model 'qwen-3.8-max-preview'.",
+			"Provider preset 'test-preset' declares invalid modelApi value 'invalid-api' for model 'qwen3.8-max-preview'.",
 		);
 	});
 
