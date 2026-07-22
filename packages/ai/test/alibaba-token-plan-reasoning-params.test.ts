@@ -1,8 +1,19 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
 import { getBundledModel } from "@gajae-code/ai/models";
 import { streamOpenAICompletions } from "@gajae-code/ai/providers/openai-completions";
 import { streamOpenAIResponses } from "@gajae-code/ai/providers/openai-responses";
+import { getEnvApiKey } from "@gajae-code/ai/stream";
 import type { Context, Model } from "@gajae-code/ai/types";
+
+const originalAlibabaTokenPlanApiKey = Bun.env.ALIBABA_TOKEN_PLAN_API_KEY;
+
+afterEach(() => {
+	if (originalAlibabaTokenPlanApiKey === undefined) {
+		delete Bun.env.ALIBABA_TOKEN_PLAN_API_KEY;
+	} else {
+		Bun.env.ALIBABA_TOKEN_PLAN_API_KEY = originalAlibabaTokenPlanApiKey;
+	}
+});
 
 const testContext: Context = {
 	messages: [{ role: "user", content: "hello", timestamp: 0 }],
@@ -48,6 +59,10 @@ const glm = getBundledModel("alibaba-token-plan", "glm-5.2") as Model<"openai-co
 const deepseek = getBundledModel("alibaba-token-plan", "deepseek-v4-pro") as Model<"openai-completions">;
 
 describe("Alibaba Token Plan reasoning request parameters", () => {
+	it("resolves only the documented Alibaba Token Plan credential environment variable", () => {
+		Bun.env.ALIBABA_TOKEN_PLAN_API_KEY = "alibaba-token-plan-test-key";
+		expect(getEnvApiKey("alibaba-token-plan")).toBe("alibaba-token-plan-test-key");
+	});
 	it("sends locked Qwen efforts verbatim as Responses reasoning.effort", async () => {
 		for (const effort of ["medium", "low", "xhigh"] as const) {
 			const payload = await captureResponsesPayload(qwen, effort);
